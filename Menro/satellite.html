@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AquaGuard – Mangrove Monitoring</title>
+
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+        <link rel="stylesheet" href="style.css"/>
+</head>
+
+<body>
+
+<header class="topbar">
+
+    <div class="topbar-left">
+
+        <span class="topbar-brand">
+            AquaGuard
+        </span>
+
+        <span class="topbar-sub">
+            Mangrove Monitoring System
+        </span>
+
+    </div>
+
+    <div class="topbar-right">
+
+        <span class="badge-pill sentinel">
+            🛰 Sentinel-2
+        </span>
+
+        <button
+            class="btn-help"
+            id="btnHelp"
+            aria-label="Help / Guide">
+
+            Guide
+
+        </button>
+
+    </div>
+
+</header>
+
+<div class="layout">
+
+<!-- MAP -->
+
+<main class="map-container">
+
+
+<div id="map"></div>
+
+<button class="map-menu-btn" id="btnMapMenu" aria-label="Open menu">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+    <line x1="3" y1="6" x2="21" y2="6"/>
+    <line x1="3" y1="12" x2="21" y2="12"/>
+    <line x1="3" y1="18" x2="21" y2="18"/>
+  </svg>
+  <span>Menu</span>
+</button>
+
+<div
+id="mouseCoordinates"
+class="mouse-coordinates">
+
+Lat: ---
+
+<br>
+
+Lng: ---
+
+</div>
+
+<!-- Legend -->
+
+<div class="map-legend">
+
+<h4>NDVI Legend</h4>
+
+<div class="legend-item">
+
+<span
+class="legend-color healthy">
+
+</span>
+
+Healthy
+
+</div>
+
+<div class="legend-item">
+
+<span
+class="legend-color moderate">
+
+</span>
+
+Moderate
+
+</div>
+
+<div class="legend-item">
+
+<span
+class="legend-color degraded">
+
+</span>
+
+Degraded
+
+</div>
+
+</div>
+
+</main>
+<div class="resizer right-resizer"></div>
+
+<aside class="right-panel">
+
+    <p class="section-eyebrow">
+
+        IMAGERY SETTINGS
+
+    </p>
+
+    <div class="settings-group">
+
+        <label class="settings-label">
+
+            Scene Date
+
+        </label>
+
+<input
+    type="date"
+    id="sceneDate"
+    class="settings-select">
+
+    </div>
+
+    <div class="settings-group">
+
+        <p class="section-eyebrow">
+
+            MAP LAYERS
+
+        </p>
+
+        <div class="toggle-row">
+
+            <span>Satellite Base</span>
+
+            <label class="toggle">
+
+                <input
+                    type="checkbox"
+                    id="layerSatellite"
+                    checked>
+
+                <span class="slider"></span>
+
+            </label>
+
+        </div>
+
+        
+
+        <div class="toggle-row">
+
+            <span>Mangrove Zones</span>
+
+            <label class="toggle">
+
+                <input
+                    type="checkbox"
+                    id="layerZones"
+                    checked>
+
+                <span class="slider"></span>
+
+            </label>
+
+        </div>
+
+    </div>
+
+    <div class="settings-group">
+
+        <p class="section-eyebrow">
+
+            MANGROVE ZONES
+
+        </p>
+
+        <input
+            type="text"
+            id="zoneSearch"
+            class="zone-search"
+            placeholder="Search zone..."
+            autocomplete="off">
+
+        <p id="zoneSearchHint" class="zone-search-hint">
+            Type a barangay name to filter
+        </p>
+
+        <div
+            id="zoneList"
+            class="zone-list">
+
+        </div>
+
+    </div>
+
+</aside>
+
+</div>
+
+<!-- Guide / Tutorial Modal -->
+<div class="dashboard-overlay" id="guideOverlay">
+
+  <div class="dashboard-modal guide-modal">
+
+    <div class="dashboard-modal-header">
+      <div>
+        <h2>User Guide</h2>
+        <p class="dashboard-modal-sub">A quick walkthrough for MENRO staff &amp; field personnel</p>
+      </div>
+      <button class="dashboard-close" id="btnCloseGuide" aria-label="Close guide">&times;</button>
+    </div>
+
+    <div class="dashboard-modal-body">
+
+      <div class="guide-item">
+        <div class="guide-number">1</div>
+        <div class="guide-text">
+          <h3>Dashboard</h3>
+          <p>Click <strong>📊 Dashboard</strong> in the top bar for a system-wide summary — total zones, health breakdown, average NDVI and canopy cover, survey counts, and the most commonly reported threat.</p>
+        </div>
+      </div>
+
+      <div class="guide-item">
+        <div class="guide-number">2</div>
+        <div class="guide-text">
+          <h3>Map</h3>
+          <p>Scroll to zoom in and out. Click and drag to pan around Calatagan. Use the <strong>+ / −</strong> controls in the top-left corner of the map for precise zoom steps.</p>
+        </div>
+      </div>
+
+      <div class="guide-item">
+        <div class="guide-number">3</div>
+        <div class="guide-text">
+          <h3>Search</h3>
+          <p>Use the search box under <strong>Mangrove Zones</strong> in the right panel to filter by barangay name. The list below updates instantly as you type.</p>
+        </div>
+      </div>
+
+      <div class="guide-item">
+        <div class="guide-number">4</div>
+        <div class="guide-text">
+          <h3>Layers</h3>
+          <p>In the right panel under <strong>Map Layers</strong>, toggle <strong>Satellite Base</strong>, <strong>NDVI Overlay</strong>, and <strong>Mangrove Zones</strong> on or off to control what's shown on the map.</p>
+        </div>
+      </div>
+
+      <div class="guide-item">
+        <div class="guide-number">5</div>
+        <div class="guide-text">
+          <h3>Selecting a Zone</h3>
+          <p>Click a zone marker on the map, or a zone in the list, to view its details in the left panel — partner organization, NDVI, health status, and (if available) field survey data like ranger name, canopy cover, and observed threats.</p>
+        </div>
+      </div>
+
+      <div class="guide-item">
+        <div class="guide-number">6</div>
+        <div class="guide-text">
+          <h3>Export Report</h3>
+          <p>Click <strong>Export Field Survey Report</strong> in the left panel to generate a PDF summarizing the current scene — zone overview table plus full field survey details for surveyed zones.</p>
+        </div>
+      </div>
+
+      <div class="guide-item">
+        <div class="guide-number">7</div>
+        <div class="guide-text">
+          <h3>KoboToolbox</h3>
+          <p>Field surveys submitted through the KoboToolbox mobile form sync automatically. Once a ranger submits a survey for a barangay, that zone's NDVI, status, and detail panel update on their own — no manual entry needed here.</p>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Dashboard Modal -->
+<div class="dashboard-overlay" id="dashboardOverlay">
+
+  <div class="dashboard-modal">
+
+    <div class="dashboard-modal-header">
+      <div>
+        <h2>Mangrove Monitoring Dashboard</h2>
+        <p class="dashboard-modal-sub">MENRO Calatagan · Overview across all zones</p>
+      </div>
+      <button class="dashboard-close" id="btnCloseDashboard" aria-label="Close dashboard">&times;</button>
+    </div>
+
+    <div class="dashboard-modal-body" id="dashboardBody">
+      <!-- populated by renderDashboard() -->
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Map Slide-out Menu -->
+<div class="side-menu-backdrop" id="sideMenuBackdrop"></div>
+
+<aside class="side-menu" id="sideMenu">
+
+  <div class="side-menu-header">
+    <span class="side-menu-brand">AquaGuard</span>
+    <button class="side-menu-close" id="btnCloseSideMenu" aria-label="Close menu">&times;</button>
+  </div>
+
+  <div class="side-menu-body">
+
+    <button class="side-menu-item" id="menuDashboard">
+      <span class="side-menu-icon">📊</span>
+      <span>Dashboard</span>
+    </button>
+
+    <button class="side-menu-item" id="menuGuide">
+      <span class="side-menu-icon">📖</span>
+      <span>Guide</span>
+    </button>
+
+    <button class="side-menu-item" id="menuExport">
+      <span class="side-menu-icon">📄</span>
+      <span>Export Field Survey Report</span>
+    </button>
+
+    <div class="side-menu-divider"></div>
+
+    <button class="side-menu-item side-menu-signout" id="menuSignOut">
+      <span class="side-menu-icon">🚪</span>
+      <span>Sign Out</span>
+    </button>
+
+  </div>
+
+</aside>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="satellite.js"></script>
+<script src="export.js"></script>
+<script src="Dashboard.js"></script>
+
+</body>
+</html>
