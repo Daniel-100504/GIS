@@ -992,7 +992,7 @@ function capitalise(str){
 // survey still gets the ranger-reported override on top.
 async function fetchSatelliteNDVI() {
   try {
-    const res = await fetch("get-ndvi.php");
+    const res = await fetch("ndvi/get-ndvi.php");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data.stale) console.warn("NDVI data is over 48h old — check Task Scheduler.");
