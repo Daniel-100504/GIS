@@ -408,6 +408,58 @@ const satTile = L.tileLayer(
 
 satTile.addTo(map);
 
+/* ---------- Sentinel-2 Imagery (Copernicus, real satellite passes) ----------
+   Optional overlay on top of the Esri basemap — off by default, toggled from
+   the "Sentinel-2 Imagery" switch in the right panel. Uses the same free
+   CDSE account as update_ndvi.py, via the WMS Instance ID from the Sentinel
+   Hub Configuration Utility (no auth token needed for WMS tile requests —
+   the instance ID itself is the access key).
+   Time range is bound to the Scene Date picker: for a chosen date we ask for
+   the least-cloudy scene in the 15 days up to and including it, the same
+   lookback window update_ndvi.py uses for NDVI, so what you SEE roughly
+   matches what the NDVI numbers were computed from. */
+const SENTINEL_INSTANCE_ID = "a5d57799-a09d-4715-a7f1-44c6d3dfccb6";
+const SENTINEL_WMS_URL = `https://sh.dataspace.copernicus.eu/ogc/wms/${SENTINEL_INSTANCE_ID}`;
+
+// sceneDate isn't declared yet at this point in the file (it's set up later
+// below), so read the raw DOM value directly here instead of the `sceneDate`
+// const. todayISO() is a function declaration further down, but those are
+// hoisted, so calling it up here is safe.
+function sceneDateInputValueOrToday() {
+    const el = document.getElementById("sceneDate");
+    return (el && el.value) ? el.value : todayISO();
+}
+
+function sentinelTimeRangeFor(dateStr) {
+    // dateStr is "YYYY-MM-DD" from the Scene Date input.
+    const to = dateStr || todayISO();
+    const toDate = new Date(to + "T00:00:00Z");
+    const fromDate = new Date(toDate);
+    fromDate.setUTCDate(fromDate.getUTCDate() - 15);
+    const from = fromDate.toISOString().slice(0, 10);
+    return `${from}/${to}`;
+}
+
+const sentinelLayer = L.tileLayer.wms(SENTINEL_WMS_URL, {
+    layers: "TRUE-COLOR-S2L2A",
+    format: "image/png",
+    transparent: true,
+    maxZoom: 19,
+    attribution: "Imagery \u00a9 Copernicus Sentinel-2 (CDSE)",
+    time: sentinelTimeRangeFor(sceneDateInputValueOrToday()),
+});
+
+const layerSentinel2El = document.getElementById("layerSentinel2");
+if (layerSentinel2El) {
+    layerSentinel2El.addEventListener("change", function () {
+        if (this.checked) {
+            sentinelLayer.addTo(map);
+        } else {
+            map.removeLayer(sentinelLayer);
+        }
+    });
+}
+
 /* ---------- Layer Groups ---------- */
 
 const markersLayer = L.layerGroup().addTo(map);
@@ -775,6 +827,7 @@ function syncSceneDateToToday() {
     if (sceneDate.value !== today) {
         sceneDate.value = today;
         updateSceneByDate(today);
+        sentinelLayer.setParams({ time: sentinelTimeRangeFor(today) });
     }
 }
 
@@ -782,6 +835,7 @@ sceneDate.addEventListener("change",(e)=>{
 
     sceneDateManuallySet = true;
     updateSceneByDate(e.target.value);
+    sentinelLayer.setParams({ time: sentinelTimeRangeFor(e.target.value) });
 
 });
 

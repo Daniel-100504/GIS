@@ -29,8 +29,8 @@
 
     <div class="topbar-right">
 
-        <span class="badge-pill sentinel">
-            🛰 Sentinel-2
+        <span class="badge-pill sentinel" title="Basemap imagery: Esri World Imagery. NDVI readings: Copernicus Sentinel-2.">
+            🛰 Sentinel-2 NDVI
         </span>
 
         <button
@@ -203,6 +203,10 @@ Degraded
             class="zone-search"
             placeholder="Search zone..."
             autocomplete="off">
+
+        <p id="zoneSearchHint" class="zone-search-hint">
+            Type a barangay name to filter
+        </p>
 
         <div
             id="zoneList"
