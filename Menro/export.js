@@ -40,103 +40,89 @@ function exportPDF() {
 
     function drawPageFooter() {
         const pg = doc.internal.getCurrentPageInfo().pageNumber;
+        doc.setDrawColor(180);
+        doc.setLineWidth(0.2);
+        doc.line(ML, PAGE_H - 14, PAGE_W - MR, PAGE_H - 14);
         doc.setFontSize(8);
-        doc.setTextColor(150);
+        doc.setTextColor(120);
         doc.setFont("helvetica", "normal");
-        doc.text("MENRO Calatagan – AquaGuard Mangrove Monitoring System", ML, PAGE_H - 8);
+        doc.text("MENRO Calatagan - AquaGuard Mangrove Monitoring System", ML, PAGE_H - 8);
         doc.text(`Page ${pg}`, PAGE_W - MR, PAGE_H - 8, { align: "right" });
         doc.setTextColor(0);
     }
 
-    function statusColor(status) {
-        if (status === "healthy")  return [46, 125, 50];
-        if (status === "moderate") return [245, 127, 23];
-        return [183, 28, 28];
-    }
-
-    function pill(doc, x, y, label, status) {
-        const [r, g, b] = statusColor(status);
-        doc.setFillColor(r, g, b);
-        doc.roundedRect(x, y - 4, 24, 6, 2, 2, "F");
-        doc.setFontSize(7);
-        doc.setTextColor(255, 255, 255);
+    function sectionLabel(text, y) {
         doc.setFont("helvetica", "bold");
-        doc.text(label, x + 12, y, { align: "center" });
+        doc.setFontSize(8);
+        doc.setTextColor(90);
+        doc.text(text, ML, y);
+        doc.setDrawColor(90);
+        doc.setLineWidth(0.3);
+        doc.line(ML, y + 1.5, ML + CW, y + 1.5);
         doc.setTextColor(0);
+        return y + 6;
     }
 
     // ── Cover Header ─────────────────────────────────────────
-    // Dark green header bar
-    doc.setFillColor(27, 94, 32);
-    doc.rect(0, 0, PAGE_W, 38, "F");
-
-    // Accent stripe
-    doc.setFillColor(76, 175, 80);
-    doc.rect(0, 38, PAGE_W, 2, "F");
-
-    doc.setTextColor(255, 255, 255);
+    // Plain white header — no fills. Hierarchy comes from weight/size and
+    // a single ruled line, keeping ink use to text + one thin rule.
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.text("AquaGuard Mangrove Monitoring System", ML, 16);
+    doc.setFontSize(17);
+    doc.setTextColor(0);
+    doc.text("AquaGuard Mangrove Monitoring System", ML, 18);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.text("Municipal Environment and Natural Resources Office  •  Calatagan, Batangas", ML, 24);
+    doc.setTextColor(80);
+    doc.text("Municipal Environment and Natural Resources Office - Calatagan, Batangas", ML, 25);
 
     doc.setFontSize(9);
-    doc.text(`Field Survey Report  •  Scene Date: ${reportDate}  •  Generated: ${today}`, ML, 32);
+    doc.setTextColor(120);
+    doc.text(`Field Survey Report  |  Scene Date: ${reportDate}  |  Generated: ${today}`, ML, 31);
     doc.setTextColor(0);
 
-    let y = 52;
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.6);
+    doc.line(ML, 36, PAGE_W - MR, 36);
+
+    let y = 48;
 
     // ── Scene Summary Cards ───────────────────────────────────
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(100);
-    doc.text("SCENE SUMMARY", ML, y);
-    doc.setTextColor(0);
-    y += 4;
+    y = sectionLabel("SCENE SUMMARY", y);
 
     const cards = [
-        { label: "Mean NDVI",     value: String(sceneSummary.meanNDVI),     color: [46,125,50]  },
-        { label: "Cloud Cover",   value: String(sceneSummary.cloudCover),   color: [30,80,160]  },
-        { label: "Healthy Zones", value: String(sceneSummary.healthyCount), color: [46,125,50]  },
-        { label: "At-Risk Zones", value: String(sceneSummary.atRiskCount),  color: [183,28,28]  },
+        { label: "Mean NDVI",     value: String(sceneSummary.meanNDVI) },
+        { label: "Cloud Cover",   value: String(sceneSummary.cloudCover) },
+        { label: "Healthy Zones", value: String(sceneSummary.healthyCount) },
+        { label: "At-Risk Zones", value: String(sceneSummary.atRiskCount) },
     ];
 
     const cardW = (CW - 9) / 4;
+    doc.setDrawColor(180);
+    doc.setLineWidth(0.25);
     cards.forEach((card, i) => {
         const cx = ML + i * (cardW + 3);
-        doc.setFillColor(248, 250, 248);
-        doc.setDrawColor(200, 220, 200);
-        doc.roundedRect(cx, y, cardW, 18, 2, 2, "FD");
+        doc.roundedRect(cx, y, cardW, 18, 1, 1, "S");
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7);
-        doc.setTextColor(100);
+        doc.setTextColor(110);
         doc.text(card.label, cx + cardW / 2, y + 6, { align: "center" });
         doc.setFont("helvetica", "bold");
         doc.setFontSize(14);
-        doc.setTextColor(...card.color);
-        doc.text(card.value, cx + cardW / 2, y + 14, { align: "center" });
         doc.setTextColor(0);
+        doc.text(card.value, cx + cardW / 2, y + 14, { align: "center" });
     });
+    doc.setTextColor(0);
 
     y += 26;
 
     // ── Zone Summary Table ────────────────────────────────────
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(100);
-    doc.text("MANGROVE ZONES OVERVIEW", ML, y);
-    doc.setTextColor(0);
-    y += 4;
+    y = sectionLabel("MANGROVE ZONES OVERVIEW", y);
 
-    // Table header
-    doc.setFillColor(27, 94, 32);
-    doc.rect(ML, y, CW, 7, "F");
-    doc.setTextColor(255);
+    // Table header — ruled, not filled
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.5);
+    doc.setTextColor(0);
 
     const cols = { name: ML+2, area: ML+52, ndvi: ML+72, status: ML+96, partner: ML+124 };
     doc.text("Barangay / Zone",    cols.name,    y + 4.8);
@@ -144,38 +130,37 @@ function exportPDF() {
     doc.text("NDVI",               cols.ndvi,    y + 4.8);
     doc.text("Status",             cols.status,  y + 4.8);
     doc.text("Partner Org",        cols.partner, y + 4.8);
-    doc.setTextColor(0);
     y += 7;
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.4);
+    doc.line(ML, y, ML + CW, y);
 
-    ZONES.forEach((zone, idx) => {
+    ZONES.forEach((zone) => {
         y = checkPage(y, 9);
-        // Alternating row bg
-        if (idx % 2 === 0) {
-            doc.setFillColor(245, 250, 245);
-            doc.rect(ML, y, CW, 8, "F");
-        }
-        doc.setDrawColor(220, 235, 220);
-        doc.line(ML, y + 8, ML + CW, y + 8);
 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(7.5);
-        doc.setTextColor(27, 94, 32);
+        doc.setTextColor(0);
         doc.text(zone.name, cols.name, y + 5.5);
 
         doc.setFont("helvetica", "normal");
-        doc.setTextColor(50);
+        doc.setTextColor(60);
         doc.text(zone.area.toString(), cols.area, y + 5.5);
         doc.text(zone.ndvi.toFixed(2),  cols.ndvi, y + 5.5);
 
-        // Status pill
-        pill(doc, cols.status, y + 5.5, capitalise(zone.status), zone.status);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(0);
+        doc.text(capitalise(zone.status), cols.status, y + 5.5);
 
         doc.setFont("helvetica", "normal");
-        doc.setTextColor(50);
+        doc.setTextColor(60);
         doc.text(zone.partner !== "—" ? zone.partner : "—", cols.partner, y + 5.5);
 
         doc.setTextColor(0);
         y += 8;
+        doc.setDrawColor(210);
+        doc.setLineWidth(0.15);
+        doc.line(ML, y, ML + CW, y);
     });
 
     y += 6;
@@ -185,34 +170,28 @@ function exportPDF() {
 
     if (surveyedZones.length > 0) {
         y = checkPage(y, 20);
+        y = sectionLabel("FIELD SURVEY DETAILS  -  KoboToolbox Submissions", y);
+        y += 2;
 
-        // Section header
-        doc.setFillColor(232, 245, 233);
-        doc.setDrawColor(165, 214, 167);
-        doc.roundedRect(ML, y, CW, 8, 2, 2, "FD");
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(9);
-        doc.setTextColor(27, 94, 32);
-        doc.text("FIELD SURVEY DETAILS  —  KoboToolbox Submissions", ML + 4, y + 5.5);
-        doc.setTextColor(0);
-        y += 14;
-
-        surveyedZones.forEach((zone, idx) => {
+        surveyedZones.forEach((zone) => {
             y = checkPage(y, 60);
 
-            // Zone card header
-            const [r,g,b] = statusColor(zone.status);
-            doc.setFillColor(r, g, b);
-            doc.roundedRect(ML, y, CW, 9, 2, 2, "F");
-            doc.setTextColor(255);
+            // Zone card header — ruled box, no fill
+            doc.setDrawColor(0);
+            doc.setLineWidth(0.3);
+            doc.line(ML, y, ML + CW, y);
+            y += 6;
+
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(9);
-            doc.text(`${zone.name}  —  ${zone.protected_area || zone.partner}`, ML + 4, y + 6);
+            doc.setFontSize(9.5);
+            doc.setTextColor(0);
+            doc.text(`${zone.name}  -  ${zone.protected_area || zone.partner}`, ML, y);
             doc.setFont("helvetica", "normal");
             doc.setFontSize(7.5);
-            doc.text(`NDVI: ${zone.ndvi.toFixed(2)}  •  ${capitalise(zone.status)}  •  ${zone.area} ha`, PAGE_W - MR - 2, y + 6, { align: "right" });
+            doc.setTextColor(90);
+            doc.text(`NDVI: ${zone.ndvi.toFixed(2)}  |  ${capitalise(zone.status)}  |  ${zone.area} ha`, PAGE_W - MR, y, { align: "right" });
             doc.setTextColor(0);
-            y += 11;
+            y += 6;
 
             // Two-column detail layout
             const col1x = ML + 2;
@@ -222,11 +201,11 @@ function exportPDF() {
             function detailRow(label, value, x, cy) {
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(7);
-                doc.setTextColor(100);
+                doc.setTextColor(110);
                 doc.text(label.toUpperCase(), x, cy);
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(8);
-                doc.setTextColor(30);
+                doc.setTextColor(20);
                 const lines = doc.splitTextToSize(value || "—", colW);
                 doc.text(lines, x, cy + 4);
                 doc.setTextColor(0);
@@ -250,12 +229,13 @@ function exportPDF() {
             ry = detailRow("Additional Notes",        zone.notes        || "—", col2x, ry) + 3;
 
             y = Math.max(ly, ry) + 4;
-
-            // Divider
-            doc.setDrawColor(200, 230, 200);
-            doc.line(ML, y, ML + CW, y);
-            y += 8;
         });
+
+        // Closing rule for the survey section
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.3);
+        doc.line(ML, y, ML + CW, y);
+        y += 8;
     }
 
     // ── Footer on all pages ───────────────────────────────────

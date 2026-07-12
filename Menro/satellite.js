@@ -930,8 +930,39 @@ function capitalise(str){
 
 }
 
+/* ---------- Satellite NDVI (Copernicus / Sentinel-2) ---------- */
+// Fetches the latest per-zone NDVI readings produced by update_ndvi.py
+// (via get-ndvi.php). This sets the baseline NDVI/status for every
+// zone from real satellite data. mergeKoboIntoZones() runs after this
+// in initWithKobo(), so any zone with an actual KoboToolbox field
+// survey still gets the ranger-reported override on top.
+async function fetchSatelliteNDVI() {
+  try {
+    const res = await fetch("get-ndvi.php");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.stale) console.warn("NDVI data is over 48h old — check Task Scheduler.");
+    return data.zones || {};
+  } catch (err) {
+    console.warn("Satellite NDVI fetch failed — keeping current values.", err);
+    return {};
+  }
+}
+
+function applySatelliteNDVI(zoneReadings) {
+  ZONES.forEach(zone => {
+    const reading = zoneReadings[zone.id];
+    if (!reading || reading.error) return;
+    zone.ndvi = reading.ndvi;
+    zone.status = reading.status;
+  });
+}
+
 /* ---------- KoboToolbox Init ---------- */
 async function initWithKobo() {
+  const satelliteReadings = await fetchSatelliteNDVI();
+  applySatelliteNDVI(satelliteReadings);
+
   const submissions = await fetchKoboData();
 
   if (submissions && submissions.length > 0) {
