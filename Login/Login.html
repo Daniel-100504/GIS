@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AquaGuard – Mangrove Monitoring System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <canvas id="gisCanvas" aria-hidden="true"></canvas>
+
+  <div class="page-bg">
+    <div class="card">
+
+      <div class="card-accent"></div>
+
+      <div class="card-inner">
+
+        <div class="brand">
+          <div class="brand-icon" aria-hidden="true">
+            <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="18" cy="14" r="10" fill="#1b6b3a" opacity="0.15"/>
+              <circle cx="18" cy="14" r="6" fill="#3ddc84" opacity="0.85"/>
+              <path d="M18 20 L18 32" stroke="#3ddc84" stroke-width="2.5" stroke-linecap="round"/>
+              <path d="M18 14 L14 10 M18 14 L22 10 M18 12 L15 9 M18 12 L21 9" stroke="#1b6b3a" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <h1 class="brand-title">AquaGuard</h1>
+            <p class="brand-sub">Mangrove Monitoring System</p>
+          </div>
+        </div>
+
+        <div class="coord-divider">
+          <span class="coord-tag">13.8317° N, 120.6400° E</span>
+        </div>
+
+        <div class="role-section">
+          <label class="role-label">Sign In As</label>
+          <div class="role-buttons">
+            <button class="role-btn" data-role="menro" type="button">
+              <span class="role-icon">👤</span>
+              MENRO Officer
+            </button>
+            <button class="role-btn" data-role="ranger" type="button">
+              <span class="role-icon">🌳</span>
+              Forest Ranger
+            </button>
+          </div>
+        </div>
+
+        <div class="form-body">
+          <div class="field-group">
+            <label for="username">Username</label>
+            <input
+              type="text"
+              id="username"
+              placeholder="Enter your username"
+              autocomplete="username"
+            />
+          </div>
+
+          <div class="field-group">
+            <label for="password">Password</label>
+            <div class="password-wrapper">
+              <input
+                type="password"
+                id="password"
+                placeholder="Enter your password"
+                autocomplete="current-password"
+              />
+              <button class="toggle-pw" type="button" id="togglePw" aria-label="Toggle password visibility">
+                <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="row-options">
+            <label class="remember-label">
+              <input type="checkbox" id="rememberMe" />
+              <span class="checkmark"></span>
+              Remember me
+            </label>
+            <a href="#" class="forgot-link">Forgot password?</a>
+          </div>
+
+          <button class="btn-signin" id="btnSignIn" type="button">
+            <span class="btn-text">Sign In</span>
+            <span class="btn-arrow">→</span>
+          </button>
+
+          <div id="errorMsg" class="error-msg" role="alert" aria-live="polite"></div>
+        </div>
+
+        <p class="card-footer">DENR-MENRO Batangas · Calatagan Mangrove Reserve</p>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    (function () {
+      const canvas = document.getElementById('gisCanvas');
+      const ctx = canvas.getContext('2d');
+
+      function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        draw();
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const gridSpacing = 48;
+        ctx.strokeStyle = 'rgba(61,220,132,0.06)';
+        ctx.lineWidth = 1;
+
+        for (let x = 0; x < canvas.width; x += gridSpacing) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, canvas.height);
+          ctx.stroke();
+        }
+        for (let y = 0; y < canvas.height; y += gridSpacing) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(canvas.width, y);
+          ctx.stroke();
+        }
+
+        const cx = canvas.width * 0.72, cy = canvas.height * 0.3;
+        ctx.strokeStyle = 'rgba(61,220,132,0.05)';
+        for (let r = 60; r < 320; r += 45) {
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        const dots = [
+          [0.15, 0.2], [0.8, 0.65], [0.45, 0.85], [0.6, 0.1], [0.25, 0.7]
+        ];
+        ctx.fillStyle = 'rgba(61,220,132,0.18)';
+        dots.forEach(([fx, fy]) => {
+          ctx.beginPath();
+          ctx.arc(fx * canvas.width, fy * canvas.height, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(61,220,132,0.10)';
+          ctx.lineWidth = 1;
+          const px = fx * canvas.width, py = fy * canvas.height;
+          ctx.beginPath(); ctx.moveTo(px - 12, py); ctx.lineTo(px + 12, py); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(px, py - 12); ctx.lineTo(px, py + 12); ctx.stroke();
+        });
+      }
+
+      window.addEventListener('resize', resize);
+      resize();
+    })();
+  </script>
+</body>
+</html>
