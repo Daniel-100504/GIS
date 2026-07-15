@@ -1,20 +1,5 @@
-/* ============================================================
-   KOBOTOOLBOX INTEGRATION
-   ============================================================
-   1. Replace KOBO_TOKEN with your token from:
-      https://kf.kobotoolbox.org/token/
-   2. Form UID is already set from your URL.
-   3. Run on a server (XAMPP) — not file:// — to avoid CORS.
-      If CORS blocks, use kobo-proxy.php (see README comment below).
-   ============================================================ */
-
-// NOTE: the KoboToolbox token lives only in kobo-proxy.php now.
-// Never put it here — anything in a .js file is visible to every
-// visitor via "View Source" / DevTools.
 const KOBO_API_URL  = "kobo-proxy.php";
 
-/* ---------- Barangay name → Zone ID map ---------- */
-// Maps KoboToolbox choice names to your ZONES array IDs
 const BARANGAY_TO_ZONE = {
   "bagong_silang":  "bagong-silang",
   "baha":           "baha",
@@ -35,9 +20,6 @@ const BARANGAY_TO_ZONE = {
   "poblacion_4":    "poblacion-4",
 };
 
-/* ---------- Derive health status from field data ---------- */
-// Since your form has no direct NDVI field, we estimate from
-// canopy cover % and observed threats.
 function deriveStatus(sub) {
   const cover   = parseFloat(sub["Estimated_Canopy_Cover_"]) || 0;
   const threats = sub["Observed_Threats"] || "none_observed";
@@ -49,15 +31,13 @@ function deriveStatus(sub) {
   return "degraded";
 }
 
-/* ---------- Estimate NDVI proxy from canopy cover ---------- */
 function coverToNDVI(cover) {
   // Rough linear scale: 0% cover → 0.10, 100% cover → 0.85
   const pct = Math.min(Math.max(parseFloat(cover) || 0, 0), 100);
   return +(0.10 + (pct / 100) * 0.75).toFixed(2);
 }
 
-/* ---------- Fetch submissions from KoboToolbox ---------- */
-let ALL_SUBMISSIONS = []; // raw, unmerged — used by the dashboard
+let ALL_SUBMISSIONS = []; 
 
 async function fetchKoboData() {
   try {
@@ -73,9 +53,7 @@ async function fetchKoboData() {
   }
 }
 
-/* ---------- Merge KoboToolbox submissions into ZONES ---------- */
 function mergeKoboIntoZones(submissions) {
-  // Group submissions by barangay — keep most recent per zone
   const byZone = {};
 
   submissions.forEach(sub => {
@@ -86,18 +64,15 @@ function mergeKoboIntoZones(submissions) {
     const existing = byZone[zoneId];
     const subDate  = sub["Inspection_Date"] || "";
 
-    // Keep only the most recent submission per zone
     if (!existing || subDate > (existing["Inspection_Date"] || "")) {
       byZone[zoneId] = sub;
     }
   });
 
-  // Apply to ZONES
   ZONES.forEach(zone => {
     const sub = byZone[zone.id];
     if (!sub) return;
 
-    // GPS — KoboToolbox format: "lat lng altitude accuracy"
     const gps = sub["GPS"];
     if (gps) {
       const parts = gps.split(" ").map(Number);
@@ -107,15 +82,12 @@ function mergeKoboIntoZones(submissions) {
       }
     }
 
-    // NDVI proxy from canopy cover
     if (sub["Estimated_Canopy_Cover_"]) {
       zone.ndvi = coverToNDVI(sub["Estimated_Canopy_Cover_"]);
     }
 
-    // Health status from canopy + threats
     zone.status = deriveStatus(sub);
 
-    // Ranger / inspection info stored for popup display
     zone.lastRanger    = sub["Ranger_Name"]      || zone.lastRanger    || "—";
     zone.lastDate      = sub["Inspection_Date"]  || zone.lastDate      || "—";
     zone.transect      = sub["Transect_Number"]  || zone.transect      || "—";
@@ -131,19 +103,14 @@ function mergeKoboIntoZones(submissions) {
   console.log(`KoboToolbox: merged ${Object.keys(byZone).length} zone(s) from ${submissions.length} submission(s).`);
 }
 
-/* ============================================================
-   END KOBOTOOLBOX INTEGRATION
-   ============================================================ */
-
 const ZONES = [
   {
     id: "balibago",
     name: "Balibago",
     area: 6.22,
     partner: "—",
-    ndvi: 0.59,
-    status: "healthy",
-    change: "+0.01",
+    ndvi: null,
+    status: "pending",
     lat: 13.8730,
     lng: 120.6300,
   },
@@ -152,9 +119,8 @@ const ZONES = [
     name: "Talisay",
     area: 6.93,
     partner: "—",
-    ndvi: 0.58,
-    status: "moderate",
-    change: "-0.01",
+    ndvi: null,
+    status: "pending",
     lat: 13.8650,
     lng: 120.6260,
   },
@@ -163,9 +129,8 @@ const ZONES = [
     name: "Carretunan",
     area: 23.24,
     partner: "—",
-    ndvi: 0.55,
-    status: "healthy",
-    change: "+0.01",
+    ndvi: null,
+    status: "pending",
     lat: 13.8570,
     lng: 120.6230,
   },
@@ -174,9 +139,8 @@ const ZONES = [
     name: "Quilitisan",
     area: 6.63,
     partner: "PALITAKAN",
-    ndvi: 0.63,
-    status: "healthy",
-    change: "+0.01",
+    ndvi: null,
+    status: "pending",
     lat: 13.8500,
     lng: 120.6210,
   },
@@ -185,9 +149,8 @@ const ZONES = [
     name: "Gulod",
     area: 66.80,
     partner: "—",
-    ndvi: 0.37,
-    status: "degraded",
-    change: "-0.05",
+    ndvi: null,
+    status: "pending",
     lat: 13.8450,
     lng: 120.6200,
   },
@@ -196,9 +159,8 @@ const ZONES = [
     name: "Balitoc",
     area: 7.42,
     partner: "—",
-    ndvi: 0.55,
-    status: "degraded",
-    change: "+0.01",
+    ndvi: null,
+    status: "pending",
     lat: 13.8390,
     lng: 120.6210,
   },
@@ -207,9 +169,8 @@ const ZONES = [
     name: "Poblacion 1",
     area: 6.66,
     partner: "—",
-    ndvi: 0.57,
-    status: "moderate",
-    change: "-0.01",
+    ndvi: null,
+    status: "pending",
     lat: 13.8340,
     lng: 120.6220,
   },
@@ -218,9 +179,8 @@ const ZONES = [
     name: "Poblacion 2",
     area: 1.69,
     partner: "—",
-    ndvi: 0.62,
-    status: "healthy",
-    change: "+0.01",
+    ndvi: null,
+    status: "pending",
     lat: 13.8300,
     lng: 120.6230,
   },
@@ -229,9 +189,8 @@ const ZONES = [
     name: "Poblacion 3",
     area: 29.06,
     partner: "—",
-    ndvi: 0.43,
-    status: "moderate",
-    change: "-0.03",
+    ndvi: null,
+    status: "pending",
     lat: 13.8260,
     lng: 120.6240,
   },
@@ -240,9 +199,8 @@ const ZONES = [
     name: "Poblacion 4",
     area: 18.45,
     partner: "—",
-    ndvi: 0.48,
-    status: "moderate",
-    change: "-0.02",
+    ndvi: null,
+    status: "pending",
     lat: 13.8220,
     lng: 120.6250,
   },
@@ -251,9 +209,8 @@ const ZONES = [
     name: "Tanagan",
     area: 5.41,
     partner: "—",
-    ndvi: 0.64,
-    status: "healthy",
-    change: "+0.01",
+    ndvi: null,
+    status: "pending",
     lat: 13.8160,
     lng: 120.6270,
   },
@@ -262,9 +219,8 @@ const ZONES = [
     name: "Sta. Ana",
     area: 28.63,
     partner: "SAPSAP",
-    ndvi: 0.69,
-    status: "degraded",
-    change: "+0.03",
+    ndvi: null,
+    status: "pending",
     lat: 13.8080,
     lng: 120.6300,
   },
@@ -273,9 +229,8 @@ const ZONES = [
     name: "Bagong Silang",
     area: 3.57,
     partner: "SAMMABABA",
-    ndvi: 0.72,
-    status: "healthy",
-    change: "+0.03",
+    ndvi: null,
+    status: "pending",
     lat: 13.7970,
     lng: 120.6360,
   },
@@ -284,9 +239,8 @@ const ZONES = [
     name: "Bucal and Encarnacion",
     area: 23.49,
     partner: "SMME",
-    ndvi: 0.46,
-    status: "moderate",
-    change: "-0.02",
+    ndvi: null,
+    status: "pending",
     lat: 13.8380,
     lng: 120.6560,
   },
@@ -295,9 +249,8 @@ const ZONES = [
     name: "Baha",
     area: 25.14,
     partner: "—",
-    ndvi: 0.68,
-    status: "healthy",
-    change: "+0.02",
+    ndvi: null,
+    status: "pending",
     lat: 13.8480,
     lng: 120.6620,
   },
@@ -306,9 +259,8 @@ const ZONES = [
     name: "Talibayog",
     area: 2.14,
     partner: "—",
-    ndvi: 0.61,
-    status: "healthy",
-    change: "+0.01",
+    ndvi: null,
+    status: "pending",
     lat: 13.8560,
     lng: 120.6590,
   },
@@ -317,63 +269,20 @@ const ZONES = [
     name: "Sambungan",
     area: 6.71,
     partner: "—",
-    ndvi: 0.60,
-    status: "healthy",
-    change: "+0.02",
+    ndvi: null,
+    status: "pending",
     lat: 13.8310,
     lng: 120.6490,
   }
 ];
-const SCENE_DATA = {
-
-    "2026-06-26": {
-        balibago: 0.59,
-        talisay: 0.58,
-        carretunan: 0.55,
-        quilitisan: 0.63,
-        gulod: 0.37,
-        balitoc: 0.55,
-        "poblacion-1": 0.57,
-        "poblacion-2": 0.62,
-        "poblacion-3": 0.43,
-        "poblacion-4": 0.48,
-        tanagan: 0.64,
-        "sta-ana": 0.69,
-        "bagong-silang": 0.72,
-        "bucal-encarnacion": 0.46,
-        baha: 0.68,
-        talibayog: 0.61,
-        sambungan: 0.60
-    },
-
-    "2026-06-15": {
-        balibago: 0.52,
-        talisay: 0.61,
-        carretunan: 0.50,
-        quilitisan: 0.58,
-        gulod: 0.41,
-        balitoc: 0.54,
-        "poblacion-1": 0.53,
-        "poblacion-2": 0.58,
-        "poblacion-3": 0.46,
-        "poblacion-4": 0.44,
-        tanagan: 0.60,
-        "sta-ana": 0.66,
-        "bagong-silang": 0.69,
-        "bucal-encarnacion": 0.42,
-        baha: 0.63,
-        talibayog: 0.57,
-        sambungan: 0.55
-    }
-
-};
 
 /* ---------- Colors ---------- */
 
 const STATUS_COLOR = {
   healthy: "#2e7d32",
   moderate: "#f9a825",
-  degraded: "#c62828"
+  degraded: "#c62828",
+  pending: "#9e9e9e"
 };
 
 const CALATAGAN = [13.8300,120.6300];
@@ -530,32 +439,27 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-/* ---------- Popup Builder ---------- */
+/* ---------- Popup Builder ----------
+   Kept intentionally short — just what a ranger or MENRO officer needs
+   at a glance. The full field survey record (transect, species, tree
+   count, water color, aquafarm activity, notes, etc.) lives in the
+   Export Field Survey Report PDF instead of cluttering the map popup. */
 function buildPopup(zone) {
   const hasKobo = zone.lastRanger && zone.lastRanger !== "—";
-  const koboRows = hasKobo ? `
-    <tr style="border-top:1px solid #eee"><td colspan="2" style="padding-top:6px;font-weight:700;color:#555;font-size:0.75rem;">FIELD SURVEY DATA</td></tr>
-    <tr><td>Ranger</td><td>${escapeHtml(zone.lastRanger)}</td></tr>
-    <tr><td>Date</td><td>${escapeHtml(zone.lastDate)}</td></tr>
-    <tr><td>Transect</td><td>${escapeHtml(zone.transect)}</td></tr>
-    <tr><td>Canopy Cover</td><td>${escapeHtml(zone.canopyCover)}</td></tr>
-    <tr><td>Species</td><td>${escapeHtml(zone.speciesName)}</td></tr>
-    <tr><td>Tree Count</td><td>${escapeHtml(zone.treeCount)}</td></tr>
-    <tr><td>Threats</td><td>${escapeHtml(zone.threats)}</td></tr>
-    <tr><td>Water Color</td><td>${escapeHtml(zone.waterColor)}</td></tr>
-    <tr><td>Aquafarm</td><td>${escapeHtml(zone.aquafarmNear)}</td></tr>
-    ${zone.notes !== "—" ? `<tr><td>Notes</td><td>${escapeHtml(zone.notes)}</td></tr>` : ""}
+
+  const surveyRow = hasKobo ? `
+    <tr><td style="color:#777;padding:2px 6px 2px 0">Last Inspection</td><td style="font-weight:600">${escapeHtml(zone.lastDate)}</td></tr>
+    <tr><td style="color:#777;padding:2px 6px 2px 0">Threats</td><td style="font-weight:600">${escapeHtml(capitalise(zone.threats))}</td></tr>
   ` : `<tr><td colspan="2" style="color:#999;font-size:0.72rem;padding-top:4px;">No field survey data yet</td></tr>`;
 
   return `
-    <div style="min-width:200px">
+    <div style="min-width:190px">
       <div class="popup-title">${escapeHtml(zone.name)}</div>
       <table style="width:100%;font-size:0.78rem;border-collapse:collapse">
-        <tr><td style="color:#777;padding:2px 6px 2px 0">Partner</td><td style="font-weight:600">${escapeHtml(zone.partner)}</td></tr>
-        <tr><td style="color:#777;padding:2px 6px 2px 0">Area</td><td style="font-weight:600">${zone.area} ha</td></tr>
-        <tr><td style="color:#777;padding:2px 6px 2px 0">NDVI</td><td style="font-weight:600">${zone.ndvi.toFixed(2)}</td></tr>
         <tr><td style="color:#777;padding:2px 6px 2px 0">Status</td><td style="font-weight:600">${capitalise(zone.status)}</td></tr>
-        ${koboRows}
+        <tr><td style="color:#777;padding:2px 6px 2px 0">NDVI</td><td style="font-weight:600">${zone.ndvi !== null ? zone.ndvi.toFixed(2) : "Pending fetch\u2026"}</td></tr>
+        <tr><td style="color:#777;padding:2px 6px 2px 0">Area</td><td style="font-weight:600">${zone.area} ha</td></tr>
+        ${surveyRow}
       </table>
     </div>
   `;
@@ -652,7 +556,7 @@ function renderZoneList(filterText = "") {
             </div>
 
             <div class="zone-meta">
-                ${zone.area} ha • NDVI ${zone.ndvi.toFixed(2)}
+                ${zone.area} ha • NDVI ${zone.ndvi !== null ? zone.ndvi.toFixed(2) : "Pending"}
             </div>
 
         `;
@@ -708,8 +612,12 @@ let sceneSummary = { meanNDVI: "0.00", cloudCover: "8%", healthyCount: 0, atRisk
 
 function updateSummary(){
 
-    const mean=
-        ZONES.reduce((sum,z)=>sum+z.ndvi,0)/ZONES.length;
+    const withNdvi = ZONES.filter(z => z.ndvi !== null);
+
+    const mean =
+        withNdvi.length > 0
+            ? withNdvi.reduce((sum,z)=>sum+z.ndvi,0)/withNdvi.length
+            : 0;
 
     const healthy=
         ZONES.filter(z=>z.status==="healthy").length;
@@ -826,7 +734,6 @@ function syncSceneDateToToday() {
 
     if (sceneDate.value !== today) {
         sceneDate.value = today;
-        updateSceneByDate(today);
         sentinelLayer.setParams({ time: sentinelTimeRangeFor(today) });
     }
 }
@@ -834,7 +741,6 @@ function syncSceneDateToToday() {
 sceneDate.addEventListener("change",(e)=>{
 
     sceneDateManuallySet = true;
-    updateSceneByDate(e.target.value);
     sentinelLayer.setParams({ time: sentinelTimeRangeFor(e.target.value) });
 
 });
@@ -845,57 +751,11 @@ syncSceneDateToToday();
 // on a MENRO office computer that's left open all day.
 setInterval(syncSceneDateToToday, 60 * 1000);
 
-// Thresholds mirrored from updateNDVIBar()'s comment:
-// Healthy >= 0.60, Moderate 0.40–0.59, Degraded < 0.40
-function statusFromNDVI(ndvi) {
-    if (ndvi >= 0.60) return "healthy";
-    if (ndvi >= 0.40) return "moderate";
-    return "degraded";
-}
-
-function updateSceneByDate(date){
-
-    const sceneValues = SCENE_DATA[date];
-
-    if (!sceneValues) {
-        console.warn(`No scene data for ${date} — keeping current values.`);
-        return;
-    }
-
-    ZONES.forEach(zone => {
-        const newNdvi = sceneValues[zone.id];
-        if (newNdvi === undefined) return;
-
-        const oldNdvi = zone.ndvi;
-        zone.ndvi = newNdvi;
-        zone.status = statusFromNDVI(newNdvi);
-        zone.change = (newNdvi - oldNdvi >= 0 ? "+" : "") + (newNdvi - oldNdvi).toFixed(2);
-    });
-
-    // Rebuild markers + NDVI circles with the new status/colors
-    markersLayer.clearLayers();
-    ndviLayer.clearLayers();
-
-    ZONES.forEach(zone => {
-        const color  = STATUS_COLOR[zone.status];
-        const radius = Math.sqrt(zone.area) * 100;
-        L.circle([zone.lat, zone.lng], {
-            radius, color, fillColor: color, fillOpacity: 0.35, weight: 1
-        }).bindPopup(() => buildPopup(zone)).addTo(ndviLayer);
-
-        const marker = L.marker([zone.lat, zone.lng], { icon: makeIcon(zone.status) });
-        marker.bindPopup(() => buildPopup(zone));
-        marker.on("click", () => selectZone(zone));
-        marker.addTo(markersLayer);
-        markers[zone.id] = marker;
-    });
-
-    renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");
-    updateSummary();
-
-    console.log("Scene updated:", date);
-
-}
+// NOTE: the Scene Date picker only drives the Sentinel-2 WMS imagery time
+// window and the PDF report's date label — it no longer fakes historical
+// per-zone NDVI. Zone NDVI/status always reflect the latest real reading
+// from get-ndvi.php (satellite) with KoboToolbox field survey overrides
+// on top; there is no real historical NDVI archive to browse yet.
 
 /* ---------- Mouse Coordinates ---------- */
 
@@ -1115,10 +975,18 @@ if (btnCloseSideMenu) btnCloseSideMenu.addEventListener("click", closeSideMenu);
 if (sideMenuBackdrop) sideMenuBackdrop.addEventListener("click", closeSideMenu);
 
 // ── Drawer action items ────────────────────────────────────
+const menuMap        = document.getElementById("menuMap");
 const menuDashboard = document.getElementById("menuDashboard");
 const menuGuide     = document.getElementById("menuGuide");
 const menuExport    = document.getElementById("menuExport");
 const menuSignOut   = document.getElementById("menuSignOut");
+
+if (menuMap) {
+  menuMap.addEventListener("click", () => {
+    closeSideMenu();
+    closeDashboard(); // defined in Dashboard.js — switches back to the map view
+  });
+}
 
 if (menuDashboard) {
   menuDashboard.addEventListener("click", () => {

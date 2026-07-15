@@ -17,6 +17,14 @@
 
     <div class="topbar-left">
 
+        <button class="map-menu-btn" id="btnMapMenu" aria-label="Open menu">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+
         <span class="topbar-brand">
             AquaGuard
         </span>
@@ -46,7 +54,7 @@
 
 </header>
 
-<div class="layout">
+<div class="layout" id="mapView">
 
 <!-- MAP -->
 
@@ -54,15 +62,6 @@
 
 
 <div id="map"></div>
-
-<button class="map-menu-btn" id="btnMapMenu" aria-label="Open menu">
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-    <line x1="3" y1="6" x2="21" y2="6"/>
-    <line x1="3" y1="12" x2="21" y2="12"/>
-    <line x1="3" y1="18" x2="21" y2="18"/>
-  </svg>
-  <span>Menu</span>
-</button>
 
 <div
 id="mouseCoordinates"
@@ -297,26 +296,14 @@ Degraded
 
 </div>
 
-<!-- Dashboard Modal -->
-<div class="dashboard-overlay" id="dashboardOverlay">
+<!-- Dashboard Tab -->
+<section class="dashboard-view" id="dashboardView">
 
-  <div class="dashboard-modal">
-
-    <div class="dashboard-modal-header">
-      <div>
-        <h2>Mangrove Monitoring Dashboard</h2>
-        <p class="dashboard-modal-sub">MENRO Calatagan · Overview across all zones</p>
-      </div>
-      <button class="dashboard-close" id="btnCloseDashboard" aria-label="Close dashboard">&times;</button>
-    </div>
-
-    <div class="dashboard-modal-body" id="dashboardBody">
-      <!-- populated by renderDashboard() -->
-    </div>
-
+  <div class="dashboard-view-inner" id="dashboardBody">
+    <!-- populated by renderDashboard() -->
   </div>
 
-</div>
+</section>
 
 <!-- Map Slide-out Menu -->
 <div class="side-menu-backdrop" id="sideMenuBackdrop"></div>
@@ -329,6 +316,11 @@ Degraded
   </div>
 
   <div class="side-menu-body">
+
+    <button class="side-menu-item" id="menuMap">
+      <span class="side-menu-icon">🗺️</span>
+      <span>Map</span>
+    </button>
 
     <button class="side-menu-item" id="menuDashboard">
       <span class="side-menu-icon">📊</span>

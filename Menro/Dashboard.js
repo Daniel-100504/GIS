@@ -1,9 +1,3 @@
-/* ============================================================
-   AQUAGUARD — DASHBOARD MODULE
-   Depends on globals defined in satellite.js: ZONES, ALL_SUBMISSIONS,
-   SCENE_DATA, escapeHtml(), capitalise(), todayISO().
-   Load this file AFTER satellite.js.
-   ============================================================ */
 
 function computeDashboardStats() {
   const total    = ZONES.length;
@@ -11,9 +5,12 @@ function computeDashboardStats() {
   const moderate = ZONES.filter(z => z.status === "moderate").length;
   const degraded = ZONES.filter(z => z.status === "degraded").length;
 
-  const avgNdvi = total > 0
-    ? (ZONES.reduce((sum, z) => sum + z.ndvi, 0) / total)
-    : 0;
+  const avgNdvi = (() => {
+    const withNdvi = ZONES.filter(z => z.ndvi !== null);
+    return withNdvi.length > 0
+      ? withNdvi.reduce((sum, z) => sum + z.ndvi, 0) / withNdvi.length
+      : 0;
+  })();
 
   // Canopy cover: only from zones with real field survey data
   const coverValues = ZONES
@@ -43,13 +40,11 @@ function computeDashboardStats() {
     .sort();
   const latestDate = dates.length > 0 ? dates[dates.length - 1] : null;
 
-  // NDVI trend across the last available scene dates (for the trend chart)
-  const sceneDates = Object.keys(SCENE_DATA).sort();
-  const ndviTrend = sceneDates.map(date => {
-    const values = Object.values(SCENE_DATA[date]).filter(v => typeof v === "number");
-    const avg = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null;
-    return { date, avg };
-  });
+  // NDVI trend across scene dates — no real historical NDVI archive exists
+  // yet (only the latest satellite reading is fetched), so there's nothing
+  // genuine to plot here. Left empty rather than faking a trend line;
+  // renderNDVITrendChart() shows an honest "not enough data" state for this.
+  const ndviTrend = [];
 
   // Recent activity — most recent 5 submissions
   const recent = [...ALL_SUBMISSIONS]
@@ -91,6 +86,7 @@ function formatDate(iso) {
 function statusColorHex(status) {
   if (status === "healthy")  return "#2e7d32";
   if (status === "moderate") return "#f57f17";
+  if (status === "pending")  return "#9e9e9e";
   return "#b71c1c";
 }
 
@@ -144,11 +140,11 @@ function renderHealthDonut(healthy, moderate, degraded) {
 
 // Horizontal bar chart: NDVI per zone
 function renderNDVIBarChart(zones) {
-  const sorted = [...zones].sort((a, b) => b.ndvi - a.ndvi);
-  const max = Math.max(...sorted.map(z => z.ndvi), 0.1);
+  const sorted = [...zones].sort((a, b) => (b.ndvi ?? -1) - (a.ndvi ?? -1));
+  const max = Math.max(...sorted.map(z => z.ndvi ?? 0), 0.1);
 
   const rows = sorted.map(z => {
-    const pct   = Math.max((z.ndvi / max) * 100, 2);
+    const pct   = z.ndvi !== null ? Math.max((z.ndvi / max) * 100, 2) : 0;
     const color = statusColorHex(z.status);
     return `
       <div class="hbar-row">
@@ -156,7 +152,7 @@ function renderNDVIBarChart(zones) {
         <div class="hbar-track">
           <div class="hbar-fill" style="width:${pct.toFixed(1)}%; background:${color}"></div>
         </div>
-        <span class="hbar-value">${z.ndvi.toFixed(2)}</span>
+        <span class="hbar-value">${z.ndvi !== null ? z.ndvi.toFixed(2) : "—"}</span>
       </div>
     `;
   }).join("");
@@ -265,6 +261,7 @@ function renderDashboard() {
     : `<div class="dashboard-empty">No field survey submissions recorded yet.</div>`;
 
   body.innerHTML = `
+    <h2 class="dashboard-page-title">Mangrove Monitoring Dashboard</h2>
     <div class="dashboard-meta-row">
       <span>MENRO Calatagan · Batangas</span>
       <span class="dashboard-meta-dot">•</span>
@@ -347,23 +344,22 @@ function renderDashboard() {
   `;
 }
 
-const dashboardOverlay   = document.getElementById("dashboardOverlay");
-const btnDashboard       = document.getElementById("btnDashboard");
-const btnCloseDashboard  = document.getElementById("btnCloseDashboard");
+/* ---------- Map / Dashboard tab switcher ---------- */
+const mapView       = document.getElementById("mapView");
+const dashboardView = document.getElementById("dashboardView");
 
-function openDashboard() {
-  renderDashboard();
-  dashboardOverlay.classList.add("open");
+function switchTab(tab) {
+  const toDashboard = tab === "dashboard";
+
+  if (mapView)       mapView.style.display = toDashboard ? "none" : "flex";
+  if (dashboardView) dashboardView.classList.toggle("active", toDashboard);
+
+  if (toDashboard) {
+    renderDashboard();
+  } else if (typeof map !== "undefined" && map.invalidateSize) {
+    setTimeout(() => map.invalidateSize(), 0);
+  }
 }
 
-function closeDashboard() {
-  dashboardOverlay.classList.remove("open");
-}
-
-if (btnDashboard) btnDashboard.addEventListener("click", openDashboard);
-if (btnCloseDashboard) btnCloseDashboard.addEventListener("click", closeDashboard);
-if (dashboardOverlay) {
-  dashboardOverlay.addEventListener("click", (e) => {
-    if (e.target === dashboardOverlay) closeDashboard();
-  });
-}
+function openDashboard()  { switchTab("dashboard"); }
+function closeDashboard() { switchTab("map"); }
