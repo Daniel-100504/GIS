@@ -56,10 +56,7 @@
 
 <div class="layout" id="mapView">
 
-<!-- MAP -->
-
 <main class="map-container">
-
 
 <div id="map"></div>
 
@@ -75,7 +72,54 @@ Lng: ---
 
 </div>
 
-<!-- Legend -->
+<div class="map-layers-control" id="mapLayersControl">
+
+    <button class="layers-toggle-btn" id="layersToggleBtn" aria-label="Map layers" aria-expanded="false" title="Map layers">
+        <span class="layers-toggle-thumb"></span>
+        <span class="layers-toggle-label">Layers</span>
+    </button>
+
+    <div class="layers-popup" id="layersPopup">
+
+        <p class="layers-popup-title">Map Layers</p>
+
+        <div class="toggle-row">
+
+            <span>Satellite Base</span>
+
+            <label class="toggle">
+
+                <input
+                    type="checkbox"
+                    id="layerSatellite"
+                    checked>
+
+                <span class="slider"></span>
+
+            </label>
+
+        </div>
+
+        <div class="toggle-row">
+
+            <span>Mangrove Zones</span>
+
+            <label class="toggle">
+
+                <input
+                    type="checkbox"
+                    id="layerZones"
+                    checked>
+
+                <span class="slider"></span>
+
+            </label>
+
+        </div>
+
+    </div>
+
+</div>
 
 <div class="map-legend">
 
@@ -146,52 +190,6 @@ Degraded
 
         <p class="section-eyebrow">
 
-            MAP LAYERS
-
-        </p>
-
-        <div class="toggle-row">
-
-            <span>Satellite Base</span>
-
-            <label class="toggle">
-
-                <input
-                    type="checkbox"
-                    id="layerSatellite"
-                    checked>
-
-                <span class="slider"></span>
-
-            </label>
-
-        </div>
-
-        
-
-        <div class="toggle-row">
-
-            <span>Mangrove Zones</span>
-
-            <label class="toggle">
-
-                <input
-                    type="checkbox"
-                    id="layerZones"
-                    checked>
-
-                <span class="slider"></span>
-
-            </label>
-
-        </div>
-
-    </div>
-
-    <div class="settings-group">
-
-        <p class="section-eyebrow">
-
             MANGROVE ZONES
 
         </p>
@@ -219,7 +217,6 @@ Degraded
 
 </div>
 
-<!-- Guide / Tutorial Modal -->
 <div class="dashboard-overlay" id="guideOverlay">
 
   <div class="dashboard-modal guide-modal">
@@ -296,16 +293,14 @@ Degraded
 
 </div>
 
-<!-- Dashboard Tab -->
 <section class="dashboard-view" id="dashboardView">
 
   <div class="dashboard-view-inner" id="dashboardBody">
-    <!-- populated by renderDashboard() -->
+
   </div>
 
 </section>
 
-<!-- Map Slide-out Menu -->
 <div class="side-menu-backdrop" id="sideMenuBackdrop"></div>
 
 <aside class="side-menu" id="sideMenu">

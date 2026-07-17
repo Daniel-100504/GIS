@@ -1,18 +1,3 @@
-/**
- * export.js
- * Field Survey Report (PDF) export for AquaGuard.
- * Split out from satellite.js — depends on globals defined there:
- *   ZONES, capitalise(), sceneSummary, and the #sceneDate input.
- * Load AFTER satellite.js and jsPDF, e.g.:
- *   <script src="satellite.js"></script>
- *   <script src="export.js"></script>
- */
-
-/* ---------- Export PDF ---------- */
-
-// btnExport no longer exists in the left panel — export now lives in the
-// hamburger drawer (menuExport, wired in satellite.js) — but keep this
-// guarded in case a page still ships the old button.
 const btnExportEl = document.getElementById("btnExport");
 if (btnExportEl) btnExportEl.addEventListener("click", exportPDF);
 
@@ -22,13 +7,12 @@ function exportPDF() {
 
     const PAGE_W = 210;
     const PAGE_H = 297;
-    const ML = 15; // margin left
-    const MR = 15; // margin right
-    const CW = PAGE_W - ML - MR; // content width
+    const ML = 15;
+    const MR = 15;
+    const CW = PAGE_W - ML - MR;
     const today = new Date().toLocaleDateString("en-PH", { year:"numeric", month:"long", day:"numeric" });
     const reportDate = sceneDate.value;
 
-    // ── Helpers ──────────────────────────────────────────────
     function checkPage(y, needed = 20) {
         if (y + needed > PAGE_H - 15) {
             doc.addPage();
@@ -63,9 +47,6 @@ function exportPDF() {
         return y + 6;
     }
 
-    // ── Cover Header ─────────────────────────────────────────
-    // Plain white header — no fills. Hierarchy comes from weight/size and
-    // a single ruled line, keeping ink use to text + one thin rule.
     doc.setFont("helvetica", "bold");
     doc.setFontSize(17);
     doc.setTextColor(0);
@@ -87,7 +68,6 @@ function exportPDF() {
 
     let y = 48;
 
-    // ── Scene Summary Cards ───────────────────────────────────
     y = sectionLabel("SCENE SUMMARY", y);
 
     const cards = [
@@ -116,10 +96,8 @@ function exportPDF() {
 
     y += 26;
 
-    // ── Zone Summary Table ────────────────────────────────────
     y = sectionLabel("MANGROVE ZONES OVERVIEW", y);
 
-    // Table header — ruled, not filled
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.5);
     doc.setTextColor(0);
@@ -165,7 +143,6 @@ function exportPDF() {
 
     y += 6;
 
-    // ── Field Survey Details (KoboToolbox zones only) ─────────
     const surveyedZones = ZONES.filter(z => z.lastRanger && z.lastRanger !== "—");
 
     if (surveyedZones.length > 0) {
@@ -176,7 +153,6 @@ function exportPDF() {
         surveyedZones.forEach((zone) => {
             y = checkPage(y, 60);
 
-            // Zone card header — ruled box, no fill
             doc.setDrawColor(0);
             doc.setLineWidth(0.3);
             doc.line(ML, y, ML + CW, y);
@@ -193,7 +169,6 @@ function exportPDF() {
             doc.setTextColor(0);
             y += 6;
 
-            // Two-column detail layout
             const col1x = ML + 2;
             const col2x = ML + CW / 2 + 4;
             const colW  = CW / 2 - 6;
@@ -212,7 +187,6 @@ function exportPDF() {
                 return cy + 4 + (lines.length * 4);
             }
 
-            // Left column
             let ly = y;
             ly = detailRow("Ranger Name",    zone.lastRanger  || "—", col1x, ly) + 3;
             ly = detailRow("Inspection Date", zone.lastDate   || "—", col1x, ly) + 3;
@@ -221,7 +195,6 @@ function exportPDF() {
             ly = detailRow("Species",        zone.speciesName || "—", col1x, ly) + 3;
             ly = detailRow("Tree Count",     zone.treeCount ? zone.treeCount.toString() : "—", col1x, ly) + 3;
 
-            // Right column
             let ry = y;
             ry = detailRow("Observed Threats",       zone.threats      || "—", col2x, ry) + 3;
             ry = detailRow("Water Color",             zone.waterColor   || "—", col2x, ry) + 3;
@@ -231,14 +204,12 @@ function exportPDF() {
             y = Math.max(ly, ry) + 4;
         });
 
-        // Closing rule for the survey section
         doc.setDrawColor(0);
         doc.setLineWidth(0.3);
         doc.line(ML, y, ML + CW, y);
         y += 8;
     }
 
-    // ── Footer on all pages ───────────────────────────────────
     const totalPages = doc.internal.getNumberOfPages();
     for (let p = 1; p <= totalPages; p++) {
         doc.setPage(p);

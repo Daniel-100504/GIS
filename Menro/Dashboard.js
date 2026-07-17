@@ -1,4 +1,3 @@
-
 function computeDashboardStats() {
   const total    = ZONES.length;
   const healthy  = ZONES.filter(z => z.status === "healthy").length;
@@ -12,7 +11,6 @@ function computeDashboardStats() {
       : 0;
   })();
 
-  // Canopy cover: only from zones with real field survey data
   const coverValues = ZONES
     .map(z => parseFloat(z.canopyCover))
     .filter(v => !isNaN(v));
@@ -20,7 +18,6 @@ function computeDashboardStats() {
     ? coverValues.reduce((a, b) => a + b, 0) / coverValues.length
     : null;
 
-  // Threat breakdown, excluding "no threat observed"
   const threatCounts = {};
   ALL_SUBMISSIONS.forEach(sub => {
     const threat = sub["Observed_Threats"];
@@ -33,20 +30,14 @@ function computeDashboardStats() {
   const topThreat      = threatBreakdown.length > 0 ? threatBreakdown[0].threat : null;
   const topThreatCount = threatBreakdown.length > 0 ? threatBreakdown[0].count : 0;
 
-  // Latest inspection date across all raw submissions
   const dates = ALL_SUBMISSIONS
     .map(sub => sub["Inspection_Date"])
     .filter(Boolean)
     .sort();
   const latestDate = dates.length > 0 ? dates[dates.length - 1] : null;
 
-  // NDVI trend across scene dates — no real historical NDVI archive exists
-  // yet (only the latest satellite reading is fetched), so there's nothing
-  // genuine to plot here. Left empty rather than faking a trend line;
-  // renderNDVITrendChart() shows an honest "not enough data" state for this.
   const ndviTrend = [];
 
-  // Recent activity — most recent 5 submissions
   const recent = [...ALL_SUBMISSIONS]
     .filter(sub => sub["Inspection_Date"])
     .sort((a, b) => (b["Inspection_Date"] || "").localeCompare(a["Inspection_Date"] || ""))
@@ -75,7 +66,6 @@ function computeDashboardStats() {
   };
 }
 
-/* ---------- Small formatting helpers ---------- */
 function formatDate(iso) {
   if (!iso || iso === "—") return "—";
   const d = new Date(iso);
@@ -90,9 +80,6 @@ function statusColorHex(status) {
   return "#b71c1c";
 }
 
-/* ---------- Chart builders (pure SVG / HTML, no dependencies) ---------- */
-
-// Donut chart: zone health distribution
 function renderHealthDonut(healthy, moderate, degraded) {
   const total = healthy + moderate + degraded;
   const r = 52, cx = 64, cy = 64, sw = 16;
@@ -138,7 +125,6 @@ function renderHealthDonut(healthy, moderate, degraded) {
   `;
 }
 
-// Horizontal bar chart: NDVI per zone
 function renderNDVIBarChart(zones) {
   const sorted = [...zones].sort((a, b) => (b.ndvi ?? -1) - (a.ndvi ?? -1));
   const max = Math.max(...sorted.map(z => z.ndvi ?? 0), 0.1);
@@ -160,7 +146,6 @@ function renderNDVIBarChart(zones) {
   return `<div class="hbar-chart">${rows}</div>`;
 }
 
-// Horizontal bar chart: observed threats
 function renderThreatBarChart(threatBreakdown) {
   if (!threatBreakdown || threatBreakdown.length === 0) {
     return `<div class="dashboard-empty">No threats reported in field surveys.</div>`;
@@ -183,7 +168,6 @@ function renderThreatBarChart(threatBreakdown) {
   return `<div class="hbar-chart">${rows}</div>`;
 }
 
-// Line/area chart: average NDVI across scene dates
 function renderNDVITrendChart(ndviTrend) {
   const points = ndviTrend.filter(p => p.avg !== null);
   if (points.length < 2) {
@@ -344,7 +328,6 @@ function renderDashboard() {
   `;
 }
 
-/* ---------- Map / Dashboard tab switcher ---------- */
 const mapView       = document.getElementById("mapView");
 const dashboardView = document.getElementById("dashboardView");
 

@@ -32,12 +32,12 @@ function deriveStatus(sub) {
 }
 
 function coverToNDVI(cover) {
-  // Rough linear scale: 0% cover → 0.10, 100% cover → 0.85
+
   const pct = Math.min(Math.max(parseFloat(cover) || 0, 0), 100);
   return +(0.10 + (pct / 100) * 0.75).toFixed(2);
 }
 
-let ALL_SUBMISSIONS = []; 
+let ALL_SUBMISSIONS = [];
 
 async function fetchKoboData() {
   try {
@@ -51,6 +51,37 @@ async function fetchKoboData() {
     ALL_SUBMISSIONS = [];
     return null;
   }
+}
+
+let SATELLITE_BASELINE = {};
+
+function captureSatelliteBaseline() {
+  ZONES.forEach(zone => {
+    SATELLITE_BASELINE[zone.id] = { ndvi: zone.ndvi, status: zone.status };
+  });
+}
+
+function resetZonesToBaseline() {
+  ZONES.forEach(zone => {
+    const base = SATELLITE_BASELINE[zone.id];
+    zone.ndvi = base ? base.ndvi : null;
+    zone.status = base ? base.status : "pending";
+    zone.lastRanger   = "—";
+    zone.lastDate     = "—";
+    zone.transect     = "—";
+    zone.canopyCover  = "—";
+    zone.speciesName  = "—";
+    zone.treeCount    = "—";
+    zone.threats      = "—";
+    zone.waterColor   = "—";
+    zone.aquafarmNear = "—";
+    zone.notes        = "—";
+  });
+}
+
+function submissionsUpToDate(dateStr) {
+  if (!dateStr) return ALL_SUBMISSIONS;
+  return ALL_SUBMISSIONS.filter(sub => sub["Inspection_Date"] && sub["Inspection_Date"] <= dateStr);
 }
 
 function mergeKoboIntoZones(submissions) {
@@ -276,8 +307,6 @@ const ZONES = [
   }
 ];
 
-/* ---------- Colors ---------- */
-
 const STATUS_COLOR = {
   healthy: "#2e7d32",
   moderate: "#f9a825",
@@ -287,19 +316,13 @@ const STATUS_COLOR = {
 
 const CALATAGAN = [13.8300,120.6300];
 
-/* ---------- Map ---------- */
-
 const map = L.map("map",{
     center:CALATAGAN,
     zoom:13,
     zoomControl:false
 });
 
-// Zoom control moved to bottom-right (Google Maps convention) so the
-// top-left corner is free for the hamburger menu button.
 L.control.zoom({ position: "bottomright" }).addTo(map);
-
-/* ---------- Basemaps ---------- */
 
 const osmTile = L.tileLayer(
 "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -317,30 +340,16 @@ const satTile = L.tileLayer(
 
 satTile.addTo(map);
 
-/* ---------- Sentinel-2 Imagery (Copernicus, real satellite passes) ----------
-   Optional overlay on top of the Esri basemap — off by default, toggled from
-   the "Sentinel-2 Imagery" switch in the right panel. Uses the same free
-   CDSE account as update_ndvi.py, via the WMS Instance ID from the Sentinel
-   Hub Configuration Utility (no auth token needed for WMS tile requests —
-   the instance ID itself is the access key).
-   Time range is bound to the Scene Date picker: for a chosen date we ask for
-   the least-cloudy scene in the 15 days up to and including it, the same
-   lookback window update_ndvi.py uses for NDVI, so what you SEE roughly
-   matches what the NDVI numbers were computed from. */
 const SENTINEL_INSTANCE_ID = "a5d57799-a09d-4715-a7f1-44c6d3dfccb6";
 const SENTINEL_WMS_URL = `https://sh.dataspace.copernicus.eu/ogc/wms/${SENTINEL_INSTANCE_ID}`;
 
-// sceneDate isn't declared yet at this point in the file (it's set up later
-// below), so read the raw DOM value directly here instead of the `sceneDate`
-// const. todayISO() is a function declaration further down, but those are
-// hoisted, so calling it up here is safe.
 function sceneDateInputValueOrToday() {
     const el = document.getElementById("sceneDate");
     return (el && el.value) ? el.value : todayISO();
 }
 
 function sentinelTimeRangeFor(dateStr) {
-    // dateStr is "YYYY-MM-DD" from the Scene Date input.
+
     const to = dateStr || todayISO();
     const toDate = new Date(to + "T00:00:00Z");
     const fromDate = new Date(toDate);
@@ -369,13 +378,8 @@ if (layerSentinel2El) {
     });
 }
 
-/* ---------- Layer Groups ---------- */
-
 const markersLayer = L.layerGroup().addTo(map);
 const ndviLayer = L.layerGroup();
-
-
-/* ---------- Marker Icon ---------- */
 
 function makeIcon(status){
 
@@ -401,12 +405,10 @@ function makeIcon(status){
 
 }
 
-/* ---------- NDVI Overlay ---------- */
 ZONES.forEach(zone => {
 
     const color = STATUS_COLOR[zone.status];
 
-    // Scale the circle size according to area (hectares)
     const radius = Math.sqrt(zone.area) * 100;
 
     L.circle([zone.lat, zone.lng], {
@@ -425,10 +427,6 @@ ZONES.forEach(zone => {
 
 });
 
-/* ---------- HTML Escaping ----------
-   Field survey values (ranger name, notes, etc.) come from KoboToolbox
-   submissions filled out by rangers in the field — treat them as
-   untrusted input and escape before inserting into innerHTML. */
 function escapeHtml(value) {
   if (value === null || value === undefined) return "—";
   return String(value)
@@ -673,6 +671,29 @@ updateSummary();
 
 /* ---------- Layer Toggles ---------- */
 
+const mapLayersControl = document.getElementById("mapLayersControl");
+const layersToggleBtn  = document.getElementById("layersToggleBtn");
+
+if (layersToggleBtn && mapLayersControl) {
+    layersToggleBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        const isOpen = mapLayersControl.classList.toggle("open");
+        layersToggleBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    });
+
+    document.addEventListener("click", function (e) {
+        if (!mapLayersControl.contains(e.target)) {
+            mapLayersControl.classList.remove("open");
+            layersToggleBtn.setAttribute("aria-expanded", "false");
+        }
+    });
+
+    mapLayersControl.querySelector(".layers-popup")
+        .addEventListener("click", function (e) {
+            e.stopPropagation();
+        });
+}
+
 document.getElementById("layerSatellite")
 .addEventListener("change",function(){
 
@@ -707,12 +728,42 @@ document.getElementById("layerZones")
 
 });
 
-
-
 /* ---------- Scene Date ---------- */
 
 const sceneDate = document.getElementById("sceneDate");
-let sceneDateManuallySet = false; // true once the user picks a date themselves
+let sceneDateManuallySet = false;
+let dataReady = false;
+
+function rebuildMapLayers() {
+  markersLayer.clearLayers();
+  ndviLayer.clearLayers();
+
+  ZONES.forEach(zone => {
+    const color  = STATUS_COLOR[zone.status];
+    const radius = Math.sqrt(zone.area) * 100;
+    L.circle([zone.lat, zone.lng], {
+      radius, color, fillColor: color, fillOpacity: 0.35, weight: 1
+    }).bindPopup(() => buildPopup(zone)).addTo(ndviLayer);
+
+    const marker = L.marker([zone.lat, zone.lng], { icon: makeIcon(zone.status) });
+    marker.bindPopup(() => buildPopup(zone));
+    marker.on("click", () => selectZone(zone));
+    marker.addTo(markersLayer);
+    markers[zone.id] = marker;
+  });
+
+  renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");
+}
+
+function applyDataForDate(dateStr) {
+  resetZonesToBaseline();
+
+  const submissions = submissionsUpToDate(dateStr);
+  if (submissions.length > 0) mergeKoboIntoZones(submissions);
+
+  rebuildMapLayers();
+  updateSummary();
+}
 
 function todayISO() {
     const d = new Date();
@@ -735,6 +786,7 @@ function syncSceneDateToToday() {
     if (sceneDate.value !== today) {
         sceneDate.value = today;
         sentinelLayer.setParams({ time: sentinelTimeRangeFor(today) });
+        if (dataReady) applyDataForDate(today);
     }
 }
 
@@ -742,20 +794,13 @@ sceneDate.addEventListener("change",(e)=>{
 
     sceneDateManuallySet = true;
     sentinelLayer.setParams({ time: sentinelTimeRangeFor(e.target.value) });
+    if (dataReady) applyDataForDate(e.target.value);
 
 });
 
 syncSceneDateToToday();
 
-// Re-check once a minute — cheap, and catches the midnight rollover
-// on a MENRO office computer that's left open all day.
 setInterval(syncSceneDateToToday, 60 * 1000);
-
-// NOTE: the Scene Date picker only drives the Sentinel-2 WMS imagery time
-// window and the PDF report's date label — it no longer fakes historical
-// per-zone NDVI. Zone NDVI/status always reflect the latest real reading
-// from get-ndvi.php (satellite) with KoboToolbox field survey overrides
-// on top; there is no real historical NDVI archive to browse yet.
 
 /* ---------- Mouse Coordinates ---------- */
 
@@ -844,71 +889,18 @@ function capitalise(str){
 
 }
 
-/* ---------- Satellite NDVI (Copernicus / Sentinel-2) ---------- */
-// Fetches the latest per-zone NDVI readings produced by update_ndvi.py
-// (via get-ndvi.php). This sets the baseline NDVI/status for every
-// zone from real satellite data. mergeKoboIntoZones() runs after this
-// in initWithKobo(), so any zone with an actual KoboToolbox field
-// survey still gets the ranger-reported override on top.
-async function fetchSatelliteNDVI() {
-  try {
-    const res = await fetch("ndvi/get-ndvi.php");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (data.stale) console.warn("NDVI data is over 48h old — check Task Scheduler.");
-    return data.zones || {};
-  } catch (err) {
-    console.warn("Satellite NDVI fetch failed — keeping current values.", err);
-    return {};
-  }
-}
-
-function applySatelliteNDVI(zoneReadings) {
-  ZONES.forEach(zone => {
-    const reading = zoneReadings[zone.id];
-    if (!reading || reading.error) return;
-    zone.ndvi = reading.ndvi;
-    zone.status = reading.status;
-  });
-}
-
 /* ---------- KoboToolbox Init ---------- */
+// Satellite NDVI pipeline (Copernicus stats API) dropped — Kobo field
+// surveys are now the only NDVI/status source. Zones with no survey
+// yet stay at their initial "pending" / null state below.
 async function initWithKobo() {
-  const satelliteReadings = await fetchSatelliteNDVI();
-  applySatelliteNDVI(satelliteReadings);
+  captureSatelliteBaseline();
 
-  const submissions = await fetchKoboData();
+  await fetchKoboData();
 
-  if (submissions && submissions.length > 0) {
-    mergeKoboIntoZones(submissions);
+  dataReady = true;
+  applyDataForDate(sceneDate.value);
 
-    // Rebuild markers with updated zone data
-    markersLayer.clearLayers();
-    ndviLayer.clearLayers();
-
-    ZONES.forEach(zone => {
-      // Rebuild NDVI circle
-      const color  = STATUS_COLOR[zone.status];
-      const radius = Math.sqrt(zone.area) * 100;
-      L.circle([zone.lat, zone.lng], {
-        radius, color, fillColor: color, fillOpacity: 0.35, weight: 1
-      }).bindPopup(() => buildPopup(zone)).addTo(ndviLayer);
-
-      // Rebuild marker
-      const marker = L.marker([zone.lat, zone.lng], { icon: makeIcon(zone.status) });
-      marker.bindPopup(() => buildPopup(zone));
-      marker.on("click", () => selectZone(zone));
-      marker.addTo(markersLayer);
-      markers[zone.id] = marker;
-    });
-
-    // Rebuild zone list (keep current search filter applied, if any)
-    renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");
-  } else {
-    console.warn("Using default zone data (no KoboToolbox submissions).");
-  }
-
-  updateSummary();
   selectZone(ZONES[0]);
 }
 

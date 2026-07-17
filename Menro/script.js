@@ -1,5 +1,5 @@
 (function () {
-  // ── Element refs ──────────────────────────────
+
   const usernameInput = document.getElementById('username');
   const passwordInput = document.getElementById('password');
   const rememberMe    = document.getElementById('rememberMe');
@@ -9,10 +9,8 @@
   const errorMsg      = document.getElementById('errorMsg');
   const roleBtns      = document.querySelectorAll('.role-btn');
 
-  // ── State ─────────────────────────────────────
-  let selectedRole = 'menro'; // default
+  let selectedRole = 'menro';
 
-  // ── Role selection ────────────────────────────
   roleBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       roleBtns.forEach(b => b.classList.remove('active'));
@@ -22,7 +20,6 @@
     });
   });
 
-  // ── Password toggle ───────────────────────────
   togglePw.addEventListener('click', () => {
     const isHidden = passwordInput.type === 'password';
     passwordInput.type = isHidden ? 'text' : 'password';
@@ -38,14 +35,12 @@
          <circle cx="12" cy="12" r="3"/>`;
   });
 
-  // ── Restore remembered username ───────────────
   const saved = localStorage.getItem('menro_remembered_user');
   if (saved) {
     usernameInput.value = saved;
     rememberMe.checked = true;
   }
 
-  // ── Validation helpers ────────────────────────
   function showError(msg) {
     errorMsg.textContent = msg;
   }
@@ -73,10 +68,8 @@
     return true;
   }
 
-  // ── Sign in handler ───────────────────────────
   btnSignIn.addEventListener('click', handleSignIn);
 
-  // Allow Enter key to submit
   [usernameInput, passwordInput].forEach(input => {
     input.addEventListener('keydown', e => {
       if (e.key === 'Enter') handleSignIn();
@@ -90,26 +83,22 @@
 
     const user = usernameInput.value.trim();
 
-    // Remember me
     if (rememberMe.checked) {
       localStorage.setItem('menro_remembered_user', user);
     } else {
       localStorage.removeItem('menro_remembered_user');
     }
 
-    // TODO: Replace with real auth API call
-    // Placeholder: simulate a login attempt
     btnSignIn.disabled = true;
     btnSignIn.textContent = 'Signing in…';
 
     setTimeout(() => {
-      // Example: accept any non-empty input for now
-      // Replace this block with your actual auth logic
+
       const success = true;
 
       if (success) {
-        // Redirect to dashboard
-        window.location.href = 'satellite.html';
+
+        window.location.href = '../Menro/satellite.html';
       } else {
         showError('Invalid username or password. Please try again.');
         btnSignIn.disabled = false;
