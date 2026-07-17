@@ -71,10 +71,10 @@ function exportPDF() {
     y = sectionLabel("SCENE SUMMARY", y);
 
     const cards = [
-        { label: "Mean NDVI",     value: String(sceneSummary.meanNDVI) },
-        { label: "Cloud Cover",   value: String(sceneSummary.cloudCover) },
-        { label: "Healthy Zones", value: String(sceneSummary.healthyCount) },
-        { label: "At-Risk Zones", value: String(sceneSummary.atRiskCount) },
+        { label: "Mean NDVI",      value: String(sceneSummary.meanNDVI) },
+        { label: "Zones Surveyed", value: `${sceneSummary.zonesSurveyed} / ${sceneSummary.totalZones}` },
+        { label: "Healthy Zones",  value: String(sceneSummary.healthyCount) },
+        { label: "At-Risk Zones",  value: String(sceneSummary.atRiskCount) },
     ];
 
     const cardW = (CW - 9) / 4;
