@@ -103,7 +103,9 @@ if ($mode === 'ndvi') {
     $lng    = floatval($_GET['lng'] ?? 0);
     $radius = floatval($_GET['radius'] ?? 300); // meters
     $to     = $_GET['date'] ?? date('Y-m-d');
-    $from   = date('Y-m-d', strtotime($to . ' -15 days'));
+    $windowDays = 10; // keep in sync with SENTINEL_WINDOW_DAYS in satellite.js
+    $from   = date('Y-m-d', strtotime($to . " -{$windowDays} days"));
+    $maxcc  = isset($_GET['maxcc']) ? floatval($_GET['maxcc']) : 50;
 
     if (!$lat || !$lng) {
         http_response_code(400);
@@ -138,7 +140,7 @@ EVAL;
                 'type'       => 'sentinel-2-l2a',
                 'dataFilter' => [
                     'timeRange'        => ['from' => "{$from}T00:00:00Z", 'to' => "{$to}T23:59:59Z"],
-                    'maxCloudCoverage' => 40,
+                    'maxCloudCoverage' => $maxcc,
                 ],
             ]],
         ],
@@ -179,6 +181,77 @@ EVAL;
     }
 
     echo json_encode(['ndvi' => $mean, 'from' => $from, 'to' => $to, 'raw' => $stats]);
+    exit;
+}
+
+if ($mode === 'catalog') {
+    header('Content-Type: application/json');
+
+    // Which month to search, e.g. "2026-07". Defaults to the current month.
+    $month = $_GET['month'] ?? date('Y-m');
+    $maxcc = isset($_GET['maxcc']) ? floatval($_GET['maxcc']) : 50;
+
+    if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'month must be in YYYY-MM format']);
+        exit;
+    }
+
+    $monthStart = $month . '-01';
+    $monthEnd   = date('Y-m-t', strtotime($monthStart));
+
+    // Bounding box covering the whole Calatagan mangrove survey area (all zones), padded slightly.
+    $bbox = [120.595, 13.745, 120.685, 13.945];
+
+    $payload = [
+        'bbox'        => $bbox,
+        'datetime'    => "{$monthStart}T00:00:00Z/{$monthEnd}T23:59:59Z",
+        'collections' => ['sentinel-2-l2a'],
+        'limit'       => 100,
+        'filter'      => "eo:cloud_cover <= {$maxcc}",
+        'filter-lang' => 'cql2-text',
+    ];
+
+    $token = getAccessToken();
+    $ch = curl_init('https://sh.dataspace.copernicus.eu/api/v1/catalog/1.0.0/search');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . $token,
+        'Content-Type: application/json',
+    ]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($response === false || $httpCode !== 200) {
+        http_response_code(502);
+        echo json_encode(['error' => 'Catalog search failed', 'code' => $httpCode, 'detail' => $response]);
+        exit;
+    }
+
+    $data = json_decode($response, true);
+
+    $truncated = isset($data['context']['returned'], $data['context']['matched'])
+        && $data['context']['returned'] < $data['context']['matched'];
+
+    // Reduce results to one best (lowest cloud cover) entry per calendar day.
+    $dates = [];
+    foreach (($data['features'] ?? []) as $feature) {
+        $props = $feature['properties'] ?? [];
+        $dt    = $props['datetime'] ?? null;
+        $cc    = $props['eo:cloud_cover'] ?? ($props['cloudCover'] ?? null);
+        if (!$dt) continue;
+
+        $day = substr($dt, 0, 10);
+        if (!isset($dates[$day]) || ($cc !== null && $cc < $dates[$day])) {
+            $dates[$day] = $cc;
+        }
+    }
+
+    echo json_encode(['month' => $month, 'maxcc' => $maxcc, 'dates' => $dates, 'truncated' => $truncated]);
     exit;
 }
 

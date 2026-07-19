@@ -404,6 +404,32 @@ button, input {
   letter-spacing: 0.01em;
 }
 
+.imagery-refresh-badge {
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(10, 33, 27, 0.86);
+  color: #eaf5ef;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  z-index: 800;
+  pointer-events: none;
+}
+
+.imagery-refresh-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(234, 245, 239, 0.35);
+  border-top-color: #eaf5ef;
+  border-radius: 50%;
+  animation: sync-spin 0.7s linear infinite;
+}
+
 .map-layers-control {
   position: absolute;
   bottom: 15px;
@@ -531,19 +557,6 @@ button, input {
 
 .settings-select:focus { outline: none; border-color: var(--brand-600); }
 
-.date-nav {
-  display: flex;
-  align-items: stretch;
-  gap: 6px;
-}
-
-.date-nav-input {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--font-mono);
-  letter-spacing: -0.01em;
-}
-
 .date-nav-btn {
   flex-shrink: 0;
   width: 32px;
@@ -577,6 +590,180 @@ button, input {
   color: var(--ink-300);
   border-color: var(--border);
   background: var(--surface-alt);
+}
+
+.cloud-coverage-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.cloud-coverage-label {
+  font-size: 0.68rem;
+  color: var(--ink-600);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cloud-coverage-slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--brand-600);
+  cursor: pointer;
+}
+
+.cloud-coverage-value {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--ink-700);
+  font-family: var(--font-mono);
+  width: 34px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.scene-calendar {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+}
+
+.scene-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.scene-calendar-title-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  justify-content: center;
+}
+
+.cal-select {
+  border: 1.5px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--ink-900);
+  padding: 3px 4px;
+  cursor: pointer;
+  appearance: none;
+  text-align: center;
+  text-align-last: center;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.cal-select:hover {
+  background: var(--brand-100);
+  border-color: var(--brand-600);
+}
+
+.cal-select:focus {
+  outline: none;
+  border-color: var(--brand-600);
+  background: var(--brand-100);
+}
+
+.scene-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 0.62rem;
+  color: var(--ink-400);
+  margin-bottom: 4px;
+}
+
+.scene-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+
+.cal-cell {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  color: var(--ink-700);
+  border-radius: 5px;
+  cursor: pointer;
+  background: var(--surface);
+  border: 1.5px solid transparent;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.cal-cell.empty {
+  visibility: hidden;
+  cursor: default;
+}
+
+.cal-cell.out-of-range {
+  color: var(--ink-300);
+  cursor: not-allowed;
+}
+
+.cal-cell.available {
+  border-color: var(--brand-600);
+  color: var(--brand-700);
+  font-weight: 600;
+}
+
+.cal-cell:hover:not(.empty):not(.out-of-range):not(.selected) {
+  background: var(--brand-100);
+}
+
+.cal-cell.today {
+  color: var(--brand-700);
+  font-weight: 700;
+}
+
+.cal-cell.selected {
+  background: var(--brand-700);
+  border-color: var(--brand-700);
+  color: #fff;
+  font-weight: 700;
+}
+
+.scene-calendar-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 8px;
+  font-size: 0.62rem;
+  color: var(--ink-500);
+}
+
+.scene-calendar-legend span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cal-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.cal-dot-available {
+  background: var(--surface);
+  border: 1.5px solid var(--brand-600);
+}
+
+.cal-dot-selected {
+  background: var(--brand-700);
 }
 
 .sync-satellite-btn {

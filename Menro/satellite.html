@@ -75,6 +75,11 @@
 
 <div id="map"></div>
 
+<div id="imageryRefreshBadge" class="imagery-refresh-badge" hidden>
+    <span class="imagery-refresh-spinner"></span>
+    <span>Refreshing satellite imagery…</span>
+</div>
+
 <div
 id="mouseCoordinates"
 class="mouse-coordinates">
@@ -170,38 +175,50 @@ Lng: ---
 
         </label>
 
-<div class="date-nav">
+<input type="hidden" id="sceneDate">
 
-    <button
-        type="button"
-        id="sceneDatePrev"
-        class="date-nav-btn"
-        aria-label="Previous day">
+    <div class="cloud-coverage-row">
+        <span class="cloud-coverage-label">Max. cloud coverage:</span>
+        <input
+            type="range"
+            id="cloudCoverageSlider"
+            class="cloud-coverage-slider"
+            min="0"
+            max="100"
+            step="5"
+            value="50">
+        <span class="cloud-coverage-value" id="cloudCoverageValue">50%</span>
+    </div>
 
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="15 18 9 12 15 6"/>
-        </svg>
+    <div class="scene-calendar" id="sceneCalendar">
 
-    </button>
+        <div class="scene-calendar-header">
+            <button type="button" id="calMonthPrev" class="date-nav-btn" aria-label="Previous month">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
 
-    <input
-        type="date"
-        id="sceneDate"
-        class="settings-select date-nav-input">
+            <div class="scene-calendar-title-controls">
+                <select id="calMonthSelect" class="cal-select" aria-label="Month"></select>
+                <select id="calYearSelect" class="cal-select" aria-label="Year"></select>
+            </div>
 
-    <button
-        type="button"
-        id="sceneDateNext"
-        class="date-nav-btn"
-        aria-label="Next day">
+            <button type="button" id="calMonthNext" class="date-nav-btn" aria-label="Next month">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+        </div>
 
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="9 18 15 12 9 6"/>
-        </svg>
+        <div class="scene-calendar-weekdays">
+            <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+        </div>
 
-    </button>
+        <div class="scene-calendar-grid" id="calGrid"></div>
 
-</div>
+        <div class="scene-calendar-legend">
+            <span><i class="cal-dot cal-dot-available"></i> Imagery available</span>
+            <span><i class="cal-dot cal-dot-selected"></i> Selected</span>
+        </div>
+
+    </div>
 
     <button
         type="button"

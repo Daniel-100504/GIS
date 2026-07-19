@@ -415,15 +415,26 @@ function sceneDateInputValueOrToday() {
     return (el && el.value) ? el.value : todayISO();
 }
 
+const SENTINEL_WINDOW_DAYS = 10; // Middle ground: tight enough that picking a date still
+                                  // reflects a genuinely nearby scene, wide enough that a
+                                  // cloudy pass doesn't leave you with no imagery at all.
+                                  // (Window length barely affects Sentinel Hub processing
+                                  // cost — what actually burns credits is repeat requests,
+                                  // handled below via debouncing + per-date caching.)
+
 function sentinelTimeRangeFor(dateStr) {
 
     const to = dateStr || todayISO();
     const toDate = new Date(to + "T00:00:00Z");
     const fromDate = new Date(toDate);
-    fromDate.setUTCDate(fromDate.getUTCDate() - 15);
+    fromDate.setUTCDate(fromDate.getUTCDate() - SENTINEL_WINDOW_DAYS);
     const from = fromDate.toISOString().slice(0, 10);
     return `${from}/${to}`;
 }
+
+const cloudCoverageSliderEl = document.getElementById("cloudCoverageSlider");
+const cloudCoverageValueEl  = document.getElementById("cloudCoverageValue");
+let currentMaxCC = cloudCoverageSliderEl ? parseInt(cloudCoverageSliderEl.value, 10) : 50;
 
 const sentinelLayer = L.tileLayer.wms(`${SENTINEL_PROXY_URL}?mode=wms`, {
     layers: "TRUE_COLOR",
@@ -433,6 +444,7 @@ const sentinelLayer = L.tileLayer.wms(`${SENTINEL_PROXY_URL}?mode=wms`, {
     zIndex: 2,
     attribution: "Imagery \u00a9 Copernicus Sentinel-2 (CDSE)",
     time: sentinelTimeRangeFor(sceneDateInputValueOrToday()),
+    maxcc: currentMaxCC,
 });
 
 const ndviHeatmapLayer = L.tileLayer.wms(`${SENTINEL_PROXY_URL}?mode=wms`, {
@@ -443,7 +455,22 @@ const ndviHeatmapLayer = L.tileLayer.wms(`${SENTINEL_PROXY_URL}?mode=wms`, {
     zIndex: 3,
     attribution: "NDVI \u00a9 Copernicus Sentinel-2 (CDSE)",
     time: sentinelTimeRangeFor(sceneDateInputValueOrToday()),
+    maxcc: currentMaxCC,
 });
+
+const imageryRefreshBadgeEl = document.getElementById("imageryRefreshBadge");
+let sentinelLoading = false;
+let ndviLoading = false;
+
+function updateImageryRefreshBadge() {
+    if (!imageryRefreshBadgeEl) return;
+    imageryRefreshBadgeEl.hidden = !(sentinelLoading || ndviLoading);
+}
+
+sentinelLayer.on("loading", () => { sentinelLoading = true; updateImageryRefreshBadge(); });
+sentinelLayer.on("load",    () => { sentinelLoading = false; updateImageryRefreshBadge(); });
+ndviHeatmapLayer.on("loading", () => { ndviLoading = true; updateImageryRefreshBadge(); });
+ndviHeatmapLayer.on("load",    () => { ndviLoading = false; updateImageryRefreshBadge(); });
 
 const layerSentinel2El = document.getElementById("layerSentinel2");
 if (layerSentinel2El) {
@@ -467,14 +494,39 @@ if (layerNdviEl) {
     });
 }
 
+const satelliteNdviCache = {}; // key: `${zoneId}|${dateStr}|${maxcc}` -> ndvi value (or null)
+
+const refreshCloudCoverage = debounce((value) => {
+    sentinelLayer.setParams({ maxcc: value });
+    ndviHeatmapLayer.setParams({ maxcc: value });
+    if (typeof onCloudCoverageChanged === "function") onCloudCoverageChanged(value);
+}, 350);
+
+if (cloudCoverageSliderEl) {
+    cloudCoverageSliderEl.addEventListener("input", (e) => {
+        currentMaxCC = parseInt(e.target.value, 10);
+        if (cloudCoverageValueEl) cloudCoverageValueEl.textContent = `${currentMaxCC}%`;
+        refreshCloudCoverage(currentMaxCC);
+    });
+}
+
 async function fetchZoneNdviFromCopernicus(zone, dateStr) {
-    const radius = Math.sqrt(zone.area) * 100; 
+    const date = dateStr || todayISO();
+    const cacheKey = `${zone.id}|${date}|${currentMaxCC}`;
+
+    if (Object.prototype.hasOwnProperty.call(satelliteNdviCache, cacheKey)) {
+        zone.satNdvi = satelliteNdviCache[cacheKey];
+        return zone.satNdvi;
+    }
+
+    const radius = Math.sqrt(zone.area) * 100;
     const params = new URLSearchParams({
         mode: "ndvi",
         lat: zone.lat,
         lng: zone.lng,
         radius: radius.toFixed(0),
-        date: dateStr || todayISO(),
+        date,
+        maxcc: currentMaxCC,
     });
 
     try {
@@ -482,6 +534,7 @@ async function fetchZoneNdviFromCopernicus(zone, dateStr) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         zone.satNdvi = (typeof data.ndvi === "number") ? data.ndvi : null;
+        satelliteNdviCache[cacheKey] = zone.satNdvi;
         return zone.satNdvi;
     } catch (err) {
         console.warn(`Satellite NDVI fetch failed for ${zone.name}:`, err);
@@ -501,7 +554,7 @@ async function syncAllZonesFromSatellite(dateStr) {
     if (btnSyncSatelliteInlineEl) btnSyncSatelliteInlineEl.classList.add("syncing");
 
     const date = dateStr || sceneDateInputValueOrToday();
-    console.log(`Syncing satellite NDVI for ${ZONES.length} zones (this can take a little while)...`);
+    console.log(`Syncing satellite NDVI for ${ZONES.length} zones (cached dates are reused, no extra API calls)...`);
 
     for (const zone of ZONES) {
         await fetchZoneNdviFromCopernicus(zone, date);
@@ -942,6 +995,19 @@ function todayISO() {
     return `${yyyy}-${mm}-${dd}`;
 }
 
+function debounce(fn, wait) {
+    let t;
+    return function (...args) {
+        clearTimeout(t);
+        t = setTimeout(() => fn.apply(this, args), wait);
+    };
+}
+
+const refreshSentinelLayers = debounce((dateStr) => {
+    sentinelLayer.setParams({ time: sentinelTimeRangeFor(dateStr) });
+    ndviHeatmapLayer.setParams({ time: sentinelTimeRangeFor(dateStr) });
+}, 450);
+
 function syncSceneDateToToday() {
     const today = todayISO();
     sceneDate.max = today;
@@ -950,8 +1016,7 @@ function syncSceneDateToToday() {
 
     if (sceneDate.value !== today) {
         sceneDate.value = today;
-        sentinelLayer.setParams({ time: sentinelTimeRangeFor(today) });
-        ndviHeatmapLayer.setParams({ time: sentinelTimeRangeFor(today) });
+        refreshSentinelLayers(today);
         if (dataReady) applyDataForDate(today);
     }
 }
@@ -959,44 +1024,201 @@ function syncSceneDateToToday() {
 sceneDate.addEventListener("change",(e)=>{
 
     sceneDateManuallySet = true;
-    sentinelLayer.setParams({ time: sentinelTimeRangeFor(e.target.value) });
-    ndviHeatmapLayer.setParams({ time: sentinelTimeRangeFor(e.target.value) });
+    refreshSentinelLayers(e.target.value);
     if (dataReady) applyDataForDate(e.target.value);
     if (typeof setDashboardDateFromScene === "function") setDashboardDateFromScene(e.target.value);
 
 });
 
-function stepSceneDate(days) {
-    const base = sceneDate.value ? new Date(sceneDate.value + "T00:00:00") : new Date();
-    base.setDate(base.getDate() + days);
+// ---- Scene availability calendar --------------------------------------
+// Highlights which days in the visible month actually have a Sentinel-2
+// scene at-or-under the chosen cloud coverage, so picking a date isn't a
+// guessing game. One catalog search per (month, cloud%) covers the whole
+// month — catalog search is metadata-only, so this doesn't touch the
+// processing-credit budget the imagery/NDVI fetches do.
 
-    const yyyy = base.getFullYear();
-    const mm   = String(base.getMonth() + 1).padStart(2, "0");
-    const dd   = String(base.getDate()).padStart(2, "0");
-    const next = `${yyyy}-${mm}-${dd}`;
+const calGridEl       = document.getElementById("calGrid");
+const calMonthSelectEl = document.getElementById("calMonthSelect");
+const calYearSelectEl  = document.getElementById("calYearSelect");
+const calMonthPrevEl  = document.getElementById("calMonthPrev");
+const calMonthNextEl  = document.getElementById("calMonthNext");
 
-    if (sceneDate.max && next > sceneDate.max) return;
-    if (sceneDate.min && next < sceneDate.min) return;
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-    sceneDate.value = next;
-    sceneDate.dispatchEvent(new Event("change"));
+const availableDatesCache = {}; // key: `${yyyy}-${mm}|${maxcc}` -> { "yyyy-mm-dd": cloudCoverPct }
+
+function initialCalendarDate() {
+    const val = sceneDate.value || todayISO();
+    const [y, m] = val.split("-").map(Number);
+    return { year: y, month: m - 1 };
 }
 
-const sceneDatePrevEl = document.getElementById("sceneDatePrev");
-const sceneDateNextEl = document.getElementById("sceneDateNext");
+let calendarView = initialCalendarDate();
 
-function updateSceneDateArrowState() {
-    if (sceneDateNextEl) {
-        sceneDateNextEl.disabled = !!(sceneDate.max && sceneDate.value && sceneDate.value >= sceneDate.max);
+function populateCalMonthYearSelects() {
+    if (calMonthSelectEl && calMonthSelectEl.options.length === 0) {
+        MONTH_NAMES.forEach((name, i) => {
+            const opt = document.createElement("option");
+            opt.value = i;
+            opt.textContent = name;
+            calMonthSelectEl.appendChild(opt);
+        });
+    }
+
+    if (calYearSelectEl && calYearSelectEl.options.length === 0) {
+        const currentYear = new Date().getFullYear();
+        // A reasonable jump range: a handful of years back through the present year.
+        for (let y = currentYear - 6; y <= currentYear; y++) {
+            const opt = document.createElement("option");
+            opt.value = y;
+            opt.textContent = y;
+            calYearSelectEl.appendChild(opt);
+        }
     }
 }
 
-if (sceneDatePrevEl) sceneDatePrevEl.addEventListener("click", () => { stepSceneDate(-1); updateSceneDateArrowState(); });
-if (sceneDateNextEl) sceneDateNextEl.addEventListener("click", () => { stepSceneDate(1); updateSceneDateArrowState(); });
-sceneDate.addEventListener("change", updateSceneDateArrowState);
+populateCalMonthYearSelects();
+
+if (calMonthSelectEl) {
+    calMonthSelectEl.addEventListener("change", () => {
+        calendarView.month = parseInt(calMonthSelectEl.value, 10);
+        renderSceneCalendar();
+    });
+}
+
+if (calYearSelectEl) {
+    calYearSelectEl.addEventListener("change", () => {
+        calendarView.year = parseInt(calYearSelectEl.value, 10);
+        renderSceneCalendar();
+    });
+}
+
+async function fetchAvailableDatesForMonth(year, month, maxcc) {
+    const ym = `${year}-${String(month + 1).padStart(2, "0")}`;
+    const cacheKey = `${ym}|${maxcc}`;
+
+    if (availableDatesCache[cacheKey]) return availableDatesCache[cacheKey];
+
+    try {
+        const res = await fetch(`${SENTINEL_PROXY_URL}?mode=catalog&month=${ym}&maxcc=${maxcc}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        availableDatesCache[cacheKey] = data.dates || {};
+        return availableDatesCache[cacheKey];
+    } catch (err) {
+        console.warn("Could not load scene availability for", ym, err);
+        return {};
+    }
+}
+
+async function renderSceneCalendar() {
+    if (!calGridEl) return;
+
+    const { year, month } = calendarView;
+
+    // Make sure the year dropdown can show whatever year we're actually viewing,
+    // even if it falls outside the default pre-populated range.
+    if (calYearSelectEl && !Array.from(calYearSelectEl.options).some(o => parseInt(o.value, 10) === year)) {
+        const opt = document.createElement("option");
+        opt.value = year;
+        opt.textContent = year;
+        calYearSelectEl.appendChild(opt);
+    }
+
+    if (calMonthSelectEl) calMonthSelectEl.value = month;
+    if (calYearSelectEl) calYearSelectEl.value = year;
+
+    const firstWeekday  = new Date(year, month, 1).getDay();
+    const daysInMonth   = new Date(year, month + 1, 0).getDate();
+    const today         = todayISO();
+    const selected      = sceneDate.value || today;
+    const maxDate       = sceneDate.max || today;
+
+    // Render a quick skeleton first so the grid isn't blank while the
+    // catalog request is in flight (visible instantly, availability fills in after).
+    let cells = "";
+    for (let i = 0; i < firstWeekday; i++) {
+        cells += `<div class="cal-cell empty"></div>`;
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        const isOutOfRange = dateStr > maxDate;
+        const isToday      = dateStr === today;
+        const isSelected   = dateStr === selected;
+
+        const classes = ["cal-cell"];
+        if (isOutOfRange) classes.push("out-of-range");
+        if (isToday)      classes.push("today");
+        if (isSelected)   classes.push("selected");
+
+        cells += `<div class="${classes.join(" ")}" data-date="${dateStr}">${d}</div>`;
+    }
+    calGridEl.innerHTML = cells;
+    bindCalendarCellClicks();
+
+    const available = await fetchAvailableDatesForMonth(year, month, currentMaxCC);
+
+    // Only apply if we're still looking at the month we fetched for
+    // (user may have flipped months again while this was in flight).
+    if (calendarView.year !== year || calendarView.month !== month) return;
+
+    Object.keys(available).forEach(dateStr => {
+        const cell = calGridEl.querySelector(`.cal-cell[data-date="${dateStr}"]`);
+        if (cell && !cell.classList.contains("out-of-range")) {
+            cell.classList.add("available");
+            const cc = available[dateStr];
+            if (cc !== null && cc !== undefined) {
+                cell.title = `Cloud cover: ${Math.round(cc)}%`;
+            }
+        }
+    });
+}
+
+function bindCalendarCellClicks() {
+    if (!calGridEl) return;
+    calGridEl.querySelectorAll(".cal-cell:not(.empty):not(.out-of-range)").forEach(cell => {
+        cell.addEventListener("click", () => {
+            const dateStr = cell.dataset.date;
+            if (!dateStr) return;
+            sceneDate.value = dateStr;
+            sceneDate.dispatchEvent(new Event("change"));
+        });
+    });
+}
+
+if (calMonthPrevEl) {
+    calMonthPrevEl.addEventListener("click", () => {
+        calendarView.month -= 1;
+        if (calendarView.month < 0) { calendarView.month = 11; calendarView.year -= 1; }
+        renderSceneCalendar();
+    });
+}
+
+if (calMonthNextEl) {
+    calMonthNextEl.addEventListener("click", () => {
+        calendarView.month += 1;
+        if (calendarView.month > 11) { calendarView.month = 0; calendarView.year += 1; }
+        renderSceneCalendar();
+    });
+}
+
+// Keep the calendar in sync whenever the scene date changes from any source
+// (arrows, manual typing, or clicking a day) — jump to that month if needed.
+sceneDate.addEventListener("change", () => {
+    const [y, m] = sceneDate.value.split("-").map(Number);
+    if (y !== calendarView.year || (m - 1) !== calendarView.month) {
+        calendarView = { year: y, month: m - 1 };
+    }
+    renderSceneCalendar();
+});
+
+function onCloudCoverageChanged() {
+    renderSceneCalendar();
+}
+
+renderSceneCalendar();
 
 syncSceneDateToToday();
-updateSceneDateArrowState();
 
 setInterval(syncSceneDateToToday, 60 * 1000);
 
