@@ -100,14 +100,13 @@ Lng: ---
 
         <div class="toggle-row">
 
-            <span>Satellite Base</span>
+            <span>NDVI Overlay</span>
 
             <label class="toggle">
 
                 <input
                     type="checkbox"
-                    id="layerSatellite"
-                    checked>
+                    id="layerNdvi">
 
                 <span class="slider"></span>
 
@@ -124,22 +123,6 @@ Lng: ---
                 <input
                     type="checkbox"
                     id="layerSentinel2">
-
-                <span class="slider"></span>
-
-            </label>
-
-        </div>
-
-        <div class="toggle-row">
-
-            <span>NDVI Overlay</span>
-
-            <label class="toggle">
-
-                <input
-                    type="checkbox"
-                    id="layerNdvi">
 
                 <span class="slider"></span>
 
@@ -220,6 +203,20 @@ Lng: ---
 
 </div>
 
+    <button
+        type="button"
+        id="btnSyncSatelliteInline"
+        class="sync-satellite-btn">
+
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+          <polyline points="21 3 21 9 15 9"/>
+        </svg>
+
+        <span id="btnSyncSatelliteInlineLabel">Sync Satellite NDVI</span>
+
+    </button>
+
     </div>
 
     <div class="settings-group">
@@ -248,6 +245,27 @@ Lng: ---
                 hidden>
                 &times;
             </button>
+
+        </div>
+
+        <div class="zone-controls-row">
+
+            <select id="zoneStatusFilter" class="zone-control-select" aria-label="Filter by status">
+                <option value="all">All statuses</option>
+                <option value="healthy">Healthy</option>
+                <option value="moderate">Moderate</option>
+                <option value="degraded">Degraded</option>
+                <option value="pending">Pending</option>
+            </select>
+
+            <select id="zoneSort" class="zone-control-select" aria-label="Sort zones">
+                <option value="name-asc">Name (A–Z)</option>
+                <option value="name-desc">Name (Z–A)</option>
+                <option value="ndvi-desc">NDVI (High–Low)</option>
+                <option value="ndvi-asc">NDVI (Low–High)</option>
+                <option value="area-desc">Area (Large–Small)</option>
+                <option value="area-asc">Area (Small–Large)</option>
+            </select>
 
         </div>
 
@@ -309,7 +327,7 @@ Lng: ---
         <div class="guide-number">4</div>
         <div class="guide-text">
           <h3>Layers</h3>
-          <p>In the right panel under <strong>Map Layers</strong>, toggle <strong>Satellite Base</strong>, <strong>Sentinel-2 Imagery</strong>, <strong>NDVI Overlay</strong>, and <strong>Mangrove Zones</strong> on or off to control what's shown on the map.</p>
+          <p>In the right panel under <strong>Map Layers</strong>, toggle <strong>Sentinel-2 Imagery</strong>, <strong>NDVI Overlay</strong>, and <strong>Mangrove Zones</strong> on or off to control what's shown on the map.</p>
         </div>
       </div>
 
@@ -333,7 +351,7 @@ Lng: ---
         <div class="guide-number">7</div>
         <div class="guide-text">
           <h3>Sync Satellite NDVI</h3>
-          <p>Choose <strong>Sync Satellite NDVI</strong> from the menu to pull a real mean NDVI reading for every zone from Copernicus Sentinel-2 imagery, based on the currently selected Scene Date. This runs zone-by-zone and can take a little while — it's shown alongside the field-survey NDVI in each zone's popup rather than replacing it.</p>
+          <p>Click <strong>Sync Satellite NDVI</strong> below the Scene Date in the right panel to pull a real mean NDVI reading for every zone from Copernicus Sentinel-2 imagery, based on the currently selected date. This runs zone-by-zone and can take a little while — it's shown alongside the field-survey NDVI in each zone's popup rather than replacing it.</p>
         </div>
       </div>
 
@@ -345,6 +363,25 @@ Lng: ---
         </div>
       </div>
 
+    </div>
+
+  </div>
+
+</div>
+
+<div class="dashboard-overlay" id="surveyDetailOverlay">
+
+  <div class="dashboard-modal survey-detail-modal">
+
+    <div class="dashboard-modal-header">
+      <div>
+        <h2 id="surveyDetailTitle">Zone name</h2>
+        <p class="dashboard-modal-sub" id="surveyDetailSub">Field survey submission</p>
+      </div>
+      <button class="dashboard-close" id="btnCloseSurveyDetail" aria-label="Close survey detail">&times;</button>
+    </div>
+
+    <div class="dashboard-modal-body" id="surveyDetailBody">
     </div>
 
   </div>
@@ -413,16 +450,6 @@ Lng: ---
         </svg>
       </span>
       <span>Export Field Survey Report</span>
-    </button>
-
-    <button class="side-menu-item" id="menuSyncSatellite">
-      <span class="side-menu-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
-          <polyline points="21 3 21 9 15 9"/>
-        </svg>
-      </span>
-      <span>Sync Satellite NDVI</span>
     </button>
 
     <div class="side-menu-divider"></div>

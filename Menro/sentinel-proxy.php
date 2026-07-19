@@ -1,40 +1,4 @@
 <?php
-/**
- * Copernicus Data Space Ecosystem (Sentinel Hub) proxy.
- *
- * Mirrors the pattern used by kobo-proxy.php: credentials stay on the
- * server, the browser only ever talks to this file.
- *
- * ---------------------------------------------------------------
- * SETUP — fill these in from your Copernicus Data Space account
- * ---------------------------------------------------------------
- * 1. Create/sign in at https://dataspace.copernicus.eu
- * 2. Open the Sentinel Hub dashboard: https://shapps.dataspace.copernicus.eu/dashboard/
- * 3. User Settings -> "OAuth clients" -> Create -> copy the Client ID
- *    and Client Secret into CDSE_CLIENT_ID / CDSE_CLIENT_SECRET below.
- *    (The secret is only shown once — copy it immediately.)
- * 4. "Configuration utility" -> New configuration (or use the default
- *    "Sentinel-2 L2A" template) -> copy its Instance ID into
- *    CDSE_INSTANCE_ID below.
- * 5. In that configuration, make sure it has a layer named
- *    TRUE-COLOR-S2L2A (created automatically by the template) and add
- *    a second custom layer named NDVI using this evalscript:
- *
- *      //VERSION=3
- *      function setup() {
- *        return { input: ["B04","B08","dataMask"], output: { bands: 4 } };
- *      }
- *      function evaluatePixel(s) {
- *        let ndvi = (s.B08 - s.B04) / (s.B08 + s.B04 + 0.0001);
- *        if (s.dataMask === 0) return [0, 0, 0, 0];
- *        if (ndvi < 0)   return [0.65, 0.65, 0.65, 0.6];
- *        if (ndvi < 0.2) return [0.86, 0.29, 0.23, 0.75];
- *        if (ndvi < 0.4) return [0.79, 0.54, 0.17, 0.75];
- *        if (ndvi < 0.6) return [0.96, 0.80, 0.25, 0.75];
- *        return [0.11, 0.49, 0.38, 0.8];
- *      }
- * ---------------------------------------------------------------
- */
 
 define('CDSE_CLIENT_ID',     'sh-70f32f1b-d5f0-477e-8141-5271e145f2b1');
 define('CDSE_CLIENT_SECRET', '4AIkqqYHJG5ZuMN1UmUzqRtNLZqfRhf9');
@@ -103,7 +67,6 @@ function getAccessToken() {
 
 $mode = $_GET['mode'] ?? 'wms';
 
-/* ---------- WMS tile passthrough (true-color + NDVI heatmap layers) ---------- */
 if ($mode === 'wms') {
     $token = getAccessToken();
 
@@ -133,7 +96,6 @@ if ($mode === 'wms') {
     exit;
 }
 
-/* ---------- Mean NDVI for one zone (circular footprint) over a date window ---------- */
 if ($mode === 'ndvi') {
     header('Content-Type: application/json');
 

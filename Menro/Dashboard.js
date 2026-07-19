@@ -52,6 +52,7 @@ function computeDashboardStats() {
   const healthy  = ZONES.filter(z => z.status === "healthy").length;
   const moderate = ZONES.filter(z => z.status === "moderate").length;
   const degraded = ZONES.filter(z => z.status === "degraded").length;
+  const pending  = ZONES.filter(z => z.status === "pending").length;
 
   const avgNdvi = (() => {
     const withNdvi = ZONES.filter(z => z.ndvi !== null);
@@ -99,14 +100,16 @@ function computeDashboardStats() {
       const zone   = ZONES.find(z => z.id === zoneId);
       return {
         zoneName: zone ? zone.name : (sub["Barangay"] || "Unknown zone").replace(/_/g, " "),
+        zoneStatus: zone ? zone.status : "pending",
         ranger: sub["Ranger_Name"] || "—",
         date: sub["Inspection_Date"] || "—",
         threat: sub["Observed_Threats"] ? sub["Observed_Threats"].replace(/_/g, " ") : "none observed",
+        raw: sub,
       };
     });
 
   return {
-    total, healthy, moderate, degraded,
+    total, healthy, moderate, degraded, pending,
     avgNdvi, avgCanopy,
     totalSurveys: ALL_SUBMISSIONS.length,
     latestDate,
@@ -120,11 +123,6 @@ function computeDashboardStats() {
     recent,
   };
 }
-
-/* ---------- Stat card icons + helper ----------
-   Small stroke-style icon set (matches the app's existing line-icon
-   language) plus a single builder so every stat card in the header
-   grids renders consistently instead of hand-rolled markup. */
 
 const STAT_ICONS = {
   zones: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>`,
@@ -162,8 +160,8 @@ function statusColorHex(status) {
   return "#c1473a";
 }
 
-function renderHealthDonut(healthy, moderate, degraded) {
-  const total = healthy + moderate + degraded;
+function renderHealthDonut(healthy, moderate, degraded, pending = 0) {
+  const total = healthy + moderate + degraded + pending;
   const r = 52, cx = 64, cy = 64, sw = 16;
   const circumference = 2 * Math.PI * r;
 
@@ -172,17 +170,20 @@ function renderHealthDonut(healthy, moderate, degraded) {
     { value: moderate, color: "#c98a2c", label: "Moderate" },
     { value: degraded, color: "#c1473a", label: "Degraded" },
   ];
+  if (pending > 0) segments.push({ value: pending, color: "#c3cdc7", label: "Pending" });
 
+  const gap = segments.filter(s => s.value > 0).length > 1 ? 1.5 : 0;
   let offset = 0;
   const arcs = segments.map(seg => {
     const pct  = total > 0 ? seg.value / total : 0;
-    const dash = pct * circumference;
+    const rawDash = pct * circumference;
+    const dash = Math.max(rawDash - gap, 0);
     const circle = pct > 0
       ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${seg.color}" stroke-width="${sw}"
            stroke-dasharray="${dash.toFixed(2)} ${(circumference - dash).toFixed(2)}"
            stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})" stroke-linecap="butt"/>`
       : "";
-    offset += dash;
+    offset += rawDash;
     return circle;
   }).join("");
 
@@ -208,24 +209,49 @@ function renderHealthDonut(healthy, moderate, degraded) {
 }
 
 function renderNDVIBarChart(zones) {
-  const sorted = [...zones].sort((a, b) => (b.ndvi ?? -1) - (a.ndvi ?? -1));
-  const max = Math.max(...sorted.map(z => z.ndvi ?? 0), 0.1);
+  const withData = zones.filter(z => z.ndvi !== null).sort((a, b) => b.ndvi - a.ndvi);
+  const noData   = zones.filter(z => z.ndvi === null).sort((a, b) => a.name.localeCompare(b.name));
+  const max = Math.max(...withData.map(z => z.ndvi), 0.1);
 
-  const rows = sorted.map(z => {
-    const pct   = z.ndvi !== null ? Math.max((z.ndvi / max) * 100, 2) : 0;
+  const legend = `
+    <div class="hbar-legend">
+      <span><span class="hbar-legend-dot" style="background:${statusColorHex("healthy")}"></span>Healthy</span>
+      <span><span class="hbar-legend-dot" style="background:${statusColorHex("moderate")}"></span>Moderate</span>
+      <span><span class="hbar-legend-dot" style="background:${statusColorHex("degraded")}"></span>Degraded</span>
+    </div>
+  `;
+
+  const dataRows = withData.map(z => {
+    const pct   = Math.max((z.ndvi / max) * 100, 4);
     const color = statusColorHex(z.status);
     return `
       <div class="hbar-row">
         <span class="hbar-label" title="${escapeHtml(z.name)}">${escapeHtml(z.name)}</span>
         <div class="hbar-track">
-          <div class="hbar-fill" style="width:${pct.toFixed(1)}%; background:${color}"></div>
+          <div class="hbar-fill" style="width:${pct.toFixed(1)}%; background:linear-gradient(90deg, ${color}b3, ${color})"></div>
         </div>
-        <span class="hbar-value">${z.ndvi !== null ? z.ndvi.toFixed(2) : "—"}</span>
+        <span class="hbar-value">${z.ndvi.toFixed(2)}</span>
       </div>
     `;
   }).join("");
 
-  return `<div class="hbar-chart">${rows}</div>`;
+  const noDataRows = noData.map(z => `
+    <div class="hbar-row no-data">
+      <span class="hbar-label" title="${escapeHtml(z.name)}">${escapeHtml(z.name)}</span>
+      <div class="hbar-track dashed"><div class="hbar-fill-empty"></div></div>
+      <span class="hbar-value muted">No data</span>
+    </div>
+  `).join("");
+
+  const footnote = noData.length > 0
+    ? `<div class="hbar-footnote">${noData.length} zone${noData.length !== 1 ? "s" : ""} awaiting a field survey or satellite sync</div>`
+    : "";
+
+  if (withData.length === 0 && noData.length === 0) {
+    return `<div class="dashboard-empty">No zone data recorded yet.</div>`;
+  }
+
+  return `${legend}<div class="hbar-chart">${dataRows}${noDataRows}</div>${footnote}`;
 }
 
 function renderBreakdownBarChart(breakdown, emptyText) {
@@ -260,7 +286,7 @@ function renderNDVITrendChart(ndviTrend) {
     return `<div class="dashboard-empty">Not enough scene dates yet to plot a trend.</div>`;
   }
 
-  const w = 560, h = 140, padL = 34, padR = 14, padT = 14, padB = 26;
+  const w = 640, h = 170, padL = 38, padR = 16, padT = 16, padB = 28;
   const innerW = w - padL - padR, innerH = h - padT - padB;
 
   const values = points.map(p => p.avg);
@@ -299,13 +325,27 @@ function renderNDVITrendChart(ndviTrend) {
   `;
 }
 
-/* ---------- Field Survey Log (date switcher) ----------
-   Lets a MENRO officer step through actual calendar dates and see
-   exactly which surveys were submitted that day — mirrors how
-   KoboToolbox's own "Data" table can be filtered by date, but surfaced
-   right in the dashboard instead of requiring a trip to Kobo. */
 
-let dashboardSelectedDate = null;
+let dashboardSelectedDate  = null; 
+let dashboardCalendarYear  = null; 
+let dashboardCalendarMonth = null; 
+
+// Keeps the "Field Survey Calendar" in sync with the Scene Date control in the
+// map's right panel: whenever the Scene Date changes (or the dashboard is
+// opened), the calendar jumps to that date and re-summarizes its week.
+function setDashboardDateFromScene(dateStr) {
+  if (!dateStr) return;
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return;
+
+  dashboardSelectedDate  = dateStr;
+  dashboardCalendarYear  = d.getFullYear();
+  dashboardCalendarMonth = d.getMonth();
+
+  if (typeof dashboardView !== "undefined" && dashboardView && dashboardView.classList.contains("active")) {
+    renderDashboard();
+  }
+}
 
 function availableSurveyDates() {
   return [...new Set(ALL_SUBMISSIONS.map(s => s["Inspection_Date"]).filter(Boolean))].sort();
@@ -313,6 +353,47 @@ function availableSurveyDates() {
 
 function submissionsOnDate(dateStr) {
   return ALL_SUBMISSIONS.filter(sub => sub["Inspection_Date"] === dateStr);
+}
+
+function submissionsInRange(startIso, endIso) {
+  return ALL_SUBMISSIONS.filter(sub => {
+    const d = sub["Inspection_Date"];
+    return d && d >= startIso && d <= endIso;
+  });
+}
+
+function isoDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function mondayOf(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  const offset = (d.getDay() + 6) % 7; 
+  d.setDate(d.getDate() - offset);
+  return isoDate(d);
+}
+
+function weekRange(dateStr) {
+  const start = mondayOf(dateStr);
+  const endD = new Date(start + "T00:00:00");
+  endD.setDate(endD.getDate() + 6);
+  return { start, end: isoDate(endD) };
+}
+
+function buildMonthGrid(year, month) {
+  const firstOfMonth = new Date(year, month, 1);
+  const leadDays = (firstOfMonth.getDay() + 6) % 7;
+  const start = new Date(year, month, 1 - leadDays);
+  const cells = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    cells.push(d);
+  }
+  return cells;
 }
 
 function renderSurveyLogCard(sub) {
@@ -351,6 +432,156 @@ function renderSurveyLogCard(sub) {
   `;
 }
 
+function renderCalendarWidget(weekStart, weekEnd) {
+  const monthLabel = new Date(dashboardCalendarYear, dashboardCalendarMonth, 1)
+    .toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const cells   = buildMonthGrid(dashboardCalendarYear, dashboardCalendarMonth);
+  const todayIso = todayISO();
+
+  const dowRow = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+    .map(d => `<span class="cal-dow">${d}</span>`).join("");
+
+  const dayCells = cells.map(d => {
+    const iso     = isoDate(d);
+    const inMonth = d.getMonth() === dashboardCalendarMonth;
+    const count   = submissionsOnDate(iso).length;
+
+    const classes = ["cal-day"];
+    if (!inMonth) classes.push("outside");
+    if (count > 0) classes.push("has-data");
+    if (iso >= weekStart && iso <= weekEnd) classes.push("in-week");
+    if (iso === dashboardSelectedDate) classes.push("selected");
+    if (iso === todayIso) classes.push("today");
+
+    return `
+      <button type="button" class="${classes.join(" ")}" data-date="${iso}"
+        aria-label="${formatDate(iso)}, ${count} survey${count !== 1 ? "s" : ""}">
+        <span class="cal-day-num">${d.getDate()}</span>
+        ${count > 0 ? `<span class="cal-day-dot"></span>` : ""}
+      </button>
+    `;
+  }).join("");
+
+  return `
+    <div class="cal-header">
+      <button type="button" class="date-nav-btn" id="calPrevMonth" aria-label="Previous month">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span class="cal-month-label">${monthLabel}</span>
+      <button type="button" class="date-nav-btn" id="calNextMonth" aria-label="Next month">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+    <div class="cal-grid cal-dow-row">${dowRow}</div>
+    <div class="cal-grid cal-days">${dayCells}</div>
+    <div class="cal-legend">
+      <span><span class="cal-legend-dot"></span> Has survey data</span>
+      <span><span class="cal-legend-swatch"></span> Selected week</span>
+    </div>
+  `;
+}
+
+function detailField(label, value) {
+  return `
+    <div class="survey-detail-field">
+      <span class="survey-detail-label">${escapeHtml(label)}</span>
+      <span class="survey-detail-value">${escapeHtml(value || "—")}</span>
+    </div>
+  `;
+}
+
+function renderSurveyDetailBody(sub, zoneName, zoneStatus) {
+  const hasThreat = sub["Observed_Threats"] && sub["Observed_Threats"] !== "none_observed";
+  const gpsParts  = (sub["GPS"] || "").split(" ").map(Number);
+  const hasGps    = gpsParts.length >= 2 && !isNaN(gpsParts[0]) && !isNaN(gpsParts[1]);
+
+  return `
+    <div class="survey-detail-topline">
+      <span class="status-chip status-${zoneStatus || "pending"}">${capitalise(zoneStatus || "pending")}</span>
+      <span class="threat-tag ${hasThreat ? "flagged" : "none"}">
+        ${hasThreat ? escapeHtml(capitalise(sub["Observed_Threats"].replace(/_/g, " "))) : "None observed"}
+      </span>
+    </div>
+
+    <div class="survey-detail-grid">
+      ${detailField("Ranger name", sub["Ranger_Name"])}
+      ${detailField("Inspection date", formatDate(sub["Inspection_Date"]))}
+      ${detailField("Transect / quadrat", sub["Transect_Number"])}
+      ${detailField("Estimated canopy cover", sub["Estimated_Canopy_Cover_"] ? sub["Estimated_Canopy_Cover_"] + "%" : "—")}
+      ${detailField("Species observed", sub["Species_Name"])}
+      ${detailField("Tree count", sub["Tree_Count"])}
+      ${detailField("Water color", sub["Water_Color"] ? sub["Water_Color"].replace(/_/g, " ") : "—")}
+      ${detailField("Nearby aquafarm activity", sub["Nearby_Aquafarm_Activity"] ? sub["Nearby_Aquafarm_Activity"].replace(/_/g, " ") : "—")}
+      ${hasGps ? detailField("GPS coordinates", `${gpsParts[0].toFixed(5)}, ${gpsParts[1].toFixed(5)}`) : ""}
+    </div>
+
+    ${sub["Additional_Notes"] ? `
+      <div class="survey-detail-notes">
+        <span class="survey-detail-label">Additional notes</span>
+        <p>${escapeHtml(sub["Additional_Notes"])}</p>
+      </div>
+    ` : ""}
+
+    <div class="survey-detail-source">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1Z"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/></svg>
+      Synced from KoboToolbox field survey submission
+    </div>
+  `;
+}
+
+function openSurveyDetail(sub, zoneName, zoneStatus) {
+  const overlay = document.getElementById("surveyDetailOverlay");
+  const titleEl = document.getElementById("surveyDetailTitle");
+  const subEl   = document.getElementById("surveyDetailSub");
+  const bodyEl  = document.getElementById("surveyDetailBody");
+  if (!overlay || !titleEl || !subEl || !bodyEl) return;
+
+  titleEl.textContent = zoneName;
+  subEl.textContent   = `Field survey · ${formatDate(sub["Inspection_Date"])}`;
+  bodyEl.innerHTML     = renderSurveyDetailBody(sub, zoneName, zoneStatus);
+
+  overlay.classList.add("open");
+}
+
+function closeSurveyDetail() {
+  const overlay = document.getElementById("surveyDetailOverlay");
+  if (overlay) overlay.classList.remove("open");
+}
+
+(function bindSurveyDetailModal() {
+  const overlay  = document.getElementById("surveyDetailOverlay");
+  const closeBtn = document.getElementById("btnCloseSurveyDetail");
+  if (closeBtn) closeBtn.addEventListener("click", closeSurveyDetail);
+  if (overlay) {
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) closeSurveyDetail();
+    });
+  }
+})();
+
+function bindActivityTableControls(recentList) {
+  const table = document.querySelector(".activity-table tbody");
+  if (!table) return;
+
+  const openFromRow = (row) => {
+    const item = recentList[parseInt(row.dataset.idx, 10)];
+    if (item && item.raw) openSurveyDetail(item.raw, item.zoneName, item.zoneStatus);
+  };
+
+  table.addEventListener("click", (e) => {
+    const row = e.target.closest("tr[data-idx]");
+    if (row) openFromRow(row);
+  });
+
+  table.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const row = e.target.closest("tr[data-idx]");
+    if (!row) return;
+    e.preventDefault();
+    openFromRow(row);
+  });
+}
+
 function renderSurveyLog() {
   const dates = availableSurveyDates();
 
@@ -359,59 +590,66 @@ function renderSurveyLog() {
     return `<div class="dashboard-empty">No field survey submissions recorded yet.</div>`;
   }
 
-  if (!dashboardSelectedDate || !dates.includes(dashboardSelectedDate)) {
+  if (!dashboardSelectedDate) {
     dashboardSelectedDate = dates[dates.length - 1];
   }
 
-  const idx = dates.indexOf(dashboardSelectedDate);
-  const daySubs = submissionsOnDate(dashboardSelectedDate);
+  if (dashboardCalendarYear === null) {
+    const selD = new Date(dashboardSelectedDate + "T00:00:00");
+    dashboardCalendarYear  = selD.getFullYear();
+    dashboardCalendarMonth = selD.getMonth();
+  }
 
-  const options = [...dates].reverse().map(d => {
-    const count = submissionsOnDate(d).length;
-    return `<option value="${d}" ${d === dashboardSelectedDate ? "selected" : ""}>${formatDate(d)} · ${count} survey${count !== 1 ? "s" : ""}</option>`;
-  }).join("");
+  const { start: weekStart, end: weekEnd } = weekRange(dashboardSelectedDate);
+  const weekSubs = submissionsInRange(weekStart, weekEnd)
+    .sort((a, b) => (a["Inspection_Date"] || "").localeCompare(b["Inspection_Date"] || ""));
 
-  const cardsHtml = daySubs.length > 0
-    ? `<div class="survey-log-cards">${daySubs.map(renderSurveyLogCard).join("")}</div>`
-    : `<div class="dashboard-empty">No field surveys recorded on this date.</div>`;
+  const summaryCards = weekSubs.length > 0
+    ? `<div class="survey-log-cards">${weekSubs.map(renderSurveyLogCard).join("")}</div>`
+    : `<div class="dashboard-empty">No field surveys gathered this week.</div>`;
+
+  const rangeLabel = weekStart.slice(0, 7) === weekEnd.slice(0, 7)
+    ? `${formatDate(weekStart)} – ${new Date(weekEnd + "T00:00:00").toLocaleDateString("en-US", { day: "numeric" })}, ${weekEnd.slice(0, 4)}`
+    : `${formatDate(weekStart)} – ${formatDate(weekEnd)}`;
 
   return `
-    <div class="survey-log-toolbar">
-      <button class="date-nav-btn" id="dashSurveyPrev" ${idx <= 0 ? "disabled" : ""} aria-label="Previous survey date">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-      </button>
-      <select id="dashSurveyDateSelect" class="settings-select survey-log-select" aria-label="Jump to survey date">${options}</select>
-      <button class="date-nav-btn" id="dashSurveyNext" ${idx >= dates.length - 1 ? "disabled" : ""} aria-label="Next survey date">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-      </button>
-      <span class="survey-log-count">${daySubs.length} submission${daySubs.length !== 1 ? "s" : ""} on ${formatDate(dashboardSelectedDate)}</span>
+    <div class="survey-log-layout">
+      <div class="survey-calendar">
+        ${renderCalendarWidget(weekStart, weekEnd)}
+      </div>
+      <div class="survey-week-summary">
+        <div class="week-summary-head">
+          <span class="week-summary-range">${rangeLabel}</span>
+          <span class="week-summary-count">${weekSubs.length} survey${weekSubs.length !== 1 ? "s" : ""} gathered this week</span>
+        </div>
+        ${summaryCards}
+      </div>
     </div>
-    ${cardsHtml}
   `;
 }
 
-function shiftSurveyLogDate(dir) {
-  const dates = availableSurveyDates();
-  if (dates.length === 0) return;
-  const idx = dates.indexOf(dashboardSelectedDate);
-  const newIdx = Math.max(0, Math.min(dates.length - 1, idx + dir));
-  dashboardSelectedDate = dates[newIdx];
+function shiftCalendarMonth(dir) {
+  dashboardCalendarMonth += dir;
+  if (dashboardCalendarMonth < 0)  { dashboardCalendarMonth = 11; dashboardCalendarYear--; }
+  if (dashboardCalendarMonth > 11) { dashboardCalendarMonth = 0;  dashboardCalendarYear++; }
   renderDashboard();
 }
 
 function bindSurveyLogControls() {
-  const select = document.getElementById("dashSurveyDateSelect");
-  const prev   = document.getElementById("dashSurveyPrev");
-  const next   = document.getElementById("dashSurveyNext");
-
-  if (select) {
-    select.addEventListener("change", (e) => {
-      dashboardSelectedDate = e.target.value;
+  const grid = document.querySelector(".survey-calendar .cal-days");
+  if (grid) {
+    grid.addEventListener("click", (e) => {
+      const btn = e.target.closest(".cal-day");
+      if (!btn) return;
+      dashboardSelectedDate = btn.dataset.date;
       renderDashboard();
     });
   }
-  if (prev) prev.addEventListener("click", () => shiftSurveyLogDate(-1));
-  if (next) next.addEventListener("click", () => shiftSurveyLogDate(1));
+
+  const prevBtn = document.getElementById("calPrevMonth");
+  const nextBtn = document.getElementById("calNextMonth");
+  if (prevBtn) prevBtn.addEventListener("click", () => shiftCalendarMonth(-1));
+  if (nextBtn) nextBtn.addEventListener("click", () => shiftCalendarMonth(1));
 }
 
 function renderDashboard() {
@@ -432,8 +670,8 @@ function renderDashboard() {
           </tr>
         </thead>
         <tbody>
-          ${s.recent.map(r => `
-            <tr>
+          ${s.recent.map((r, i) => `
+            <tr class="activity-row" data-idx="${i}" tabindex="0">
               <td class="activity-zone-cell">${escapeHtml(r.zoneName)}</td>
               <td>${escapeHtml(r.ranger)}</td>
               <td>${r.threat === "none observed"
@@ -464,7 +702,7 @@ function renderDashboard() {
 
     <p class="dashboard-section-title">Zone Health Overview</p>
     <div class="dashboard-grid">
-      ${statCard({ icon: "zones", accent: "", label: "Total Mangrove Zones", value: s.total, hint: "Across 17 barangays" })}
+      ${statCard({ icon: "zones", accent: "", label: "Total Mangrove Zones", value: s.total, hint: s.pending > 0 ? `${s.pending} zone${s.pending !== 1 ? "s" : ""} awaiting data` : "Across 17 barangays" })}
       ${statCard({ icon: "healthy", accent: "healthy", label: "Healthy Zones", value: s.healthy, hint: `${s.total ? Math.round((s.healthy / s.total) * 100) : 0}% of total` })}
       ${statCard({ icon: "moderate", accent: "moderate", label: "Moderate Zones", value: s.moderate, hint: `${s.total ? Math.round((s.moderate / s.total) * 100) : 0}% of total`, valueClass: "amber" })}
       ${statCard({ icon: "degraded", accent: "degraded", label: "Degraded Zones", value: s.degraded, hint: `${s.total ? Math.round((s.degraded / s.total) * 100) : 0}% of total`, valueClass: "red" })}
@@ -473,7 +711,7 @@ function renderDashboard() {
     <div class="dashboard-charts-row">
       <div class="chart-card chart-card-narrow">
         <p class="chart-card-title">Health Distribution</p>
-        ${renderHealthDonut(s.healthy, s.moderate, s.degraded)}
+        ${renderHealthDonut(s.healthy, s.moderate, s.degraded, s.pending)}
       </div>
       <div class="chart-card">
         <p class="chart-card-title">NDVI by Zone</p>
@@ -489,12 +727,12 @@ function renderDashboard() {
       ${statCard({ icon: "calendar", label: "Latest Inspection", value: s.latestDate ? formatDate(s.latestDate) : "—", hint: "Most recent ranger visit", valueClass: "date-value" })}
     </div>
 
-    <p class="dashboard-section-title">Field Survey Log</p>
+    <p class="dashboard-section-title">Field Survey Calendar</p>
     <div class="chart-card survey-log-panel">
       ${surveyLogHtml}
     </div>
 
-    <div class="dashboard-charts-row">
+    <div class="dashboard-charts-row dashboard-charts-row-reverse">
       <div class="chart-card">
         <p class="chart-card-title">Average NDVI Trend</p>
         ${renderNDVITrendChart(s.ndviTrend)}
@@ -526,6 +764,7 @@ function renderDashboard() {
   `;
 
   bindSurveyLogControls();
+  bindActivityTableControls(s.recent);
 }
 
 const mapView       = document.getElementById("mapView");
@@ -544,5 +783,9 @@ function switchTab(tab) {
   }
 }
 
-function openDashboard()  { switchTab("dashboard"); }
+function openDashboard() {
+  const sceneDateEl = document.getElementById("sceneDate");
+  if (sceneDateEl && sceneDateEl.value) setDashboardDateFromScene(sceneDateEl.value);
+  switchTab("dashboard");
+}
 function closeDashboard() { switchTab("map"); }

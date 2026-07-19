@@ -37,11 +37,6 @@ function coverToNDVI(cover) {
   return +(0.10 + (pct / 100) * 0.75).toFixed(2);
 }
 
-/* ---------- Placeholder field data ----------
-   Stand-in KoboToolbox submissions so the dashboard and map render
-   real-looking numbers during development. Replace/remove once the
-   live proxy (kobo-proxy.php) is reachable — DEFAULT_SUBMISSIONS is
-   only used as a fallback when that fetch fails. */
 const DEFAULT_SUBMISSIONS = [
   { Barangay: "balibago",      Inspection_Date: "2026-06-02", Ranger_Name: "Marco Villanueva",   Transect_Number: "T-01", Estimated_Canopy_Cover_: "72", Species_Name: "Rhizophora mucronata", Tree_Count: "340", Observed_Threats: "none_observed",        Water_Color: "clear",           Nearby_Aquafarm_Activity: "none",     Additional_Notes: "Dense stand along the tidal creek, healthy regrowth on the eastern edge.", GPS: "13.922447 120.619998 0 5" },
   { Barangay: "talisay",       Inspection_Date: "2026-06-02", Ranger_Name: "Elena Ramos",         Transect_Number: "T-02", Estimated_Canopy_Cover_: "45", Species_Name: "Avicennia marina",     Tree_Count: "210", Observed_Threats: "debris___waste_dumping", Water_Color: "murky",           Nearby_Aquafarm_Activity: "minimal",  Additional_Notes: "Plastic debris accumulating near the outflow channel.", GPS: "13.8650 120.6260 0 5" },
@@ -83,14 +78,6 @@ async function fetchKoboData() {
   }
 }
 
-/* ---------- Connection Status Badge ----------
-   Shows whether the app can actually reach its backend (the KoboToolbox
-   proxy), not just whether the OS reports a network interface — a laptop
-   can be "connected" to Wi-Fi with no real route to the server. We seed
-   the initial state from navigator.onLine for an instant first paint,
-   then correct it as soon as a real request (fetchKoboData, or the
-   lightweight poll below) succeeds or fails. */
-
 const connectionStatusEl     = document.getElementById("connectionStatus");
 const connectionStatusIconEl = document.getElementById("connectionStatusIcon");
 const connectionStatusTextEl = document.getElementById("connectionStatusText");
@@ -109,7 +96,7 @@ const ICON_OFFLINE = `
   <line x1="12" y1="19.5" x2="12.01" y2="19.5"/>
 `;
 
-let isOnline = null; // avoid redundant DOM writes
+let isOnline = null;
 
 function setConnectionStatus(online) {
   if (!connectionStatusEl || online === isOnline) return;
@@ -125,15 +112,11 @@ function setConnectionStatus(online) {
   if (connectionStatusTextEl) connectionStatusTextEl.textContent = online ? "Online" : "Offline";
 }
 
-// Instant first paint from the browser's own signal.
 setConnectionStatus(navigator.onLine);
 
-// Browser-level network changes (Wi-Fi drop, airplane mode, etc.)
 window.addEventListener("online",  () => setConnectionStatus(true));
 window.addEventListener("offline", () => setConnectionStatus(false));
 
-// Periodic real-world check against the backend, since navigator.onLine
-// can say "online" even when the server itself is unreachable.
 async function pingBackend() {
   try {
     const res = await fetch(KOBO_API_URL, { method: "HEAD", cache: "no-store" });
@@ -423,20 +406,7 @@ const osmTile = L.tileLayer(
     maxZoom:19
 });
 
-const satTile = L.tileLayer(
-"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-{
-    attribution:"Tiles © Esri",
-    maxZoom:19
-});
-
-satTile.addTo(map);
-
-/* ---------- Copernicus Data Space Ecosystem (Sentinel Hub) ----------
-   Both the true-color imagery and the NDVI heatmap tiles are fetched
-   through sentinel-proxy.php so the OAuth client ID/secret never touch
-   the browser. See sentinel-proxy.php for the one-time account setup
-   (OAuth client + Sentinel Hub configuration/instance). */
+osmTile.addTo(map);
 
 const SENTINEL_PROXY_URL = "sentinel-proxy.php";
 
@@ -460,6 +430,7 @@ const sentinelLayer = L.tileLayer.wms(`${SENTINEL_PROXY_URL}?mode=wms`, {
     format: "image/png",
     transparent: true,
     maxZoom: 19,
+    zIndex: 2,
     attribution: "Imagery \u00a9 Copernicus Sentinel-2 (CDSE)",
     time: sentinelTimeRangeFor(sceneDateInputValueOrToday()),
 });
@@ -469,6 +440,7 @@ const ndviHeatmapLayer = L.tileLayer.wms(`${SENTINEL_PROXY_URL}?mode=wms`, {
     format: "image/png",
     transparent: true,
     maxZoom: 19,
+    zIndex: 3,
     attribution: "NDVI \u00a9 Copernicus Sentinel-2 (CDSE)",
     time: sentinelTimeRangeFor(sceneDateInputValueOrToday()),
 });
@@ -495,15 +467,8 @@ if (layerNdviEl) {
     });
 }
 
-/* ---------- Per-zone NDVI from the Statistics API ----------
-   Computes a real mean NDVI for the ~circular footprint already used
-   for each zone's map marker (Math.sqrt(area) * 100 meters), over the
-   15 days leading up to the selected scene date. Stored on
-   zone.satNdvi (kept separate from the Kobo-derived zone.ndvi so field
-   data and satellite data can be compared side by side). */
-
 async function fetchZoneNdviFromCopernicus(zone, dateStr) {
-    const radius = Math.sqrt(zone.area) * 100; // meters, matches the map circle
+    const radius = Math.sqrt(zone.area) * 100; 
     const params = new URLSearchParams({
         mode: "ndvi",
         lat: zone.lat,
@@ -527,22 +492,32 @@ async function fetchZoneNdviFromCopernicus(zone, dateStr) {
 
 let satelliteSyncInProgress = false;
 
+const btnSyncSatelliteInlineEl = document.getElementById("btnSyncSatelliteInline");
+
 async function syncAllZonesFromSatellite(dateStr) {
     if (satelliteSyncInProgress) return;
     satelliteSyncInProgress = true;
 
+    if (btnSyncSatelliteInlineEl) btnSyncSatelliteInlineEl.classList.add("syncing");
+
     const date = dateStr || sceneDateInputValueOrToday();
     console.log(`Syncing satellite NDVI for ${ZONES.length} zones (this can take a little while)...`);
 
-    // Sequential, not parallel — the Statistics API is rate-limited per
-    // account, and 17 zones fired at once is an easy way to get throttled.
     for (const zone of ZONES) {
         await fetchZoneNdviFromCopernicus(zone, date);
         renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");
     }
 
+    if (btnSyncSatelliteInlineEl) btnSyncSatelliteInlineEl.classList.remove("syncing");
+
     satelliteSyncInProgress = false;
     console.log("Satellite NDVI sync complete.");
+}
+
+if (btnSyncSatelliteInlineEl) {
+    btnSyncSatelliteInlineEl.addEventListener("click", () => {
+        syncAllZonesFromSatellite(sceneDateInputValueOrToday());
+    });
 }
 
 const markersLayer = L.layerGroup().addTo(map);
@@ -604,11 +579,6 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-/* ---------- Popup Builder ----------
-   Kept intentionally short — just what a ranger or MENRO officer needs
-   at a glance. The full field survey record (transect, species, tree
-   count, water color, aquafarm activity, notes, etc.) lives in the
-   Export Field Survey Report PDF instead of cluttering the map popup. */
 function buildPopup(zone) {
   const hasKobo = zone.lastRanger && zone.lastRanger !== "—";
 
@@ -631,8 +601,6 @@ function buildPopup(zone) {
   `;
 }
 
-/* ---------- Markers ---------- */
-
 const markers={};
 
 ZONES.forEach(zone=>{
@@ -654,13 +622,12 @@ ZONES.forEach(zone=>{
 
 });
 
-/* -------- CONTINUE WITH PART 2 -------- */
-/* ---------- Zone List ---------- */
-
 const zoneListEl = document.getElementById("zoneList");
 const zoneSearchEl = document.getElementById("zoneSearch");
 const zoneSearchHintEl = document.getElementById("zoneSearchHint");
 const zoneSearchClearEl = document.getElementById("zoneSearchClear");
+const zoneStatusFilterEl = document.getElementById("zoneStatusFilter");
+const zoneSortEl = document.getElementById("zoneSort");
 
 function updateZoneSearchHint(query, matchCount) {
 
@@ -676,15 +643,52 @@ function updateZoneSearchHint(query, matchCount) {
 
 }
 
+function sortZones(zones, sortKey) {
+
+    const sorted = zones.slice();
+
+    switch (sortKey) {
+        case "name-desc":
+            sorted.sort((a, b) => b.name.localeCompare(a.name));
+            break;
+        case "ndvi-desc":
+            sorted.sort((a, b) => (b.ndvi ?? -1) - (a.ndvi ?? -1));
+            break;
+        case "ndvi-asc":
+            sorted.sort((a, b) => (a.ndvi ?? Infinity) - (b.ndvi ?? Infinity));
+            break;
+        case "area-desc":
+            sorted.sort((a, b) => b.area - a.area);
+            break;
+        case "area-asc":
+            sorted.sort((a, b) => a.area - b.area);
+            break;
+        case "name-asc":
+        default:
+            sorted.sort((a, b) => a.name.localeCompare(b.name));
+            break;
+    }
+
+    return sorted;
+}
+
 function renderZoneList(filterText = "") {
 
     const query = filterText.trim().toLowerCase();
+    const statusFilter = zoneStatusFilterEl ? zoneStatusFilterEl.value : "all";
+    const sortKey = zoneSortEl ? zoneSortEl.value : "name-asc";
 
     zoneListEl.innerHTML = "";
 
-    const filtered = ZONES.filter(zone =>
+    let filtered = ZONES.filter(zone =>
         zone.name.toLowerCase().includes(query)
     );
+
+    if (statusFilter !== "all") {
+        filtered = filtered.filter(zone => zone.status === statusFilter);
+    }
+
+    filtered = sortZones(filtered, sortKey);
 
     updateZoneSearchHint(filterText.trim(), filtered.length);
 
@@ -768,7 +772,17 @@ if (zoneSearchClearEl) {
     });
 }
 
-/* ---------- Zone Detail ---------- */
+if (zoneStatusFilterEl) {
+    zoneStatusFilterEl.addEventListener("change", () => {
+        renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");
+    });
+}
+
+if (zoneSortEl) {
+    zoneSortEl.addEventListener("change", () => {
+        renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");
+    });
+}
 
 function selectZone(zone){
 
@@ -782,12 +796,6 @@ function selectZone(zone){
     });
 
 }
-
-/* ---------- Scene Summary ----------
-   No longer rendered in the UI (left panel removed), but the figures are
-   kept on `sceneSummary` since export.js reads them for the PDF cards.
-   Every figure here is derived from real zone/survey data — nothing is
-   a placeholder, so the PDF always matches what the Dashboard shows. */
 
 let sceneSummary = { meanNDVI: "0.00", zonesSurveyed: 0, totalZones: 0, healthyCount: 0, atRiskCount: 0 };
 
@@ -821,12 +829,6 @@ function updateSummary(){
 
 }
 
-
-/* ---------- NDVI Distribution Bar ---------- */
-// Healthy:  NDVI >= 0.60
-// Moderate: NDVI >= 0.40 and < 0.60
-// Degraded: NDVI <  0.40
-
 function updateNDVIBar(){
   const total = ZONES.length;
   const groups = [
@@ -857,8 +859,6 @@ function updateNDVIBar(){
 
 updateSummary();
 
-/* ---------- Layer Toggles ---------- */
-
 const mapLayersControl = document.getElementById("mapLayersControl");
 const layersToggleBtn  = document.getElementById("layersToggleBtn");
 
@@ -882,24 +882,7 @@ if (layersToggleBtn && mapLayersControl) {
         });
 }
 
-document.getElementById("layerSatellite")
-.addEventListener("change",function(){
 
-    if(this.checked){
-
-        map.removeLayer(osmTile);
-
-        satTile.addTo(map);
-
-    }else{
-
-        map.removeLayer(satTile);
-
-        osmTile.addTo(map);
-
-    }
-
-});
 
 document.getElementById("layerZones")
 .addEventListener("change",function(){
@@ -915,8 +898,6 @@ document.getElementById("layerZones")
     }
 
 });
-
-/* ---------- Scene Date ---------- */
 
 const sceneDate = document.getElementById("sceneDate");
 let sceneDateManuallySet = false;
@@ -961,13 +942,9 @@ function todayISO() {
     return `${yyyy}-${mm}-${dd}`;
 }
 
-// Keeps the date input synced to "today" so it doesn't go stale if the
-// dashboard is left open overnight. Stops touching the field once the
-// user has manually picked a date, so it never yanks them out of a
-// historical scene they're actively reviewing.
 function syncSceneDateToToday() {
     const today = todayISO();
-    sceneDate.max = today; // no future scene dates
+    sceneDate.max = today;
 
     if (sceneDateManuallySet) return;
 
@@ -985,10 +962,9 @@ sceneDate.addEventListener("change",(e)=>{
     sentinelLayer.setParams({ time: sentinelTimeRangeFor(e.target.value) });
     ndviHeatmapLayer.setParams({ time: sentinelTimeRangeFor(e.target.value) });
     if (dataReady) applyDataForDate(e.target.value);
+    if (typeof setDashboardDateFromScene === "function") setDashboardDateFromScene(e.target.value);
 
 });
-
-/* ---------- Scene Date Arrows ---------- */
 
 function stepSceneDate(days) {
     const base = sceneDate.value ? new Date(sceneDate.value + "T00:00:00") : new Date();
@@ -1024,8 +1000,6 @@ updateSceneDateArrowState();
 
 setInterval(syncSceneDateToToday, 60 * 1000);
 
-/* ---------- Mouse Coordinates ---------- */
-
 const mouseCoordinates=document.getElementById("mouseCoordinates");
 
 map.on("mousemove",(e)=>{
@@ -1038,8 +1012,6 @@ map.on("mousemove",(e)=>{
 
 });
 
-/* ---------- Logout ---------- */
-
 function handleLogout() {
 
     const confirmLogout = confirm(
@@ -1048,25 +1020,17 @@ function handleLogout() {
 
     if (confirmLogout) {
 
-        // Clear saved login information
         localStorage.removeItem("menro_remembered_user");
 
-        // Redirect to the login page
         window.location.href = "../Login/Login.html";
 
     }
 
-    // If Cancel is clicked, nothing happens.
 
 }
 
-// btnLogout no longer exists in the top bar — sign out now lives in the
-// hamburger drawer (menuSignOut) — but keep this guarded in case a page
-// still ships the old button.
 const btnLogout = document.getElementById("btnLogout");
 if (btnLogout) btnLogout.addEventListener("click", handleLogout);
-
-/* ---------- Right Resizer ---------- */
 
 const rightPanel=document.querySelector(".right-panel");
 const rightResizer=document.querySelector(".right-resizer");
@@ -1103,18 +1067,12 @@ document.addEventListener("mouseup",()=>{
 
 });
 
-/* ---------- Utility ---------- */
-
 function capitalise(str){
 
     return str.charAt(0).toUpperCase()+str.slice(1);
 
 }
 
-/* ---------- KoboToolbox Init ---------- */
-// Satellite NDVI pipeline (Copernicus stats API) dropped — Kobo field
-// surveys are now the only NDVI/status source. Zones with no survey
-// yet stay at their initial "pending" / null state below.
 async function initWithKobo() {
   captureSatelliteBaseline();
 
@@ -1127,11 +1085,6 @@ async function initWithKobo() {
 }
 
 initWithKobo();
-
-/* ============================================================
-   Dashboard modal code (stats, charts, open/close handlers) now
-   lives in dashboard.js — loaded separately in satellite.html.
-   ============================================================ */
 
 const guideOverlay  = document.getElementById("guideOverlay");
 const btnHelp       = document.getElementById("btnHelp");
@@ -1155,19 +1108,16 @@ if (guideOverlay) {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    const surveyDetailOpen = document.getElementById("surveyDetailOverlay")?.classList.contains("open");
+    if (surveyDetailOpen && typeof closeSurveyDetail === "function") {
+      closeSurveyDetail();
+      return;
+    }
     closeDashboard();
     closeGuide();
     closeSideMenu();
   }
 });
-
-/* ============================================================
-   Map Hamburger Menu — Google Maps-style slide-out drawer.
-   Mirrors the existing top bar / right panel controls rather
-   than duplicating their logic: each drawer control forwards
-   to the original element (dispatching its native event) so
-   there is only one source of truth for map/layer state.
-   ============================================================ */
 
 const sideMenu         = document.getElementById("sideMenu");
 const sideMenuBackdrop = document.getElementById("sideMenuBackdrop");
@@ -1188,25 +1138,23 @@ if (btnMapMenu)       btnMapMenu.addEventListener("click", openSideMenu);
 if (btnCloseSideMenu) btnCloseSideMenu.addEventListener("click", closeSideMenu);
 if (sideMenuBackdrop) sideMenuBackdrop.addEventListener("click", closeSideMenu);
 
-// ── Drawer action items ────────────────────────────────────
 const menuMap        = document.getElementById("menuMap");
 const menuDashboard = document.getElementById("menuDashboard");
 const menuGuide     = document.getElementById("menuGuide");
 const menuExport    = document.getElementById("menuExport");
-const menuSyncSatellite = document.getElementById("menuSyncSatellite");
 const menuSignOut   = document.getElementById("menuSignOut");
 
 if (menuMap) {
   menuMap.addEventListener("click", () => {
     closeSideMenu();
-    closeDashboard(); // defined in Dashboard.js — switches back to the map view
+    closeDashboard();
   });
 }
 
 if (menuDashboard) {
   menuDashboard.addEventListener("click", () => {
     closeSideMenu();
-    openDashboard(); // defined in Dashboard.js
+    openDashboard();
   });
 }
 
@@ -1220,14 +1168,7 @@ if (menuGuide) {
 if (menuExport) {
   menuExport.addEventListener("click", () => {
     closeSideMenu();
-    exportPDF(); // defined in export.js
-  });
-}
-
-if (menuSyncSatellite) {
-  menuSyncSatellite.addEventListener("click", () => {
-    closeSideMenu();
-    syncAllZonesFromSatellite(sceneDateInputValueOrToday());
+    exportPDF(); 
   });
 }
 
@@ -1238,9 +1179,6 @@ if (menuSignOut) {
   });
 }
 
-// First-time visit: show the guide automatically once, then remember.
-// (Uses a session-scoped flag so it re-appears each new browser session,
-// which is reasonable for shared MENRO office computers.)
 if (!sessionStorage.getItem("aquaguard_guide_shown")) {
   openGuide();
   sessionStorage.setItem("aquaguard_guide_shown", "1");
