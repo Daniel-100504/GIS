@@ -153,13 +153,6 @@ function formatDate(iso) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function statusColorHex(status) {
-  if (status === "healthy")  return "#1c7d61";
-  if (status === "moderate") return "#c98a2c";
-  if (status === "pending")  return "#93a29b";
-  return "#c1473a";
-}
-
 function renderHealthDonut(healthy, moderate, degraded, pending = 0) {
   const total = healthy + moderate + degraded + pending;
   const r = 52, cx = 64, cy = 64, sw = 16;
@@ -189,7 +182,7 @@ function renderHealthDonut(healthy, moderate, degraded, pending = 0) {
 
   const legend = segments.map(seg => `
     <div class="donut-legend-item">
-      <span class="donut-legend-dot" style="background:${seg.color}"></span>
+      <span class="donut-legend-dot ${seg.label.toLowerCase()}"></span>
       <span class="donut-legend-label">${seg.label}</span>
       <span class="donut-legend-value">${seg.value}</span>
     </div>
@@ -215,20 +208,19 @@ function renderNDVIBarChart(zones) {
 
   const legend = `
     <div class="hbar-legend">
-      <span><span class="hbar-legend-dot" style="background:${statusColorHex("healthy")}"></span>Healthy</span>
-      <span><span class="hbar-legend-dot" style="background:${statusColorHex("moderate")}"></span>Moderate</span>
-      <span><span class="hbar-legend-dot" style="background:${statusColorHex("degraded")}"></span>Degraded</span>
+      <span><span class="hbar-legend-dot healthy"></span>Healthy</span>
+      <span><span class="hbar-legend-dot moderate"></span>Moderate</span>
+      <span><span class="hbar-legend-dot degraded"></span>Degraded</span>
     </div>
   `;
 
   const dataRows = withData.map(z => {
-    const pct   = Math.max((z.ndvi / max) * 100, 4);
-    const color = statusColorHex(z.status);
+    const pct = Math.max((z.ndvi / max) * 100, 4);
     return `
       <div class="hbar-row">
         <span class="hbar-label" title="${escapeHtml(z.name)}">${escapeHtml(z.name)}</span>
         <div class="hbar-track">
-          <div class="hbar-fill" style="width:${pct.toFixed(1)}%; background:linear-gradient(90deg, ${color}b3, ${color})"></div>
+          <div class="hbar-fill ${z.status}" style="--pct:${pct.toFixed(1)}%"></div>
         </div>
         <span class="hbar-value">${z.ndvi.toFixed(2)}</span>
       </div>
@@ -266,7 +258,7 @@ function renderBreakdownBarChart(breakdown, emptyText) {
       <div class="hbar-row">
         <span class="hbar-label" title="${escapeHtml(capitalise(t.threat))}">${escapeHtml(capitalise(t.threat))}</span>
         <div class="hbar-track">
-          <div class="hbar-fill threat-fill" style="width:${pct.toFixed(1)}%"></div>
+          <div class="hbar-fill threat-fill" style="--pct:${pct.toFixed(1)}%"></div>
         </div>
         <span class="hbar-value">${t.count}</span>
       </div>

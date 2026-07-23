@@ -13,7 +13,10 @@
 
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23146b52' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22c0-4 3-5 3-9a3 3 0 0 0-6 0c0 4 3 5 3 9Z'/%3E%3Cpath d='M12 13V3'/%3E%3Cpath d='M12 7 8 3'/%3E%3Cpath d='M12 9 17 4'/%3E%3C/svg%3E"/>
 
-        <link rel="stylesheet" href="style.css"/>
+        <link rel="stylesheet" href="css/style.css"/>
+        <link rel="stylesheet" href="css/right-panel.css"/>
+        <link rel="stylesheet" href="css/side-menu.css"/>
+        <link rel="stylesheet" href="css/dashboard.css"/>
 </head>
 
 <body>
@@ -51,20 +54,6 @@
             <span id="connectionStatusText">Online</span>
         </span>
 
-        <button
-            class="btn-help"
-            id="btnHelp"
-            aria-label="Help / Guide">
-
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 5"/>
-              <line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-            Guide
-
-        </button>
-
     </div>
 
 </header>
@@ -74,11 +63,6 @@
 <main class="map-container">
 
 <div id="map"></div>
-
-<div id="imageryRefreshBadge" class="imagery-refresh-badge" hidden>
-    <span class="imagery-refresh-spinner"></span>
-    <span>Refreshing satellite imagery…</span>
-</div>
 
 <div
 id="mouseCoordinates"
@@ -268,7 +252,7 @@ Lng: ---
         <div class="zone-controls-row">
 
             <select id="zoneStatusFilter" class="zone-control-select" aria-label="Filter by status">
-                <option value="all">All statuses</option>
+                <option value="all">All Status</option>
                 <option value="healthy">Healthy</option>
                 <option value="moderate">Moderate</option>
                 <option value="degraded">Degraded</option>
@@ -488,9 +472,9 @@ Lng: ---
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="satellite.js"></script>
-<script src="export.js"></script>
-<script src="Dashboard.js"></script>
+<script src="js/satellite.js"></script>
+<script src="js/export.js"></script>
+<script src="js/Dashboard.js"></script>
 
 </body>
 </html>

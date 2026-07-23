@@ -101,9 +101,9 @@ if ($mode === 'ndvi') {
 
     $lat    = floatval($_GET['lat'] ?? 0);
     $lng    = floatval($_GET['lng'] ?? 0);
-    $radius = floatval($_GET['radius'] ?? 300); // meters
+    $radius = floatval($_GET['radius'] ?? 300); 
     $to     = $_GET['date'] ?? date('Y-m-d');
-    $windowDays = 10; // keep in sync with SENTINEL_WINDOW_DAYS in satellite.js
+    $windowDays = 10; 
     $from   = date('Y-m-d', strtotime($to . " -{$windowDays} days"));
     $maxcc  = isset($_GET['maxcc']) ? floatval($_GET['maxcc']) : 50;
 
@@ -187,7 +187,6 @@ EVAL;
 if ($mode === 'catalog') {
     header('Content-Type: application/json');
 
-    // Which month to search, e.g. "2026-07". Defaults to the current month.
     $month = $_GET['month'] ?? date('Y-m');
     $maxcc = isset($_GET['maxcc']) ? floatval($_GET['maxcc']) : 50;
 
@@ -200,7 +199,6 @@ if ($mode === 'catalog') {
     $monthStart = $month . '-01';
     $monthEnd   = date('Y-m-t', strtotime($monthStart));
 
-    // Bounding box covering the whole Calatagan mangrove survey area (all zones), padded slightly.
     $bbox = [120.595, 13.745, 120.685, 13.945];
 
     $payload = [
@@ -237,7 +235,6 @@ if ($mode === 'catalog') {
     $truncated = isset($data['context']['returned'], $data['context']['matched'])
         && $data['context']['returned'] < $data['context']['matched'];
 
-    // Reduce results to one best (lowest cloud cover) entry per calendar day.
     $dates = [];
     foreach (($data['features'] ?? []) as $feature) {
         $props = $feature['properties'] ?? [];

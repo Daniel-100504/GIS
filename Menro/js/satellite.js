@@ -1,4 +1,4 @@
-const KOBO_API_URL  = "kobo-proxy.php";
+const KOBO_API_URL  = "API/kobo-proxy.php";
 
 const BARANGAY_TO_ZONE = {
   "bagong_silang":  "bagong-silang",
@@ -408,7 +408,7 @@ const osmTile = L.tileLayer(
 
 osmTile.addTo(map);
 
-const SENTINEL_PROXY_URL = "sentinel-proxy.php";
+const SENTINEL_PROXY_URL = "API/sentinel-proxy.php";
 
 function sceneDateInputValueOrToday() {
     const el = document.getElementById("sceneDate");
@@ -457,20 +457,6 @@ const ndviHeatmapLayer = L.tileLayer.wms(`${SENTINEL_PROXY_URL}?mode=wms`, {
     time: sentinelTimeRangeFor(sceneDateInputValueOrToday()),
     maxcc: currentMaxCC,
 });
-
-const imageryRefreshBadgeEl = document.getElementById("imageryRefreshBadge");
-let sentinelLoading = false;
-let ndviLoading = false;
-
-function updateImageryRefreshBadge() {
-    if (!imageryRefreshBadgeEl) return;
-    imageryRefreshBadgeEl.hidden = !(sentinelLoading || ndviLoading);
-}
-
-sentinelLayer.on("loading", () => { sentinelLoading = true; updateImageryRefreshBadge(); });
-sentinelLayer.on("load",    () => { sentinelLoading = false; updateImageryRefreshBadge(); });
-ndviHeatmapLayer.on("loading", () => { ndviLoading = true; updateImageryRefreshBadge(); });
-ndviHeatmapLayer.on("load",    () => { ndviLoading = false; updateImageryRefreshBadge(); });
 
 const layerSentinel2El = document.getElementById("layerSentinel2");
 if (layerSentinel2El) {
@@ -1309,7 +1295,6 @@ async function initWithKobo() {
 initWithKobo();
 
 const guideOverlay  = document.getElementById("guideOverlay");
-const btnHelp       = document.getElementById("btnHelp");
 const btnCloseGuide = document.getElementById("btnCloseGuide");
 
 function openGuide() {
@@ -1320,7 +1305,6 @@ function closeGuide() {
   guideOverlay.classList.remove("open");
 }
 
-if (btnHelp) btnHelp.addEventListener("click", openGuide);
 if (btnCloseGuide) btnCloseGuide.addEventListener("click", closeGuide);
 if (guideOverlay) {
   guideOverlay.addEventListener("click", (e) => {
