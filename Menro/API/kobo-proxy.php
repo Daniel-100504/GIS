@@ -1,12 +1,4 @@
 <?php
-/**
- * kobo-proxy.php
- * Place this file in the SAME folder as satellite.html.
- * This proxies KoboToolbox API requests to avoid CORS issues on localhost.
- *
- * Usage: set KOBO_API_URL in satellite.js to "kobo-proxy.php" instead of
- * the full KoboToolbox URL.
- */
 
 define('KOBO_TOKEN',    '4ef0ca6fea118509c9a9d067a3c5d267185f3ba9');
 define('KOBO_FORM_UID', 'ar4Kip6AFkpybWVa9dkwBK');
