@@ -5,7 +5,8 @@ const BARANGAY_TO_ZONE = {
   "baha":           "baha",
   "balibago":       "balibago",
   "balitoc":        "balitoc",
-  "bucal":          "bucal-encarnacion",
+  "bucal":          "bucal",
+  "encarnacion":    "encarnacion",
   "carretunan":     "carretunan",
   "gulod":          "gulod",
   "quilitisan":     "quilitisan",
@@ -37,30 +38,7 @@ function coverToNDVI(cover) {
   return +(0.10 + (pct / 100) * 0.75).toFixed(2);
 }
 
-const DEFAULT_SUBMISSIONS = [
-  { Barangay: "balibago",      Inspection_Date: "2026-06-02", Ranger_Name: "Marco Villanueva",   Transect_Number: "T-01", Estimated_Canopy_Cover_: "72", Species_Name: "Rhizophora mucronata", Tree_Count: "340", Observed_Threats: "none_observed",        Water_Color: "clear",           Nearby_Aquafarm_Activity: "none",     Additional_Notes: "Dense stand along the tidal creek, healthy regrowth on the eastern edge.", GPS: "13.922447 120.619998 0 5" },
-  { Barangay: "talisay",       Inspection_Date: "2026-06-02", Ranger_Name: "Elena Ramos",         Transect_Number: "T-02", Estimated_Canopy_Cover_: "45", Species_Name: "Avicennia marina",     Tree_Count: "210", Observed_Threats: "debris___waste_dumping", Water_Color: "murky",           Nearby_Aquafarm_Activity: "minimal",  Additional_Notes: "Plastic debris accumulating near the outflow channel.", GPS: "13.8650 120.6260 0 5" },
-  { Barangay: "carretunan",    Inspection_Date: "2026-06-05", Ranger_Name: "Marco Villanueva",   Transect_Number: "T-03", Estimated_Canopy_Cover_: "38", Species_Name: "Rhizophora apiculata", Tree_Count: "180", Observed_Threats: "illegal_cutting",       Water_Color: "murky",           Nearby_Aquafarm_Activity: "moderate", Additional_Notes: "Fresh stumps spotted along the northern boundary; flagged for follow-up patrol.", GPS: "13.8570 120.6230 0 5" },
-  { Barangay: "quilitisan",    Inspection_Date: "2026-06-05", Ranger_Name: "Jonas Del Rosario",   Transect_Number: "T-04", Estimated_Canopy_Cover_: "65", Species_Name: "Sonneratia alba",      Tree_Count: "290", Observed_Threats: "none_observed",        Water_Color: "clear",           Nearby_Aquafarm_Activity: "none",     Additional_Notes: "PALITAKAN volunteers assisted with the transect count.", GPS: "13.8500 120.6210 0 5" },
-  { Barangay: "gulod",         Inspection_Date: "2026-06-09", Ranger_Name: "Elena Ramos",         Transect_Number: "T-05", Estimated_Canopy_Cover_: "52", Species_Name: "Rhizophora mucronata", Tree_Count: "150", Observed_Threats: "erosion",              Water_Color: "slightly_turbid", Nearby_Aquafarm_Activity: "minimal",  Additional_Notes: "Visible shoreline erosion near the barangay boundary marker.", GPS: "13.8450 120.6200 0 5" },
-  { Barangay: "balitoc",       Inspection_Date: "2026-06-09", Ranger_Name: "Jonas Del Rosario",   Transect_Number: "T-06", Estimated_Canopy_Cover_: "81", Species_Name: "Bruguiera gymnorrhiza", Tree_Count: "410", Observed_Threats: "none_observed",       Water_Color: "clear",           Nearby_Aquafarm_Activity: "none",     Additional_Notes: "Largest zone in the municipality; canopy continues to thicken year over year.", GPS: "13.8390 120.6210 0 5" },
-  { Barangay: "poblacion_1",   Inspection_Date: "2026-06-14", Ranger_Name: "Marco Villanueva",   Transect_Number: "T-07", Estimated_Canopy_Cover_: "28", Species_Name: "Avicennia marina",     Tree_Count: "95",  Observed_Threats: "debris___waste_dumping", Water_Color: "murky",           Nearby_Aquafarm_Activity: "moderate", Additional_Notes: "Household waste dumping observed near the market-side access road.", GPS: "13.8340 120.6220 0 5" },
-  { Barangay: "poblacion_2",   Inspection_Date: "2026-06-14", Ranger_Name: "Elena Ramos",         Transect_Number: "T-08", Estimated_Canopy_Cover_: "22", Species_Name: "Rhizophora apiculata", Tree_Count: "60",  Observed_Threats: "illegal_cutting",       Water_Color: "murky",           Nearby_Aquafarm_Activity: "heavy",    Additional_Notes: "Smallest and most degraded zone; recommend priority replanting.", GPS: "13.8300 120.6230 0 5" },
-  { Barangay: "poblacion_3",   Inspection_Date: "2026-06-18", Ranger_Name: "Jonas Del Rosario",   Transect_Number: "T-09", Estimated_Canopy_Cover_: "58", Species_Name: "Sonneratia alba",      Tree_Count: "230", Observed_Threats: "none_observed",        Water_Color: "clear",           Nearby_Aquafarm_Activity: "none",     Additional_Notes: "Stable condition, consistent with last quarter's survey.", GPS: "13.8260 120.6240 0 5" },
-  { Barangay: "poblacion_4",   Inspection_Date: "2026-06-18", Ranger_Name: "Marco Villanueva",   Transect_Number: "T-10", Estimated_Canopy_Cover_: "66", Species_Name: "Rhizophora mucronata", Tree_Count: "275", Observed_Threats: "none_observed",        Water_Color: "clear",           Nearby_Aquafarm_Activity: "minimal",  Additional_Notes: "Good recovery since the 2025 replanting drive.", GPS: "13.76865 120.662093 0 5" },
-  { Barangay: "tanagan",       Inspection_Date: "2026-06-23", Ranger_Name: "Elena Ramos",         Transect_Number: "T-11", Estimated_Canopy_Cover_: "74", Species_Name: "Bruguiera gymnorrhiza", Tree_Count: "500", Observed_Threats: "none_observed",       Water_Color: "clear",           Nearby_Aquafarm_Activity: "none",     Additional_Notes: "Largest tree count recorded this season.", GPS: "13.8160 120.6270 0 5" },
-  { Barangay: "sta__ana",      Inspection_Date: "2026-06-23", Ranger_Name: "Jonas Del Rosario",   Transect_Number: "T-12", Estimated_Canopy_Cover_: "47", Species_Name: "Rhizophora apiculata", Tree_Count: "260", Observed_Threats: "erosion",              Water_Color: "slightly_turbid", Nearby_Aquafarm_Activity: "minimal",  Additional_Notes: "SAPSAP partner requested support for sandbag revetment.", GPS: "13.8080 120.6300 0 5" },
-  { Barangay: "bagong_silang",  Inspection_Date: "2026-06-27", Ranger_Name: "Marco Villanueva",  Transect_Number: "T-13", Estimated_Canopy_Cover_: "35", Species_Name: "Avicennia marina",     Tree_Count: "90",  Observed_Threats: "debris___waste_dumping", Water_Color: "murky",           Nearby_Aquafarm_Activity: "moderate", Additional_Notes: "SAMMABABA members conducted a cleanup the following week.", GPS: "13.7970 120.6360 0 5" },
-  { Barangay: "bucal",         Inspection_Date: "2026-06-27", Ranger_Name: "Elena Ramos",         Transect_Number: "T-14", Estimated_Canopy_Cover_: "69", Species_Name: "Rhizophora mucronata", Tree_Count: "320", Observed_Threats: "none_observed",        Water_Color: "clear",           Nearby_Aquafarm_Activity: "none",     Additional_Notes: "SMME co-managed zone; no issues flagged.", GPS: "13.8380 120.6560 0 5" },
-  { Barangay: "baha",          Inspection_Date: "2026-07-02", Ranger_Name: "Jonas Del Rosario",   Transect_Number: "T-15", Estimated_Canopy_Cover_: "77", Species_Name: "Sonneratia alba",      Tree_Count: "610", Observed_Threats: "none_observed",        Water_Color: "clear",           Nearby_Aquafarm_Activity: "none",     Additional_Notes: "Widest zone by area; canopy cover holding steady.", GPS: "13.8480 120.6620 0 5" },
-  { Barangay: "talibayog",     Inspection_Date: "2026-07-02", Ranger_Name: "Marco Villanueva",   Transect_Number: "T-16", Estimated_Canopy_Cover_: "41", Species_Name: "Rhizophora apiculata", Tree_Count: "200", Observed_Threats: "illegal_cutting",       Water_Color: "murky",           Nearby_Aquafarm_Activity: "heavy",    Additional_Notes: "Cutting linked to nearby fish-pen expansion; referred to MENRO enforcement.", GPS: "13.8560 120.6590 0 5" },
-  { Barangay: "sambungan",     Inspection_Date: "2026-07-07", Ranger_Name: "Elena Ramos",         Transect_Number: "T-17", Estimated_Canopy_Cover_: "55", Species_Name: "Bruguiera gymnorrhiza", Tree_Count: "140", Observed_Threats: "none_observed",       Water_Color: "slightly_turbid", Nearby_Aquafarm_Activity: "minimal",  Additional_Notes: "Minor turbidity, likely from recent rainfall runoff.", GPS: "13.8310 120.6490 0 5" },
-  { Barangay: "balibago",      Inspection_Date: "2026-07-07", Ranger_Name: "Jonas Del Rosario",   Transect_Number: "T-01", Estimated_Canopy_Cover_: "75", Species_Name: "Rhizophora mucronata", Tree_Count: "352", Observed_Threats: "none_observed",        Water_Color: "clear",           Nearby_Aquafarm_Activity: "none",     Additional_Notes: "Follow-up visit confirms continued healthy growth.", GPS: "13.922447 120.619998 0 5" },
-  { Barangay: "talisay",       Inspection_Date: "2026-07-10", Ranger_Name: "Marco Villanueva",   Transect_Number: "T-02", Estimated_Canopy_Cover_: "50", Species_Name: "Avicennia marina",     Tree_Count: "224", Observed_Threats: "none_observed",        Water_Color: "slightly_turbid", Nearby_Aquafarm_Activity: "minimal",  Additional_Notes: "Debris cleared since last visit; water clarity improving.", GPS: "13.8650 120.6260 0 5" },
-  { Barangay: "carretunan",    Inspection_Date: "2026-07-10", Ranger_Name: "Elena Ramos",         Transect_Number: "T-03", Estimated_Canopy_Cover_: "44", Species_Name: "Rhizophora apiculata", Tree_Count: "196", Observed_Threats: "none_observed",        Water_Color: "slightly_turbid", Nearby_Aquafarm_Activity: "moderate", Additional_Notes: "No further cutting observed; barangay tanod now patrolling the area.", GPS: "13.8570 120.6230 0 5" },
-];
-
-let ALL_SUBMISSIONS = DEFAULT_SUBMISSIONS.slice();
+let ALL_SUBMISSIONS = [];
 
 async function fetchKoboData() {
   try {
@@ -71,8 +49,8 @@ async function fetchKoboData() {
     setConnectionStatus(true);
     return ALL_SUBMISSIONS;
   } catch (err) {
-    console.warn("KoboToolbox fetch failed — showing placeholder data until the proxy is reachable.", err);
-    ALL_SUBMISSIONS = DEFAULT_SUBMISSIONS.slice();
+    console.warn("KoboToolbox fetch failed — no submissions available until the proxy is reachable.", err);
+    ALL_SUBMISSIONS = [];
     setConnectionStatus(false);
     return null;
   }
@@ -217,8 +195,8 @@ const ZONES = [
     partner: "—",
     ndvi: null,
     status: "pending",
-    lat: 13.922447,
-    lng: 120.619998,
+    lat: null,
+    lng: null,
   },
   {
     id: "talisay",
@@ -227,8 +205,8 @@ const ZONES = [
     partner: "—",
     ndvi: null,
     status: "pending",
-    lat: 13.8650,
-    lng: 120.6260,
+    lat: null,
+    lng: null,
   },
   {
     id: "carretunan",
@@ -237,8 +215,8 @@ const ZONES = [
     partner: "—",
     ndvi: null,
     status: "pending",
-    lat: 13.8570,
-    lng: 120.6230,
+    lat: null,
+    lng: null,
   },
   {
     id: "quilitisan",
@@ -247,8 +225,8 @@ const ZONES = [
     partner: "PALITAKAN",
     ndvi: null,
     status: "pending",
-    lat: 13.8500,
-    lng: 120.6210,
+    lat: null,
+    lng: null,
   },
   {
     id: "gulod",
@@ -257,8 +235,8 @@ const ZONES = [
     partner: "—",
     ndvi: null,
     status: "pending",
-    lat: 13.8450,
-    lng: 120.6200,
+    lat: null,
+    lng: null,
   },
   {
     id: "balitoc",
@@ -267,8 +245,8 @@ const ZONES = [
     partner: "—",
     ndvi: null,
     status: "pending",
-    lat: 13.8390,
-    lng: 120.6210,
+    lat: null,
+    lng: null,
   },
   {
     id: "poblacion-1",
@@ -277,8 +255,8 @@ const ZONES = [
     partner: "—",
     ndvi: null,
     status: "pending",
-    lat: 13.8340,
-    lng: 120.6220,
+    lat: null,
+    lng: null,
   },
   {
     id: "poblacion-2",
@@ -287,8 +265,8 @@ const ZONES = [
     partner: "—",
     ndvi: null,
     status: "pending",
-    lat: 13.8300,
-    lng: 120.6230,
+    lat: null,
+    lng: null,
   },
   {
     id: "poblacion-3",
@@ -297,8 +275,8 @@ const ZONES = [
     partner: "—",
     ndvi: null,
     status: "pending",
-    lat: 13.8260,
-    lng: 120.6240,
+    lat: null,
+    lng: null,
   },
   {
     id: "poblacion-4",
@@ -307,8 +285,8 @@ const ZONES = [
     partner: "—",
     ndvi: null,
     status: "pending",
-    lat: 13.76865,
-    lng: 120.662093,
+    lat: null,
+    lng: null,
   },
   {
     id: "tanagan",
@@ -317,8 +295,8 @@ const ZONES = [
     partner: "—",
     ndvi: null,
     status: "pending",
-    lat: 13.8160,
-    lng: 120.6270,
+    lat: null,
+    lng: null,
   },
   {
     id: "sta-ana",
@@ -327,8 +305,8 @@ const ZONES = [
     partner: "SAPSAP",
     ndvi: null,
     status: "pending",
-    lat: 13.8080,
-    lng: 120.6300,
+    lat: null,
+    lng: null,
   },
   {
     id: "bagong-silang",
@@ -337,18 +315,28 @@ const ZONES = [
     partner: "SAMMABABA",
     ndvi: null,
     status: "pending",
-    lat: 13.7970,
-    lng: 120.6360,
+    lat: null,
+    lng: null,
   },
   {
-    id: "bucal-encarnacion",
-    name: "Bucal and Encarnacion",
-    area: 71.79,
+    id: "bucal",
+    name: "Bucal",
+    area: null,
     partner: "SMME",
     ndvi: null,
     status: "pending",
-    lat: 13.8380,
-    lng: 120.6560,
+    lat: null,
+    lng: null,
+  },
+  {
+    id: "encarnacion",
+    name: "Encarnacion",
+    area: null,
+    partner: "SMME",
+    ndvi: null,
+    status: "pending",
+    lat: null,
+    lng: null,
   },
   {
     id: "baha",
@@ -357,8 +345,8 @@ const ZONES = [
     partner: "—",
     ndvi: null,
     status: "pending",
-    lat: 13.8480,
-    lng: 120.6620,
+    lat: null,
+    lng: null,
   },
   {
     id: "talibayog",
@@ -367,8 +355,8 @@ const ZONES = [
     partner: "—",
     ndvi: null,
     status: "pending",
-    lat: 13.8560,
-    lng: 120.6590,
+    lat: null,
+    lng: null,
   },
   {
     id: "sambungan",
@@ -377,8 +365,8 @@ const ZONES = [
     partner: "—",
     ndvi: null,
     status: "pending",
-    lat: 13.8310,
-    lng: 120.6490,
+    lat: null,
+    lng: null,
   }
 ];
 
@@ -415,12 +403,7 @@ function sceneDateInputValueOrToday() {
     return (el && el.value) ? el.value : todayISO();
 }
 
-const SENTINEL_WINDOW_DAYS = 10; // Middle ground: tight enough that picking a date still
-                                  // reflects a genuinely nearby scene, wide enough that a
-                                  // cloudy pass doesn't leave you with no imagery at all.
-                                  // (Window length barely affects Sentinel Hub processing
-                                  // cost — what actually burns credits is repeat requests,
-                                  // handled below via debouncing + per-date caching.)
+const SENTINEL_WINDOW_DAYS = 10;
 
 function sentinelTimeRangeFor(dateStr) {
 
@@ -480,7 +463,7 @@ if (layerNdviEl) {
     });
 }
 
-const satelliteNdviCache = {}; // key: `${zoneId}|${dateStr}|${maxcc}` -> ndvi value (or null)
+const satelliteNdviCache = {};
 
 const refreshCloudCoverage = debounce((value) => {
     sentinelLayer.setParams({ maxcc: value });
@@ -497,6 +480,11 @@ if (cloudCoverageSliderEl) {
 }
 
 async function fetchZoneNdviFromCopernicus(zone, dateStr) {
+    if (zone.lat == null || zone.lng == null) {
+        zone.satNdvi = null;
+        return null;
+    }
+
     const date = dateStr || todayISO();
     const cacheKey = `${zone.id}|${date}|${currentMaxCC}`;
 
@@ -586,28 +574,6 @@ function makeIcon(status){
 
 }
 
-ZONES.forEach(zone => {
-
-    const color = STATUS_COLOR[zone.status];
-
-    const radius = Math.sqrt(zone.area) * 100;
-
-    L.circle([zone.lat, zone.lng], {
-
-        radius: radius,
-        color: color,
-        fillColor: color,
-        fillOpacity: 0.35,
-        weight: 1
-
-    })
-
-    .bindPopup(() => buildPopup(zone))
-
-    .addTo(ndviLayer);
-
-});
-
 function escapeHtml(value) {
   if (value === null || value === undefined) return "—";
   return String(value)
@@ -633,7 +599,7 @@ function buildPopup(zone) {
         <tr><td style="color:#777;padding:2px 6px 2px 0">Status</td><td style="font-weight:600">${capitalise(zone.status)}</td></tr>
         <tr><td style="color:#777;padding:2px 6px 2px 0">NDVI</td><td style="font-weight:600">${zone.ndvi !== null ? zone.ndvi.toFixed(2) : "Pending fetch\u2026"}</td></tr>
         ${zone.satNdvi != null ? `<tr><td style="color:#777;padding:2px 6px 2px 0">Satellite NDVI</td><td style="font-weight:600">${zone.satNdvi.toFixed(2)}</td></tr>` : ""}
-        <tr><td style="color:#777;padding:2px 6px 2px 0">Area</td><td style="font-weight:600">${zone.area} ha</td></tr>
+        <tr><td style="color:#777;padding:2px 6px 2px 0">Area</td><td style="font-weight:600">${zone.area !== null ? zone.area + " ha" : "—"}</td></tr>
         ${surveyRow}
       </table>
     </div>
@@ -641,25 +607,6 @@ function buildPopup(zone) {
 }
 
 const markers={};
-
-ZONES.forEach(zone=>{
-
-    const marker=L.marker(
-        [zone.lat,zone.lng],
-        {
-            icon:makeIcon(zone.status)
-        }
-    );
-
-    marker.bindPopup(() => buildPopup(zone));
-
-    marker.on("click",()=>selectZone(zone));
-
-    marker.addTo(markersLayer);
-
-    markers[zone.id]=marker;
-
-});
 
 const zoneListEl = document.getElementById("zoneList");
 const zoneSearchEl = document.getElementById("zoneSearch");
@@ -697,10 +644,10 @@ function sortZones(zones, sortKey) {
             sorted.sort((a, b) => (a.ndvi ?? Infinity) - (b.ndvi ?? Infinity));
             break;
         case "area-desc":
-            sorted.sort((a, b) => b.area - a.area);
+            sorted.sort((a, b) => (b.area ?? -1) - (a.area ?? -1));
             break;
         case "area-asc":
-            sorted.sort((a, b) => a.area - b.area);
+            sorted.sort((a, b) => (a.area ?? Infinity) - (b.area ?? Infinity));
             break;
         case "name-asc":
         default:
@@ -766,7 +713,7 @@ function renderZoneList(filterText = "") {
             </div>
 
             <div class="zone-meta">
-                ${zone.area} ha • NDVI ${zone.ndvi !== null ? zone.ndvi.toFixed(2) : "Pending"}
+                ${zone.area !== null ? zone.area + " ha" : "— ha"} • NDVI ${zone.ndvi !== null ? zone.ndvi.toFixed(2) : "Pending"}
             </div>
 
         `;
@@ -774,6 +721,8 @@ function renderZoneList(filterText = "") {
         item.onclick=()=>{
 
             selectZone(zone);
+
+            if (zone.lat == null || zone.lng == null || !markers[zone.id]) return;
 
             map.setView(
                 [zone.lat,zone.lng],
@@ -947,6 +896,8 @@ function rebuildMapLayers() {
   ndviLayer.clearLayers();
 
   ZONES.forEach(zone => {
+    if (zone.lat == null || zone.lng == null) return;
+
     const color  = STATUS_COLOR[zone.status];
     const radius = Math.sqrt(zone.area) * 100;
     L.circle([zone.lat, zone.lng], {
@@ -1016,12 +967,6 @@ sceneDate.addEventListener("change",(e)=>{
 
 });
 
-// ---- Scene availability calendar --------------------------------------
-// Highlights which days in the visible month actually have a Sentinel-2
-// scene at-or-under the chosen cloud coverage, so picking a date isn't a
-// guessing game. One catalog search per (month, cloud%) covers the whole
-// month — catalog search is metadata-only, so this doesn't touch the
-// processing-credit budget the imagery/NDVI fetches do.
 
 const calGridEl       = document.getElementById("calGrid");
 const calMonthSelectEl = document.getElementById("calMonthSelect");
@@ -1031,7 +976,7 @@ const calMonthNextEl  = document.getElementById("calMonthNext");
 
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-const availableDatesCache = {}; // key: `${yyyy}-${mm}|${maxcc}` -> { "yyyy-mm-dd": cloudCoverPct }
+const availableDatesCache = {};
 
 function initialCalendarDate() {
     const val = sceneDate.value || todayISO();
@@ -1053,7 +998,6 @@ function populateCalMonthYearSelects() {
 
     if (calYearSelectEl && calYearSelectEl.options.length === 0) {
         const currentYear = new Date().getFullYear();
-        // A reasonable jump range: a handful of years back through the present year.
         for (let y = currentYear - 6; y <= currentYear; y++) {
             const opt = document.createElement("option");
             opt.value = y;
@@ -1102,8 +1046,6 @@ async function renderSceneCalendar() {
 
     const { year, month } = calendarView;
 
-    // Make sure the year dropdown can show whatever year we're actually viewing,
-    // even if it falls outside the default pre-populated range.
     if (calYearSelectEl && !Array.from(calYearSelectEl.options).some(o => parseInt(o.value, 10) === year)) {
         const opt = document.createElement("option");
         opt.value = year;
@@ -1120,8 +1062,6 @@ async function renderSceneCalendar() {
     const selected      = sceneDate.value || today;
     const maxDate       = sceneDate.max || today;
 
-    // Render a quick skeleton first so the grid isn't blank while the
-    // catalog request is in flight (visible instantly, availability fills in after).
     let cells = "";
     for (let i = 0; i < firstWeekday; i++) {
         cells += `<div class="cal-cell empty"></div>`;
@@ -1144,8 +1084,6 @@ async function renderSceneCalendar() {
 
     const available = await fetchAvailableDatesForMonth(year, month, currentMaxCC);
 
-    // Only apply if we're still looking at the month we fetched for
-    // (user may have flipped months again while this was in flight).
     if (calendarView.year !== year || calendarView.month !== month) return;
 
     Object.keys(available).forEach(dateStr => {
@@ -1188,8 +1126,6 @@ if (calMonthNextEl) {
     });
 }
 
-// Keep the calendar in sync whenever the scene date changes from any source
-// (arrows, manual typing, or clicking a day) — jump to that month if needed.
 sceneDate.addEventListener("change", () => {
     const [y, m] = sceneDate.value.split("-").map(Number);
     if (y !== calendarView.year || (m - 1) !== calendarView.month) {
