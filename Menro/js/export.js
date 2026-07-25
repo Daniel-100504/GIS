@@ -123,7 +123,7 @@ function exportPDF() {
 
         doc.setFont("helvetica", "normal");
         doc.setTextColor(60);
-        doc.text(zone.area.toString(), cols.area, y + 5.5);
+        doc.text(zone.area !== null ? zone.area.toString() : "—", cols.area, y + 5.5);
         doc.text(zone.ndvi !== null ? zone.ndvi.toFixed(2) : "—",  cols.ndvi, y + 5.5);
 
         doc.setFont("helvetica", "bold");
@@ -165,7 +165,7 @@ function exportPDF() {
             doc.setFont("helvetica", "normal");
             doc.setFontSize(7.5);
             doc.setTextColor(90);
-            doc.text(`NDVI: ${zone.ndvi !== null ? zone.ndvi.toFixed(2) : "—"}  |  ${capitalise(zone.status)}  |  ${zone.area} ha`, PAGE_W - MR, y, { align: "right" });
+            doc.text(`NDVI: ${zone.ndvi !== null ? zone.ndvi.toFixed(2) : "—"}  |  ${capitalise(zone.status)}  |  ${zone.area !== null ? zone.area + " ha" : "— ha"}`, PAGE_W - MR, y, { align: "right" });
             doc.setTextColor(0);
             y += 6;
 
