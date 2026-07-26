@@ -963,7 +963,6 @@ sceneDate.addEventListener("change",(e)=>{
     sceneDateManuallySet = true;
     refreshSentinelLayers(e.target.value);
     if (dataReady) applyDataForDate(e.target.value);
-    if (typeof setDashboardDateFromScene === "function") setDashboardDateFromScene(e.target.value);
 
 });
 
@@ -1157,20 +1156,34 @@ map.on("mousemove",(e)=>{
 });
 
 function handleLogout() {
+    openSignOutConfirm();
+}
 
-    const confirmLogout = confirm(
-        "Are you sure you want to sign out?"
-    );
+const signOutOverlay    = document.getElementById("signOutOverlay");
+const btnCloseSignOut   = document.getElementById("btnCloseSignOut");
+const btnCancelSignOut  = document.getElementById("btnCancelSignOut");
+const btnConfirmSignOut = document.getElementById("btnConfirmSignOut");
 
-    if (confirmLogout) {
+function openSignOutConfirm() {
+    if (signOutOverlay) signOutOverlay.classList.add("open");
+}
 
-        localStorage.removeItem("menro_remembered_user");
+function closeSignOutConfirm() {
+    if (signOutOverlay) signOutOverlay.classList.remove("open");
+}
 
-        window.location.href = "../Login/Login.html";
+function confirmSignOut() {
+    localStorage.removeItem("menro_remembered_user");
+    window.location.href = "../Login/Login.html";
+}
 
-    }
-
-
+if (btnCloseSignOut)   btnCloseSignOut.addEventListener("click", closeSignOutConfirm);
+if (btnCancelSignOut)  btnCancelSignOut.addEventListener("click", closeSignOutConfirm);
+if (btnConfirmSignOut) btnConfirmSignOut.addEventListener("click", confirmSignOut);
+if (signOutOverlay) {
+    signOutOverlay.addEventListener("click", (e) => {
+        if (e.target === signOutOverlay) closeSignOutConfirm();
+    });
 }
 
 const btnLogout = document.getElementById("btnLogout");
@@ -1253,6 +1266,11 @@ document.addEventListener("keydown", (e) => {
     const surveyDetailOpen = document.getElementById("surveyDetailOverlay")?.classList.contains("open");
     if (surveyDetailOpen && typeof closeSurveyDetail === "function") {
       closeSurveyDetail();
+      return;
+    }
+    const signOutOpen = document.getElementById("signOutOverlay")?.classList.contains("open");
+    if (signOutOpen) {
+      closeSignOutConfirm();
       return;
     }
     closeDashboard();
