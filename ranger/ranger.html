@@ -19,7 +19,6 @@
 
   <div class="shell">
 
-    <!-- SIDEBAR -->
     <aside class="sidebar">
       <div class="sidebar-brand">
         <img src="../assets/calatagan-seal.png" width="36" height="36" alt="Calatagan Seal"
@@ -66,7 +65,7 @@
             <div class="ranger-role">Field Personnel</div>
           </div>
         </div>
-        <button class="btn-logout" onclick="window.location.href='../Login/Login.html'">
+        <button class="btn-logout" id="btnSignOut" type="button">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -78,10 +77,8 @@
       </div>
     </aside>
 
-    <!-- MAIN CONTENT -->
     <main class="main">
 
-      <!-- TOPBAR -->
       <header class="topbar">
         <div>
           <div class="topbar-title" id="topbar-title">Dashboard</div>
@@ -90,7 +87,6 @@
         <div class="topbar-coord">13.8317° N, 120.6400° E</div>
       </header>
 
-      <!-- DASHBOARD VIEW -->
       <section class="view active" id="view-dashboard">
 
         <div class="stat-row">
@@ -221,7 +217,6 @@
 
       </section>
 
-      <!-- SUBMIT VIEW -->
       <section class="view" id="view-submit">
         <div class="panel form-panel">
           <div class="panel-header">
@@ -246,13 +241,12 @@
           </div>
           <div class="kobo-wrap">
             <iframe src="https://ee.kobotoolbox.org/i/BtpXWgyE" width="100%" height="620" frameborder="0"
-              title="Mangrove Field Data Submission Form" style="border-radius:8px;border:1.5px solid #c4e0ce;">
+              title="Mangrove Field Data Submission Form" style="border-radius:8px;border:1.5px solid var(--border-strong);">
             </iframe>
           </div>
         </div>
       </section>
 
-      <!-- HISTORY VIEW -->
       <section class="view" id="view-history">
         <div class="panel">
           <div class="panel-header">
@@ -289,6 +283,26 @@
       </section>
 
     </main>
+  </div>
+
+  <div class="confirm-overlay" id="signoutOverlay">
+    <div class="confirm-modal">
+      <button class="confirm-modal-close" id="btnCloseSignout" aria-label="Close">&times;</button>
+      <div class="confirm-modal-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+      </div>
+      <div class="confirm-modal-title">Sign out?</div>
+      <div class="confirm-modal-text">You'll need to sign in again to access the ranger dashboard.</div>
+      <div class="confirm-modal-actions">
+        <button class="btn-confirm-cancel" id="btnCancelSignout">Cancel</button>
+        <button class="btn-confirm-danger" id="btnConfirmSignout">Sign Out</button>
+      </div>
+    </div>
   </div>
 
   <script src="ranger.js"></script>
