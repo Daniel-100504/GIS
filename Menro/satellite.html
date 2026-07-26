@@ -33,6 +33,8 @@
           </svg>
         </button>
 
+        <img src="../assets/calatagan-seal.png" width="26" height="26" alt="Calatagan Seal" class="topbar-logo">
+
         <span class="topbar-brand">
             AquaGuard
         </span>
@@ -389,6 +391,32 @@ Lng: ---
 
 </div>
 
+<div class="dashboard-overlay" id="signOutOverlay">
+
+  <div class="confirm-modal">
+
+    <button class="confirm-modal-close" id="btnCloseSignOut" aria-label="Close">&times;</button>
+
+    <div class="confirm-modal-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+    </div>
+
+    <h2 class="confirm-modal-title">Sign out of AquaGuard?</h2>
+    <p class="confirm-modal-text">You'll need to sign in again to access the dashboard and map.</p>
+
+    <div class="confirm-modal-actions">
+      <button type="button" class="btn-confirm-cancel" id="btnCancelSignOut">Cancel</button>
+      <button type="button" class="btn-confirm-danger" id="btnConfirmSignOut">Sign Out</button>
+    </div>
+
+  </div>
+
+</div>
+
 <section class="dashboard-view" id="dashboardView">
 
   <div class="dashboard-view-inner" id="dashboardBody">
@@ -402,7 +430,10 @@ Lng: ---
 <aside class="side-menu" id="sideMenu">
 
   <div class="side-menu-header">
-    <span class="side-menu-brand">AquaGuard</span>
+    <div class="side-menu-brand-group">
+      <img src="../assets/calatagan-seal.png" width="30" height="30" alt="Calatagan Seal" class="side-menu-logo">
+      <span class="side-menu-brand">AquaGuard</span>
+    </div>
     <button class="side-menu-close" id="btnCloseSideMenu" aria-label="Close menu">&times;</button>
   </div>
 
@@ -453,7 +484,16 @@ Lng: ---
       <span>Export Field Survey Report</span>
     </button>
 
-    <div class="side-menu-divider"></div>
+  </div>
+
+  <div class="side-menu-footer">
+    <div class="side-menu-account">
+      <div class="side-menu-avatar">M</div>
+      <div class="side-menu-account-info">
+        <span class="side-menu-account-name">MENRO</span>
+        <span class="side-menu-account-role">Calatagan, Batangas</span>
+      </div>
+    </div>
 
     <button class="side-menu-item side-menu-signout" id="menuSignOut">
       <span class="side-menu-icon">
@@ -465,7 +505,6 @@ Lng: ---
       </span>
       <span>Sign Out</span>
     </button>
-
   </div>
 
 </aside>
