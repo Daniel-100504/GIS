@@ -1,10 +1,7 @@
 # Mapping System and Health Assessment for Mangrove Monitoring in Calatagan, Batangas
-
-A web-based GIS dashboard that combines satellite NDVI (Copernicus Sentinel-2), field survey data (KoboToolbox), and a mangrove zone registry into one system for MENRO-Calatagan.
-
 ## Group Members
 
-| Team Member | Assigned Module |
+| Team Member | Roles |
 |-------------|-----------------|
 | **Daniel J. Magarao** | Software Engineer |
 | **Kaye M. Macalalad** | System Analyst |
@@ -16,34 +13,44 @@ A web-based GIS dashboard that combines satellite NDVI (Copernicus Sentinel-2), 
 
 - **Purpose:** Give MENRO officers a single dashboard to track mangrove health across Calatagan's barangay zones, cross-referencing satellite data with ranger field surveys.
 - **Scope:** Role-based login, interactive zone map, satellite NDVI sync, KoboToolbox survey integration, analytics dashboard, PDF report export.
-- **Not yet implemented:** Forest Ranger landing page, production auth backend, persistent zone database.
+- **Description:** A web-based GIS dashboard that combines satellite NDVI (Copernicus Sentinel-2), field survey data (KoboToolbox), and a mangrove zone registry into one system for MENRO-Calatagan.
+
 
 ## 2. Architecture
 
-```
-Browser Client (Login.html, satellite.html, script.js, satellite.js, Dashboard.js, export.js)
-        │  HTTPS
-        ▼
-PHP Proxy Layer  ── sentinel-proxy.php  ──▶  Copernicus Data Space Ecosystem (Sentinel Hub)
-                 └─ kobo-proxy.php      ──▶  KoboToolbox API
-```
+![System Architecture Diagram](images/system-architecture.png)
 
-The proxy layer exists so third-party API credentials never reach the browser.
+The system is organized into five layers:
 
-**Stack:** Leaflet.js (map) · jsPDF (PDF export) · vanilla JS/CSS client · PHP proxies · Copernicus Sentinel Hub API · KoboToolbox REST API v2 · browser `localStorage`.
+- **Data Sources Layer** — Satellite Imagery (Sentinel-2/Copernicus), Field Data Collection (KoboToolbox/GPS), and Aquafarm Location & Wastewater Data.
+- **Processing Layer** — The Copernicus Data Space Ecosystem Statistics API computes per-zone NDVI/NDWI; a Python backend handles data aggregation and health classification, guided by System Administrator feedback and validation as part of the iterative SDLC.
+- **Storage & API Layer** — A PostgreSQL + PostGIS spatial database stores NDVI and survey records; a Backend REST API serves GeoJSON directly to the frontend.
+- **Application Layer** — A Web GIS Interface (Leaflet.js interactive map) and a Dashboard & Reporting module (NDVI trends, alerts).
+- **Users Layer** — MENRO Officers (interactive maps and analytics) and Field Rangers (reports and decision support).
+
+**Stack:** Leaflet.js (interactive map) · Python (backend processing) · PostgreSQL + PostGIS (spatial database) · REST API (GeoJSON) · Copernicus Data Space Ecosystem Statistics API (NDVI/NDWI) · KoboToolbox (field data collection).
 
 ## 3. Use Cases
 
-| Use Case | Actor | Description |
+![Use Case Diagram](images/use-case-diagram.png)
+
+**System: GIS-Based Mangrove Mapping and Health Assessment System**
+
+| Use Case | Actor(s) | Description |
 |---|---|---|
-| Log In | Officer / Ranger | Select role, sign in |
-| View Map & Layers | Officer | View zones; toggle NDVI, imagery, boundary layers |
-| Search/Filter/Sort Zones | Officer | Locate zones by name, status, NDVI, or area |
-| Sync Satellite NDVI | Officer | Pull mean NDVI per zone for a chosen date/cloud threshold |
-| View Dashboard | Officer | Health breakdown, NDVI trend, threats, survey log |
-| Export PDF Report | Officer | Generate a paginated field-survey report |
-| Auto-sync Submissions | KoboToolbox (system) | Pull new field surveys into zone records |
-| Provide Imagery/NDVI | CDSE (system) | Authenticate proxy, serve WMS/NDVI/catalog data |
+| Log In | Admin, Field Researcher | Authenticate into the system |
+| Manage User Accounts & Permissions | Admin | Create/edit user roles and access rights |
+| Manage Database Backups & System Settings | Admin | Maintain system configuration and data backups |
+| View Interactive Dashboard & Map Layers | MENRO Officer, Field Researcher | View zone map, NDVI/health layers, and analytics dashboard |
+| Process Satellite Imagery | MENRO Officer | Trigger/review Sentinel-2 NDVI/NDWI processing per zone |
+| Submit Belt Transect Quadrat Data | Field Researcher | Upload ground-truth field survey data (belt transect/quadrat method) |
+| Cross-Validate Remote Sensing with Ground-Truthing | MENRO Officer | Compare satellite NDVI against field survey data to confirm zone health |
+| Generate Environmental Health Reports | MENRO Officer | Produce environmental health reports for MENRO |
+
+**Actors:**
+- **Admin** — manages accounts, permissions, and system/database settings
+- **MENRO Officer** — views dashboard, processes satellite imagery, cross-validates data, generates reports
+- **Field Researcher** — logs in, views dashboard, submits belt transect quadrat field data
 
 ## 4. Features & Requirements
 
@@ -84,7 +91,7 @@ The proxy layer exists so third-party API credentials never reach the browser.
 ## 6. Non-Functional Requirements
 
 - **Performance:** map/zone list interactive within ~3s; visible progress during NDVI sync
-- **Security:** ⚠️ move hard-coded CDSE/KoboToolbox credentials and the token cache out of source files before production; replace demo/localStorage login with a real auth backend; restrict CORS to the deployed origin
+- **Security:** move hard-coded CDSE/KoboToolbox credentials and the token cache out of source files before production; replace demo/localStorage login with a real auth backend; restrict CORS to the deployed origin
 - **Reliability:** clear proxy error codes; Online/Offline indicator; last-good data stays visible on sync failure
 - **Usability:** status shown via color + text; key actions within two clicks; in-app guide
 - **Maintainability:** logic split by concern (auth/map/dashboard/export); CSS design tokens
