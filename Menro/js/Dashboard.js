@@ -766,7 +766,7 @@ function renderDashboard() {
 
     <p class="dashboard-section-title">Zone Health Overview</p>
     <div class="dashboard-grid">
-      ${statCard({ icon: "zones", accent: "", label: "Total Mangrove Zones", value: s.total, hint: s.pending > 0 ? `${s.pending} zone${s.pending !== 1 ? "s" : ""} awaiting data` : "Across 17 barangays" })}
+      ${statCard({ icon: "zones", accent: "", label: "Total Mangrove Zones", value: s.total, hint: s.pending > 0 ? `${s.pending} zone${s.pending !== 1 ? "s" : ""} awaiting data` : `Across ${s.total} barangays` })}
       ${statCard({ icon: "healthy", accent: "healthy", label: "Healthy Zones", value: s.healthy, hint: `${s.total ? Math.round((s.healthy / s.total) * 100) : 0}% of total` })}
       ${statCard({ icon: "moderate", accent: "moderate", label: "Moderate Zones", value: s.moderate, hint: `${s.total ? Math.round((s.moderate / s.total) * 100) : 0}% of total`, valueClass: "amber" })}
       ${statCard({ icon: "degraded", accent: "degraded", label: "Degraded Zones", value: s.degraded, hint: `${s.total ? Math.round((s.degraded / s.total) * 100) : 0}% of total`, valueClass: "red" })}
