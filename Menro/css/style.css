@@ -10,7 +10,6 @@
   --brand-700: #146b52;
   --brand-600: #1c7d61;
   --brand-500: #229372;
-  --brand-300: #7fc9ab;
   --brand-150: #cfe9dd;
   --brand-100: #e6f4ee;
   --brand-50:  #f2f9f5;
@@ -34,13 +33,13 @@
   --accent-sand: #d9a15a;
   --accent-sky:  #2f6f8f;
 
-  --danger: #c1473a;
 
   --font-display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
   --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
 
   --radius-sm: 6px;
+
   --radius-md: 10px;
   --radius-lg: 16px;
 
@@ -48,8 +47,6 @@
   --shadow-md: 0 6px 20px rgba(10, 49, 40, 0.09);
   --shadow-lg: 0 20px 60px rgba(10, 49, 40, 0.28);
   --shadow-popover: 0 10px 30px rgba(10, 49, 40, 0.18);
-
-  --font: var(--font-body);
 }
 
 html, body {
@@ -144,18 +141,6 @@ button, input {
 
 .badge-pill .icon { width: 13px; height: 13px; flex-shrink: 0; }
 
-.badge-pill.sentinel {
-  background: var(--brand-50);
-  color: var(--brand-700);
-  border: 1px solid var(--brand-150);
-}
-
-.badge-pill.nextpass {
-  background: #eaf3f8;
-  color: var(--accent-sky);
-  border: 1px solid #cfe2ec;
-}
-
 .badge-pill.online {
   background: #eaf6ef;
   color: #1c7d61;
@@ -183,24 +168,6 @@ button, input {
   50% { opacity: 0.4; }
 }
 
-.btn-logout {
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 7px 14px;
-  border-radius: var(--radius-sm);
-  border: 1.5px solid var(--brand-600);
-  background: var(--surface);
-  color: var(--brand-700);
-  cursor: pointer;
-  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
-}
-
-.btn-logout:hover {
-  background: var(--brand-700);
-  border-color: var(--brand-700);
-  color: #fff;
-}
-
 .map-menu-btn {
   display: flex;
   align-items: center;
@@ -217,21 +184,6 @@ button, input {
 
 .map-menu-btn:hover { background: var(--surface-sunken); }
 
-.btn-dashboard {
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 7px 14px;
-  border-radius: var(--radius-sm);
-  border: 1.5px solid var(--brand-700);
-  background: var(--brand-700);
-  color: #fff;
-  cursor: pointer;
-  transition: background 0.16s ease, transform 0.06s ease;
-}
-
-.btn-dashboard:hover { background: var(--brand-800); }
-.btn-dashboard:active { transform: translateY(1px); }
-
 .layout {
   display: flex;
   position: fixed;
@@ -240,40 +192,6 @@ button, input {
   right: 0;
   bottom: 0;
 }
-
-.action-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 7px;
-  margin-bottom: 7px;
-}
-
-.btn-action {
-  padding: 9px 8px;
-  border-radius: var(--radius-sm);
-  border: 1.5px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--ink-700);
-  font-size: 0.75rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.16s ease, border-color 0.16s ease;
-}
-
-.btn-action:hover {
-  background: var(--surface-sunken);
-  border-color: var(--brand-300);
-}
-
-.btn-action-primary {
-  background: var(--brand-100);
-  border-color: var(--brand-500);
-  color: var(--brand-800);
-  font-weight: 700;
-}
-
-.btn-action-primary:hover { background: var(--brand-150); }
-.btn-action-full { width: 100%; }
 
 .map-container {
   flex: 1;
@@ -293,31 +211,6 @@ button, input {
   font-weight: 600 !important;
 }
 
-.map-label-overlay {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  background: rgba(255,255,255,0.94);
-  backdrop-filter: blur(6px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 10px 16px;
-  font-size: 0.82rem;
-  z-index: 500;
-  box-shadow: var(--shadow-md);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.map-label-overlay strong {
-  font-family: var(--font-display);
-  font-size: 0.9rem;
-  color: var(--brand-800);
-}
-
-.map-label-overlay span { color: var(--ink-600); }
-
 .leaflet-popup-content-wrapper {
   border-radius: var(--radius-md) !important;
   box-shadow: var(--shadow-popover) !important;
@@ -331,6 +224,28 @@ button, input {
 }
 
 .leaflet-popup-tip { box-shadow: none !important; }
+
+.leaflet-tooltip.zone-label {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: var(--ink-900);
+  font-family: var(--font-body);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 0;
+  text-shadow:
+    -1px -1px 2px #fff,
+     1px -1px 2px #fff,
+    -1px  1px 2px #fff,
+     1px  1px 2px #fff,
+     0    0   4px rgba(255,255,255,0.85);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.leaflet-tooltip.zone-label::before { display: none; }
 
 .popup-title {
   font-family: var(--font-display);
@@ -377,6 +292,49 @@ button, input {
   left: 15px;
   z-index: 700;
 }
+
+.map-legend {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  z-index: 700;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 10px 14px;
+}
+
+.map-legend-title {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-400);
+  margin-bottom: 6px;
+}
+
+.map-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.78rem;
+  color: var(--ink-700);
+  padding: 2px 0;
+}
+
+.map-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.map-legend-dot.healthy  { background: var(--healthy); }
+.map-legend-dot.moderate { background: var(--moderate); }
+.map-legend-dot.degraded { background: var(--degraded); }
+.map-legend-dot.pending  { background: var(--pending); }
 
 .layers-toggle-btn {
   display: flex;
