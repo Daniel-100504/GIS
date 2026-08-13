@@ -7,6 +7,43 @@ header('Content-Type: application/json');
 
 header('Access-Control-Allow-Origin: ' . ($_SERVER['HTTP_ORIGIN'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost'));
 
+$action = $_GET['action'] ?? ($_POST['action'] ?? 'list');
+
+if ($action === 'delete') {
+    $submissionId = $_GET['id'] ?? ($_POST['id'] ?? null);
+
+    if (!$submissionId || !ctype_digit((string) $submissionId)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Missing or invalid submission id']);
+        exit;
+    }
+
+    $deleteUrl = 'https://kf.kobotoolbox.org/api/v2/assets/' . KOBO_FORM_UID . '/data/' . $submissionId . '/';
+
+    $ch = curl_init($deleteUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Token ' . KOBO_TOKEN
+    ]);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+
+    $deleteResponse = curl_exec($ch);
+    $deleteHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($deleteResponse === false || ($deleteHttpCode !== 204 && $deleteHttpCode !== 200)) {
+        http_response_code(502);
+        echo json_encode(['error' => 'Failed to delete submission on KoboToolbox', 'code' => $deleteHttpCode]);
+        exit;
+    }
+
+    echo json_encode(['success' => true, 'id' => $submissionId]);
+    exit;
+}
+
 $url = 'https://kf.kobotoolbox.org/api/v2/assets/' . KOBO_FORM_UID . '/data/?format=json';
 
 $ch = curl_init($url);
