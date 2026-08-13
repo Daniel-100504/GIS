@@ -1,4 +1,5 @@
 const KOBO_API_URL  = "API/kobo-proxy.php";
+const KOBO_REPORT_URL = "https://kf.kobotoolbox.org/#/forms/ar4Kip6AFkpybWVa9dkwBK/data/report";
 
 const BARANGAY_TO_ZONE = {
   "bagong_silang":  "bagong-silang",
@@ -27,8 +28,9 @@ function deriveStatus(sub) {
 
   const hasBadThreat = ["illegal_cutting", "debris___waste_dumping"].includes(threats);
 
-  if (cover >= 60 && !hasBadThreat)  return "healthy";
-  if (cover >= 30 || !hasBadThreat)  return "moderate";
+  if (hasBadThreat) return "degraded";
+  if (cover >= 60)  return "healthy";
+  if (cover >= 30)  return "moderate";
   return "degraded";
 }
 
@@ -119,6 +121,7 @@ function resetZonesToBaseline() {
     const base = SATELLITE_BASELINE[zone.id];
     zone.ndvi = base ? base.ndvi : null;
     zone.status = base ? base.status : "pending";
+    zone.satNdvi      = null;
     zone.lastRanger   = "—";
     zone.lastDate     = "—";
     zone.transect     = "—";
@@ -519,13 +522,9 @@ async function fetchZoneNdviFromCopernicus(zone, dateStr) {
 
 let satelliteSyncInProgress = false;
 
-const btnSyncSatelliteInlineEl = document.getElementById("btnSyncSatelliteInline");
-
 async function syncAllZonesFromSatellite(dateStr) {
     if (satelliteSyncInProgress) return;
     satelliteSyncInProgress = true;
-
-    if (btnSyncSatelliteInlineEl) btnSyncSatelliteInlineEl.classList.add("syncing");
 
     const date = dateStr || sceneDateInputValueOrToday();
     console.log(`Syncing satellite NDVI for ${ZONES.length} zones (cached dates are reused, no extra API calls)...`);
@@ -535,20 +534,11 @@ async function syncAllZonesFromSatellite(dateStr) {
         renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");
     }
 
-    if (btnSyncSatelliteInlineEl) btnSyncSatelliteInlineEl.classList.remove("syncing");
-
     satelliteSyncInProgress = false;
     console.log("Satellite NDVI sync complete.");
 }
 
-if (btnSyncSatelliteInlineEl) {
-    btnSyncSatelliteInlineEl.addEventListener("click", () => {
-        syncAllZonesFromSatellite(sceneDateInputValueOrToday());
-    });
-}
-
 const markersLayer = L.layerGroup().addTo(map);
-const ndviLayer = L.layerGroup();
 
 function makeIcon(status){
 
@@ -893,19 +883,18 @@ let dataReady = false;
 
 function rebuildMapLayers() {
   markersLayer.clearLayers();
-  ndviLayer.clearLayers();
 
   ZONES.forEach(zone => {
     if (zone.lat == null || zone.lng == null) return;
 
-    const color  = STATUS_COLOR[zone.status];
-    const radius = Math.sqrt(zone.area) * 100;
-    L.circle([zone.lat, zone.lng], {
-      radius, color, fillColor: color, fillOpacity: 0.35, weight: 1
-    }).bindPopup(() => buildPopup(zone)).addTo(ndviLayer);
-
     const marker = L.marker([zone.lat, zone.lng], { icon: makeIcon(zone.status) });
     marker.bindPopup(() => buildPopup(zone));
+    marker.bindTooltip(zone.name, {
+      permanent: true,
+      direction: "top",
+      offset: [0, -11],
+      className: "zone-label"
+    });
     marker.on("click", () => selectZone(zone));
     marker.addTo(markersLayer);
     markers[zone.id] = marker;
@@ -963,7 +952,7 @@ sceneDate.addEventListener("change",(e)=>{
     sceneDateManuallySet = true;
     refreshSentinelLayers(e.target.value);
     if (dataReady) applyDataForDate(e.target.value);
-    if (typeof setDashboardDateFromScene === "function") setDashboardDateFromScene(e.target.value);
+    syncAllZonesFromSatellite(e.target.value);
 
 });
 
@@ -1157,24 +1146,35 @@ map.on("mousemove",(e)=>{
 });
 
 function handleLogout() {
-
-    const confirmLogout = confirm(
-        "Are you sure you want to sign out?"
-    );
-
-    if (confirmLogout) {
-
-        localStorage.removeItem("menro_remembered_user");
-
-        window.location.href = "../Login/Login.html";
-
-    }
-
-
+    openSignOutConfirm();
 }
 
-const btnLogout = document.getElementById("btnLogout");
-if (btnLogout) btnLogout.addEventListener("click", handleLogout);
+const signOutOverlay    = document.getElementById("signOutOverlay");
+const btnCloseSignOut   = document.getElementById("btnCloseSignOut");
+const btnCancelSignOut  = document.getElementById("btnCancelSignOut");
+const btnConfirmSignOut = document.getElementById("btnConfirmSignOut");
+
+function openSignOutConfirm() {
+    if (signOutOverlay) signOutOverlay.classList.add("open");
+}
+
+function closeSignOutConfirm() {
+    if (signOutOverlay) signOutOverlay.classList.remove("open");
+}
+
+function confirmSignOut() {
+    localStorage.removeItem("menro_remembered_user");
+    window.location.href = "../Login/Login.html";
+}
+
+if (btnCloseSignOut)   btnCloseSignOut.addEventListener("click", closeSignOutConfirm);
+if (btnCancelSignOut)  btnCancelSignOut.addEventListener("click", closeSignOutConfirm);
+if (btnConfirmSignOut) btnConfirmSignOut.addEventListener("click", confirmSignOut);
+if (signOutOverlay) {
+    signOutOverlay.addEventListener("click", (e) => {
+        if (e.target === signOutOverlay) closeSignOutConfirm();
+    });
+}
 
 const rightPanel=document.querySelector(".right-panel");
 const rightResizer=document.querySelector(".right-resizer");
@@ -1255,6 +1255,11 @@ document.addEventListener("keydown", (e) => {
       closeSurveyDetail();
       return;
     }
+    const signOutOpen = document.getElementById("signOutOverlay")?.classList.contains("open");
+    if (signOutOpen) {
+      closeSignOutConfirm();
+      return;
+    }
     closeDashboard();
     closeGuide();
     closeSideMenu();
@@ -1310,7 +1315,7 @@ if (menuGuide) {
 if (menuExport) {
   menuExport.addEventListener("click", () => {
     closeSideMenu();
-    exportPDF(); 
+    window.open(KOBO_REPORT_URL, "_blank");
   });
 }
 

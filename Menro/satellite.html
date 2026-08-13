@@ -85,7 +85,7 @@ Lng: ---
         <span class="layers-toggle-label">Layers</span>
     </button>
 
-    <div class="layers-popup" id="layersPopup">
+    <div class="layers-popup">
 
         <p class="layers-popup-title">Map Layers</p>
 
@@ -142,6 +142,14 @@ Lng: ---
 
 </div>
 
+<div class="map-legend">
+    <p class="map-legend-title">Zone Health</p>
+    <div class="map-legend-row"><span class="map-legend-dot healthy"></span>Healthy</div>
+    <div class="map-legend-row"><span class="map-legend-dot moderate"></span>Moderate</div>
+    <div class="map-legend-row"><span class="map-legend-dot degraded"></span>Degraded</div>
+    <div class="map-legend-row"><span class="map-legend-dot pending"></span>Pending</div>
+</div>
+
 </main>
 <div class="resizer right-resizer"></div>
 
@@ -176,7 +184,7 @@ Lng: ---
         <span class="cloud-coverage-value" id="cloudCoverageValue">50%</span>
     </div>
 
-    <div class="scene-calendar" id="sceneCalendar">
+    <div class="scene-calendar">
 
         <div class="scene-calendar-header">
             <button type="button" id="calMonthPrev" class="date-nav-btn" aria-label="Previous month">
@@ -205,20 +213,6 @@ Lng: ---
         </div>
 
     </div>
-
-    <button
-        type="button"
-        id="btnSyncSatelliteInline"
-        class="sync-satellite-btn">
-
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
-          <polyline points="21 3 21 9 15 9"/>
-        </svg>
-
-        <span id="btnSyncSatelliteInlineLabel">Sync Satellite NDVI</span>
-
-    </button>
 
     </div>
 
@@ -306,7 +300,7 @@ Lng: ---
         <div class="guide-number">1</div>
         <div class="guide-text">
           <h3>Dashboard</h3>
-          <p>Open <strong>Dashboard</strong> from the menu for a system-wide summary — total zones, health breakdown, average NDVI and canopy cover, survey counts, and the most commonly reported threat.</p>
+          <p>Open <strong>Dashboard</strong> from the menu for a summary of zone health, NDVI, and surveys.</p>
         </div>
       </div>
 
@@ -314,7 +308,7 @@ Lng: ---
         <div class="guide-number">2</div>
         <div class="guide-text">
           <h3>Map</h3>
-          <p>Scroll to zoom in and out. Click and drag to pan around Calatagan. Use the <strong>+ / −</strong> controls in the top-left corner of the map for precise zoom steps.</p>
+          <p>Scroll to zoom, drag to pan, or use the +/− controls.</p>
         </div>
       </div>
 
@@ -322,7 +316,7 @@ Lng: ---
         <div class="guide-number">3</div>
         <div class="guide-text">
           <h3>Search</h3>
-          <p>Use the search box under <strong>Mangrove Zones</strong> in the right panel to filter by barangay name. The list below updates instantly as you type.</p>
+          <p>Use the search box in the right panel to filter zones by barangay name.</p>
         </div>
       </div>
 
@@ -330,7 +324,7 @@ Lng: ---
         <div class="guide-number">4</div>
         <div class="guide-text">
           <h3>Layers</h3>
-          <p>In the right panel under <strong>Map Layers</strong>, toggle <strong>Sentinel-2 Imagery</strong>, <strong>NDVI Overlay</strong>, and <strong>Mangrove Zones</strong> on or off to control what's shown on the map.</p>
+          <p>Toggle Sentinel-2 imagery, NDVI overlay, and zone markers under <strong>Map Layers</strong>.</p>
         </div>
       </div>
 
@@ -338,7 +332,7 @@ Lng: ---
         <div class="guide-number">5</div>
         <div class="guide-text">
           <h3>Selecting a Zone</h3>
-          <p>Click a zone marker on the map, or a zone in the list, to open its detail popup — partner organization, NDVI, health status, and (if available) field survey data like ranger name, canopy cover, and observed threats.</p>
+          <p>Click a zone marker or list item to see its NDVI, health status, and field survey details.</p>
         </div>
       </div>
 
@@ -346,15 +340,15 @@ Lng: ---
         <div class="guide-number">6</div>
         <div class="guide-text">
           <h3>Export Report</h3>
-          <p>Choose <strong>Export Field Survey Report</strong> from the menu to generate a PDF summarizing the current scene — zone overview table plus full field survey details for surveyed zones.</p>
+          <p>Choose <strong>Export Field Survey Report</strong> from the menu to generate a PDF summary.</p>
         </div>
       </div>
 
       <div class="guide-item">
         <div class="guide-number">7</div>
         <div class="guide-text">
-          <h3>Sync Satellite NDVI</h3>
-          <p>Click <strong>Sync Satellite NDVI</strong> below the Scene Date in the right panel to pull a real mean NDVI reading for every zone from Copernicus Sentinel-2 imagery, based on the currently selected date. This runs zone-by-zone and can take a little while — it's shown alongside the field-survey NDVI in each zone's popup rather than replacing it.</p>
+          <h3>Satellite NDVI</h3>
+          <p>Picking a Scene Date automatically syncs each zone's satellite NDVI in the background — this can take a moment.</p>
         </div>
       </div>
 
@@ -362,7 +356,7 @@ Lng: ---
         <div class="guide-number">8</div>
         <div class="guide-text">
           <h3>KoboToolbox</h3>
-          <p>Field surveys submitted through the KoboToolbox mobile form sync automatically. Once a ranger submits a survey for a barangay, that zone's NDVI, status, and detail panel update on their own — no manual entry needed here.</p>
+          <p>Field surveys sync automatically — a zone updates on its own once a ranger submits one.</p>
         </div>
       </div>
 
@@ -385,6 +379,32 @@ Lng: ---
     </div>
 
     <div class="dashboard-modal-body" id="surveyDetailBody">
+    </div>
+
+  </div>
+
+</div>
+
+<div class="dashboard-overlay" id="signOutOverlay">
+
+  <div class="confirm-modal">
+
+    <button class="confirm-modal-close" id="btnCloseSignOut" aria-label="Close">&times;</button>
+
+    <div class="confirm-modal-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+    </div>
+
+    <h2 class="confirm-modal-title">Sign out of AquaGuard?</h2>
+    <p class="confirm-modal-text">You'll need to sign in again to access the dashboard and map.</p>
+
+    <div class="confirm-modal-actions">
+      <button type="button" class="btn-confirm-cancel" id="btnCancelSignOut">Cancel</button>
+      <button type="button" class="btn-confirm-danger" id="btnConfirmSignOut">Sign Out</button>
     </div>
 
   </div>
@@ -483,10 +503,8 @@ Lng: ---
 
 </aside>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="js/satellite.js"></script>
-<script src="js/export.js"></script>
 <script src="js/Dashboard.js"></script>
 
 </body>

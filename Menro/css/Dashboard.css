@@ -1,4 +1,3 @@
-
 :root {
   --healthy-soft:  #1c7d61b3;
   --moderate-soft: #c98a2cb3;
@@ -76,6 +75,113 @@
 }
 
 .survey-detail-modal { width: min(640px, 94vw); }
+
+.confirm-modal {
+  position: relative;
+  width: min(360px, 92vw);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 32px 28px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.confirm-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--ink-400);
+  font-size: 1.3rem;
+  line-height: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.confirm-modal-close:hover {
+  background: var(--surface-sunken);
+  color: var(--ink-700);
+}
+
+.confirm-modal-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #fbeae7;
+  color: var(--degraded);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.confirm-modal-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.confirm-modal-title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink-900);
+  margin-bottom: 8px;
+}
+
+.confirm-modal-text {
+  font-size: 0.83rem;
+  color: var(--ink-500);
+  line-height: 1.55;
+  margin-bottom: 24px;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  width: 100%;
+  gap: 10px;
+}
+
+.btn-confirm-cancel,
+.btn-confirm-danger {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+
+.btn-confirm-cancel {
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink-700);
+}
+
+.btn-confirm-cancel:hover {
+  background: var(--surface-sunken);
+}
+
+.btn-confirm-danger {
+  border: 1.5px solid var(--degraded);
+  background: var(--degraded);
+  color: #fff;
+}
+
+.btn-confirm-danger:hover {
+  background: #a83a2f;
+  border-color: #a83a2f;
+}
 
 .survey-detail-topline {
   display: flex;
@@ -340,6 +446,10 @@
   grid-template-columns: 1fr 320px;
 }
 
+.dashboard-charts-row-with-date {
+  grid-template-columns: 280px 280px 1fr;
+}
+
 .dashboard-charts-row-3 {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -347,19 +457,21 @@
   margin: 22px 0;
 }
 
+@media (max-width: 1100px) {
+  .dashboard-charts-row-with-date { grid-template-columns: 1fr 1fr; }
+  .dashboard-charts-row-with-date .chart-card:last-child { grid-column: 1 / -1; }
+}
+
 @media (max-width: 900px) {
   .dashboard-charts-row-3 { grid-template-columns: 1fr; }
 }
 
-.survey-log-panel {
-  padding: 18px 20px 20px;
+.dashboard-date-picker {
+  min-width: 0;
 }
 
-.survey-log-layout {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 20px;
-  align-items: start;
+.survey-log-panel {
+  padding: 18px 20px 20px;
 }
 
 .survey-calendar {
@@ -478,8 +590,6 @@
   border: 1px solid var(--brand-150);
 }
 
-.survey-week-summary { min-width: 0; }
-
 .week-summary-head {
   display: flex;
   align-items: baseline;
@@ -501,10 +611,6 @@
   font-size: 0.76rem;
   color: var(--ink-400);
   font-weight: 500;
-}
-
-@media (max-width: 760px) {
-  .survey-log-layout { grid-template-columns: 1fr; }
 }
 
 .survey-log-cards {
@@ -647,6 +753,15 @@
   font-family: var(--font-mono);
 }
 
+.donut-surveyed-note {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-size: 0.76rem;
+  color: var(--ink-400);
+}
+
 .hbar-legend {
   display: flex;
   align-items: center;
@@ -782,7 +897,12 @@
   font-weight: 500;
 }
 
-.trend-svg { display: block; }
+.trend-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 760 / 240;
+}
 
 .activity-table {
   width: 100%;
@@ -845,6 +965,8 @@
 @media (max-width: 760px) {
   .dashboard-charts-row { grid-template-columns: 1fr; }
   .dashboard-charts-row-reverse { grid-template-columns: 1fr; }
+  .dashboard-charts-row-with-date { grid-template-columns: 1fr; }
+  .dashboard-charts-row-with-date .chart-card:last-child { grid-column: auto; }
   .hbar-row { grid-template-columns: 92px 1fr 48px; }
 }
 
