@@ -163,6 +163,7 @@ function switchView(viewName, btn) {
 
     return {
       id: flat['_id'] || flat['_uuid'] || Math.random().toString(36).slice(2),
+      koboId: flat['_id'] || null,
       date: dateRaw ? new Date(dateRaw) : null,
       barangay: findField(flat, FIELD_CANDIDATES.barangay) || 'Unknown',
       area: findField(flat, FIELD_CANDIDATES.area) || '—',
@@ -229,6 +230,14 @@ function switchView(viewName, btn) {
     container.innerHTML = top.map(s => {
       const badge = statusBadge(s.status);
       const canopyText = s.canopy !== null ? `Canopy: ${s.canopy}%` : 'Canopy: —';
+      const deleteBtn = s.koboId
+        ? `<button class="submission-delete-btn" data-delete-id="${escapeHtml(String(s.koboId))}" aria-label="Delete submission">
+             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+               <polyline points="3 6 5 6 21 6" />
+               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+             </svg>
+           </button>`
+        : '';
       return `
         <div class="submission-item">
           <div class="submission-dot ${badge.dotCls}"></div>
@@ -237,6 +246,7 @@ function switchView(viewName, btn) {
             <div class="submission-meta">${formatDate(s.date)} · ${canopyText}</div>
           </div>
           <span class="badge ${badge.badgeCls}">${badge.label}</span>
+          ${deleteBtn}
         </div>`;
     }).join('');
   }
@@ -247,7 +257,7 @@ function switchView(viewName, btn) {
     if (!tbody) return;
 
     if (submissions.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--ink-400); padding:20px;">No submissions yet.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--ink-400); padding:20px;">No submissions yet.</td></tr>`;
       if (note) note.textContent = 'Showing 0 of 0 submissions. Records will appear here after each field inspection.';
       return;
     }
@@ -261,6 +271,14 @@ function switchView(viewName, btn) {
     tbody.innerHTML = sorted.map(s => {
       const badge = statusBadge(s.status);
       const canopyText = s.canopy !== null ? `${s.canopy}%` : '—';
+      const deleteBtn = s.koboId
+        ? `<button class="row-delete-btn" data-delete-id="${escapeHtml(String(s.koboId))}" aria-label="Delete submission">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+               <polyline points="3 6 5 6 21 6" />
+               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+             </svg>
+           </button>`
+        : '—';
       return `
         <tr>
           <td>${formatDate(s.date)}</td>
@@ -270,6 +288,7 @@ function switchView(viewName, btn) {
           <td>${canopyText}</td>
           <td><span class="wq ${s.water.cls}">${escapeHtml(String(s.water.label))}</span></td>
           <td><span class="badge ${badge.badgeCls}">${badge.label}</span></td>
+          <td>${deleteBtn}</td>
         </tr>`;
     }).join('');
 
@@ -319,10 +338,20 @@ function switchView(viewName, btn) {
 
     const tbody = document.getElementById('history-table-body');
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--degraded); padding:20px;">Couldn't load submissions: ${escapeHtml(message)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--degraded); padding:20px;">Couldn't load submissions: ${escapeHtml(message)}</td></tr>`;
     }
     const note = document.getElementById('history-note');
     if (note) note.textContent = 'Check that kobo-proxy.php is reachable and correctly configured.';
+  }
+
+  let currentSubmissions = [];
+  let pendingDeleteId = null;
+
+  function renderAll() {
+    renderStats(currentSubmissions);
+    renderRecentSubmissions(currentSubmissions);
+    renderHistoryTable(currentSubmissions);
+    renderAlert(currentSubmissions);
   }
 
   async function loadSubmissions() {
@@ -338,17 +367,98 @@ function switchView(viewName, btn) {
       }
       const data = await res.json();
       const results = Array.isArray(data.results) ? data.results : (Array.isArray(data) ? data : []);
-      const submissions = results.map(normalizeSubmission);
-
-      renderStats(submissions);
-      renderRecentSubmissions(submissions);
-      renderHistoryTable(submissions);
-      renderAlert(submissions);
+      currentSubmissions = results.map(normalizeSubmission);
+      renderAll();
     } catch (err) {
       console.error('AquaGuard: failed to load Kobo submissions', err);
       showError(err.message || 'Unknown error');
     }
   }
 
+  function findDeleteTarget(e) {
+    return e.target.closest('[data-delete-id]');
+  }
+
+  function bindDeleteDelegation() {
+    const recentContainer = document.getElementById('recent-submission-list');
+    const historyBody = document.getElementById('history-table-body');
+    [recentContainer, historyBody].forEach(el => {
+      if (!el) return;
+      el.addEventListener('click', (e) => {
+        const target = findDeleteTarget(e);
+        if (!target) return;
+        pendingDeleteId = target.getAttribute('data-delete-id');
+        openDeleteConfirm();
+      });
+    });
+  }
+
+  function openDeleteConfirm() {
+    const overlay = document.getElementById('deleteOverlay');
+    if (overlay) overlay.classList.add('open');
+  }
+
+  function closeDeleteConfirm() {
+    const overlay = document.getElementById('deleteOverlay');
+    if (overlay) overlay.classList.remove('open');
+    pendingDeleteId = null;
+  }
+
+  async function confirmDelete() {
+    if (!pendingDeleteId) {
+      closeDeleteConfirm();
+      return;
+    }
+    const idToDelete = pendingDeleteId;
+    const confirmBtn = document.getElementById('btnConfirmDelete');
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Deleting…';
+    }
+
+    try {
+      const res = await fetch(`${AQUAGUARD_CONFIG.KOBO_PROXY_URL}?action=delete&id=${encodeURIComponent(idToDelete)}`, {
+        method: 'POST',
+        credentials: 'same-origin'
+      });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const body = await res.json();
+          if (body && body.error) detail = body.error;
+        } catch (_) {}
+        throw new Error(detail);
+      }
+      currentSubmissions = currentSubmissions.filter(s => String(s.koboId) !== String(idToDelete));
+      renderAll();
+      closeDeleteConfirm();
+    } catch (err) {
+      console.error('AquaGuard: failed to delete submission', err);
+      alert(`Couldn't delete this submission: ${err.message || 'Unknown error'}`);
+    } finally {
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Delete';
+      }
+    }
+  }
+
+  function bindDeleteModal() {
+    const overlay = document.getElementById('deleteOverlay');
+    const closeBtn = document.getElementById('btnCloseDelete');
+    const cancelBtn = document.getElementById('btnCancelDelete');
+    const confirmBtn = document.getElementById('btnConfirmDelete');
+    if (!overlay || !confirmBtn) return;
+
+    if (closeBtn) closeBtn.addEventListener('click', closeDeleteConfirm);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeDeleteConfirm);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeDeleteConfirm();
+    });
+    confirmBtn.addEventListener('click', confirmDelete);
+  }
+
+  bindDeleteDelegation();
+  bindDeleteModal();
   loadSubmissions();
 })();

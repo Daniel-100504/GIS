@@ -678,6 +678,45 @@ body {
   border-color: #a83a2f;
 }
 
+.row-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink-400);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.row-delete-btn:hover {
+  border-color: var(--degraded);
+  color: var(--degraded);
+  background: #fbeae7;
+}
+
+.submission-delete-btn {
+  background: none;
+  border: none;
+  color: var(--ink-400);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.submission-delete-btn:hover {
+  color: var(--degraded);
+  background: #fbeae7;
+}
+
 @media (max-width: 900px) {
   .stat-row { grid-template-columns: repeat(2, 1fr); }
   .dash-grid { grid-template-columns: 1fr; }
