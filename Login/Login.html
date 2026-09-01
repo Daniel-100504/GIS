@@ -6,32 +6,52 @@
   <title>AquaGuard – Mangrove Monitoring System</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=2" />
 </head>
 <body>
 
-  <canvas id="gisCanvas" aria-hidden="true"></canvas>
+  <div class="auth-layout">
 
-  <div class="page-bg">
-    <div class="card">
+    <aside class="brand-panel">
+      <canvas id="gisCanvas" aria-hidden="true"></canvas>
 
-      <div class="card-accent"></div>
-
-      <div class="card-inner">
-
-        <div class="brand">
-          <div class="brand-icon" aria-hidden="true">
-            <img src="../assets/calatagan-seal.png" width="36" height="36" alt="Calatagan Seal" class="brand-seal">
-          </div>
+      <div class="brand-panel-content">
+        <div class="brand-top">
+          <img src="../assets/calatagan-seal.png" width="44" height="44" alt="Calatagan Seal" class="brand-seal">
           <div class="brand-text">
             <h1 class="brand-title">AquaGuard</h1>
             <p class="brand-sub">Mangrove Monitoring System</p>
           </div>
         </div>
 
-        <div class="coord-divider">
-          <span class="coord-tag">13.8317° N, 120.6400° E</span>
+        <div class="brand-mid">
+          <h2 class="brand-headline">Protecting Calatagan&rsquo;s<br>Mangrove Reserve</h2>
+          <p class="brand-copy">Real-time satellite monitoring, ranger field reports, and habitat analytics for DENR&#8209;MENRO Batangas.</p>
+
+          <div class="brand-coords">
+            <div class="brand-coord">
+              <span class="brand-coord-value">13.8317&deg; N</span>
+              <span class="brand-coord-label">Latitude</span>
+            </div>
+            <div class="brand-coord-divider"></div>
+            <div class="brand-coord">
+              <span class="brand-coord-value">120.6400&deg; E</span>
+              <span class="brand-coord-label">Longitude</span>
+            </div>
+          </div>
+        </div>
+
+        <p class="brand-footer">DENR&#8209;MENRO Batangas &middot; Calatagan Mangrove Reserve</p>
+      </div>
+    </aside>
+
+    <main class="form-panel">
+      <div class="form-card">
+
+        <div class="form-card-head">
+          <h2 class="form-title">Welcome back</h2>
+          <p class="form-subtitle">Sign in to access the monitoring dashboard.</p>
         </div>
 
         <div class="role-section">
@@ -77,15 +97,6 @@
             </div>
           </div>
 
-          <div class="row-options">
-            <label class="remember-label">
-              <input type="checkbox" id="rememberMe" />
-              <span class="checkmark"></span>
-              Remember me
-            </label>
-            <a href="#" class="forgot-link">Forgot password?</a>
-          </div>
-
           <button class="btn-signin" id="btnSignIn" type="button">
             <span class="btn-text">Sign In</span>
             <span class="btn-arrow">→</span>
@@ -94,29 +105,29 @@
           <div id="errorMsg" class="error-msg" role="alert" aria-live="polite"></div>
         </div>
 
-        <p class="card-footer">DENR-MENRO Batangas · Calatagan Mangrove Reserve</p>
-
       </div>
-    </div>
+    </main>
+
   </div>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=2"></script>
   <script>
     (function () {
       const canvas = document.getElementById('gisCanvas');
       const ctx = canvas.getContext('2d');
+      const panel = canvas.parentElement;
 
       function resize() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        canvas.width = panel.clientWidth;
+        canvas.height = panel.clientHeight;
         draw();
       }
 
       function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const gridSpacing = 48;
-        ctx.strokeStyle = 'rgba(61,220,132,0.06)';
+        const gridSpacing = 44;
+        ctx.strokeStyle = 'rgba(61,220,132,0.08)';
         ctx.lineWidth = 1;
 
         for (let x = 0; x < canvas.width; x += gridSpacing) {
@@ -132,23 +143,23 @@
           ctx.stroke();
         }
 
-        const cx = canvas.width * 0.72, cy = canvas.height * 0.3;
-        ctx.strokeStyle = 'rgba(61,220,132,0.05)';
-        for (let r = 60; r < 320; r += 45) {
+        const cx = canvas.width * 0.65, cy = canvas.height * 0.28;
+        ctx.strokeStyle = 'rgba(61,220,132,0.07)';
+        for (let r = 50; r < 340; r += 42) {
           ctx.beginPath();
           ctx.arc(cx, cy, r, 0, Math.PI * 2);
           ctx.stroke();
         }
 
         const dots = [
-          [0.15, 0.2], [0.8, 0.65], [0.45, 0.85], [0.6, 0.1], [0.25, 0.7]
+          [0.18, 0.22], [0.75, 0.62], [0.4, 0.85], [0.62, 0.15], [0.28, 0.7], [0.85, 0.35]
         ];
-        ctx.fillStyle = 'rgba(61,220,132,0.18)';
+        ctx.fillStyle = 'rgba(61,220,132,0.22)';
         dots.forEach(([fx, fy]) => {
           ctx.beginPath();
           ctx.arc(fx * canvas.width, fy * canvas.height, 3, 0, Math.PI * 2);
           ctx.fill();
-          ctx.strokeStyle = 'rgba(61,220,132,0.10)';
+          ctx.strokeStyle = 'rgba(61,220,132,0.12)';
           ctx.lineWidth = 1;
           const px = fx * canvas.width, py = fy * canvas.height;
           ctx.beginPath(); ctx.moveTo(px - 12, py); ctx.lineTo(px + 12, py); ctx.stroke();
