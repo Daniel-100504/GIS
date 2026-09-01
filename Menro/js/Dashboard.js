@@ -49,17 +49,7 @@ function computeNdviTrend(submissions) {
 
 function computeZoneSnapshotForDate(dateStr) {
   const subs = typeof submissionsUpToDate === "function" ? submissionsUpToDate(dateStr) : ALL_SUBMISSIONS;
-
-  const byZone = {};
-  subs.forEach(sub => {
-    const zoneId = BARANGAY_TO_ZONE[sub["Barangay"] || ""];
-    if (!zoneId) return;
-    const existing = byZone[zoneId];
-    const subDate  = sub["Inspection_Date"] || "";
-    if (!existing || subDate > (existing["Inspection_Date"] || "")) {
-      byZone[zoneId] = sub;
-    }
-  });
+  const byZone = latestSubmissionByZone(subs);
 
   return ZONES.map(zone => {
     const sub = byZone[zone.id];
@@ -194,7 +184,7 @@ function formatDate(iso) {
 function renderHealthDonut(healthy, moderate, degraded, pending = 0) {
   const total    = healthy + moderate + degraded + pending;
   const surveyed = healthy + moderate + degraded;
-  const r = 52, cx = 64, cy = 64, sw = 16;
+  const r = 50, cx = 64, cy = 64, sw = 19;
   const circumference = 2 * Math.PI * r;
 
   const segments = [
@@ -204,7 +194,7 @@ function renderHealthDonut(healthy, moderate, degraded, pending = 0) {
   ];
   if (pending > 0) segments.push({ value: pending, color: "#c3cdc7", label: "Pending" });
 
-  const gap = segments.filter(s => s.value > 0).length > 1 ? 1.5 : 0;
+  const gap = segments.filter(s => s.value > 0).length > 1 ? 2.2 : 0;
   let offset = 0;
   const arcs = segments.map(seg => {
     const pct  = total > 0 ? seg.value / total : 0;
@@ -232,8 +222,8 @@ function renderHealthDonut(healthy, moderate, degraded, pending = 0) {
       <svg viewBox="0 0 128 128" width="128" height="128" class="donut-svg">
         <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#eef4f0" stroke-width="${sw}"/>
         ${arcs}
-        <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-size="24" font-weight="700" fill="#0a3128" font-family="'Space Grotesk', sans-serif">${surveyed}</text>
-        <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-size="9" letter-spacing="1" fill="#869790">ZONES</text>
+        <text x="${cx}" y="${cy - 3}" text-anchor="middle" font-size="27" font-weight="700" fill="#0a3128" font-family="'Space Grotesk', sans-serif">${surveyed}</text>
+        <text x="${cx}" y="${cy + 15}" text-anchor="middle" font-size="9" letter-spacing="1.5" fill="#869790" font-weight="600">ZONES</text>
       </svg>
       <div class="donut-legend">${legend}</div>
     </div>
@@ -318,35 +308,24 @@ function renderNDVITrendChart(ndviTrend) {
     return `<div class="dashboard-empty">Not enough scene dates yet to plot a trend.</div>`;
   }
 
-  const w = 760, h = 240, padL = 44, padR = 24, padT = 24, padB = 34;
-  const innerW = w - padL - padR, innerH = h - padT - padB;
+  const padL = 46, padR = 20, padT = 30, padB = 34;
+  const h = 220;
+  const innerH = h - padT - padB;
 
-  const values = points.map(p => p.avg);
-  const rawMin = Math.min(...values);
-  const rawMax = Math.max(...values);
-  const pad = Math.max((rawMax - rawMin) * 0.2, 0.02);
-  const minV = rawMin - pad;
-  const maxV = rawMax + pad;
+  const slotWidth = 88;
+  const innerW = Math.min(Math.max(points.length * slotWidth, 320), 620);
+  const w = innerW + padL + padR;
 
-  const x = i => padL + (innerW * i) / (points.length - 1);
+  const rawMax = Math.max(...points.map(p => p.avg));
+  const minV = 0;
+  const maxV = rawMax + Math.max(rawMax * 0.18, 0.03);
+
+  const baseline = padT + innerH;
+  const slot = innerW / points.length;
+  const barWidth = Math.min(slot * 0.6, 48);
+
+  const xCenter = i => padL + slot * i + slot / 2;
   const y = v => padT + innerH - ((v - minV) / (maxV - minV)) * innerH;
-  const coords = points.map((p, i) => ({ x: x(i), y: y(p.avg) }));
-
-  function smoothPath(pts) {
-    let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const cur = pts[i], next = pts[i + 1];
-      const midX = (cur.x + next.x) / 2;
-      const midY = (cur.y + next.y) / 2;
-      d += ` Q ${cur.x.toFixed(1)} ${cur.y.toFixed(1)} ${midX.toFixed(1)} ${midY.toFixed(1)}`;
-    }
-    const last = pts[pts.length - 1];
-    d += ` T ${last.x.toFixed(1)} ${last.y.toFixed(1)}`;
-    return d;
-  }
-
-  const linePath = smoothPath(coords);
-  const areaPath = `${linePath} L ${x(points.length - 1).toFixed(1)} ${(padT + innerH).toFixed(1)} L ${x(0).toFixed(1)} ${(padT + innerH).toFixed(1)} Z`;
 
   const gridSteps = 4;
   const gridLines = Array.from({ length: gridSteps + 1 }).map((_, i) => {
@@ -358,41 +337,41 @@ function renderNDVITrendChart(ndviTrend) {
     `;
   }).join("");
 
-  const dots = coords.map((c, i) => {
-    const isLast = i === coords.length - 1;
-    return `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${isLast ? 4.4 : 3}" fill="${isLast ? "#1c7d61" : "#fff"}" stroke="#1c7d61" stroke-width="2"/>`;
+  const bars = points.map((p, i) => {
+    const cx = xCenter(i);
+    const barTop = y(p.avg);
+    const barH = Math.max(baseline - barTop, 2);
+    return `<rect x="${(cx - barWidth / 2).toFixed(1)}" y="${barTop.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" rx="3" fill="url(#ndviBarFill)"/>`;
   }).join("");
 
+  const showEveryValue = barWidth >= 26;
+  const valueLabels = points.map((p, i) => {
+    if (!showEveryValue && i !== points.length - 1) return "";
+    const barTop = y(p.avg);
+    return `<text x="${xCenter(i).toFixed(1)}" y="${(barTop - 7).toFixed(1)}" font-size="9.5" font-weight="700" fill="#0a3128" text-anchor="middle" font-family="'JetBrains Mono', monospace">${p.avg.toFixed(2)}</text>`;
+  }).join("");
+
+  const maxLabels = Math.max(Math.floor(innerW / 50), 3);
+  const labelStep = points.length > maxLabels ? Math.ceil(points.length / maxLabels) : 1;
   const labels = points.map((p, i) => {
-    if (points.length > 6 && i % Math.ceil(points.length / 6) !== 0 && i !== points.length - 1) return "";
+    if (labelStep > 1 && i % labelStep !== 0 && i !== points.length - 1) return "";
     const d = new Date(p.date);
     const label = isNaN(d.getTime()) ? p.date : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    return `<text x="${x(i).toFixed(1)}" y="${h - 10}" font-size="9.5" fill="#869790" text-anchor="middle">${label}</text>`;
+    return `<text x="${xCenter(i).toFixed(1)}" y="${h - 10}" font-size="9.5" fill="#869790" text-anchor="middle">${label}</text>`;
   }).join("");
 
-  const lastPoint = coords[coords.length - 1];
-  const lastValue = points[points.length - 1].avg.toFixed(2);
-  const calloutX  = Math.min(lastPoint.x, w - padR - 20);
-  const valueCallout = `
-    <g transform="translate(${calloutX.toFixed(1)}, ${(lastPoint.y - 16).toFixed(1)})">
-      <rect x="-20" y="-14" width="40" height="18" rx="5" fill="#0a3128"/>
-      <text x="0" y="-1" font-size="10" font-weight="700" fill="#fff" text-anchor="middle" font-family="'JetBrains Mono', monospace">${lastValue}</text>
-    </g>
-  `;
-
   return `
-    <svg viewBox="0 0 ${w} ${h}" class="trend-svg" preserveAspectRatio="xMidYMid meet">
+    <svg viewBox="0 0 ${w} ${h}" class="trend-svg" preserveAspectRatio="xMidYMid meet" style="width:auto; max-width:${w}px; aspect-ratio:${w} / ${h}; margin:0 auto;">
       <defs>
-        <linearGradient id="ndviAreaFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#1c7d61" stop-opacity="0.24"/>
-          <stop offset="100%" stop-color="#1c7d61" stop-opacity="0"/>
+        <linearGradient id="ndviBarFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#3f9b7a"/>
+          <stop offset="100%" stop-color="#1c7d61"/>
         </linearGradient>
       </defs>
       ${gridLines}
-      <path d="${areaPath}" fill="url(#ndviAreaFill)" stroke="none"/>
-      <path d="${linePath}" fill="none" stroke="#1c7d61" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-      ${dots}
-      ${valueCallout}
+      <line x1="${padL}" y1="${baseline.toFixed(1)}" x2="${w - padR}" y2="${baseline.toFixed(1)}" stroke="#c7d4cd" stroke-width="1"/>
+      ${bars}
+      ${valueLabels}
       ${labels}
     </svg>
   `;
