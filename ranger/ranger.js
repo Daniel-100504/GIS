@@ -319,14 +319,6 @@ function switchView(viewName, btn) {
     panel.style.display = 'flex';
   }
 
-  function escapeHtml(str) {
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
   function showError(message) {
     const totalEl = document.getElementById('stat-total');
     if (totalEl) totalEl.textContent = '—';

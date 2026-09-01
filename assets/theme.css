@@ -1,0 +1,153 @@
+:root {
+  --brand-900: #0a3128;
+  --brand-800: #0d4335;
+  --brand-700: #146b52;
+  --brand-600: #1c7d61;
+  --brand-500: #229372;
+  --brand-300: #7fc9ab;
+  --brand-150: #cfe9dd;
+  --brand-100: #e6f4ee;
+  --brand-50:  #f2f9f5;
+
+  --ink-900: #12211d;
+  --ink-700: #2c3b36;
+  --ink-600: #56655f;
+  --ink-500: #6b7d75;
+  --ink-400: #869790;
+  --ink-300: #aebab4;
+  --border:  #e0e8e3;
+  --border-strong: #c7d4cd;
+  --surface: #ffffff;
+  --surface-alt: #f6f9f7;
+  --surface-sunken: #eef4f0;
+
+  --healthy:  #1c7d61;
+  --moderate: #c98a2c;
+  --degraded: #c1473a;
+  --pending:  #93a29b;
+
+  --accent-sand: #d9a15a;
+  --accent-sky:  #2f6f8f;
+
+  --font-display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  --shadow-sm: 0 1px 2px rgba(10, 49, 40, 0.06), 0 1px 1px rgba(10, 49, 40, 0.04);
+  --shadow-md: 0 6px 20px rgba(10, 49, 40, 0.09);
+  --shadow-lg: 0 20px 60px rgba(10, 49, 40, 0.28);
+  --shadow-popover: 0 10px 30px rgba(10, 49, 40, 0.18);
+}
+
+/* Shared confirm/sign-out style modal, used by both the Menro and Ranger dashboards. */
+
+.confirm-modal {
+  position: relative;
+  width: min(360px, 92vw);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 32px 28px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.confirm-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--ink-400);
+  font-size: 1.3rem;
+  line-height: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.confirm-modal-close:hover {
+  background: var(--surface-sunken);
+  color: var(--ink-700);
+}
+
+.confirm-modal-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #fbeae7;
+  color: var(--degraded);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.confirm-modal-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.confirm-modal-title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink-900);
+  margin-bottom: 8px;
+}
+
+.confirm-modal-text {
+  font-size: 0.83rem;
+  color: var(--ink-500);
+  line-height: 1.55;
+  margin-bottom: 24px;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  width: 100%;
+  gap: 10px;
+}
+
+.btn-confirm-cancel,
+.btn-confirm-danger {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.btn-confirm-cancel {
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink-700);
+}
+
+.btn-confirm-cancel:hover {
+  background: var(--surface-sunken);
+}
+
+.btn-confirm-danger {
+  border: 1.5px solid var(--degraded);
+  background: var(--degraded);
+  color: #fff;
+}
+
+.btn-confirm-danger:hover {
+  background: #a83a2f;
+  border-color: #a83a2f;
+}

@@ -1,7 +1,6 @@
 <?php
 
-define('KOBO_TOKEN',    '4ef0ca6fea118509c9a9d067a3c5d267185f3ba9');
-define('KOBO_FORM_UID', 'ar4Kip6AFkpybWVa9dkwBK');
+require_once __DIR__ . '/config.php';
 
 header('Content-Type: application/json');
 
