@@ -241,17 +241,65 @@
             <span class="panel-title">Submission History</span>
             <span class="panel-sub">All field records submitted by you</span>
           </div>
+
+          <div class="filter-bar" id="history-filter-bar">
+            <div class="filter-search">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input type="text" id="filter-search" class="filter-search-input"
+                placeholder="Search barangay, protected area, transect…" autocomplete="off" />
+            </div>
+
+            <select id="filter-barangay" class="filter-select">
+              <option value="">All barangays</option>
+            </select>
+
+            <select id="filter-area" class="filter-select">
+              <option value="">All protected areas</option>
+            </select>
+
+            <select id="filter-status" class="filter-select">
+              <option value="">All statuses</option>
+              <option value="healthy">Healthy</option>
+              <option value="moderate">Moderate</option>
+              <option value="degraded">Degraded</option>
+              <option value="pending">Pending</option>
+            </select>
+
+            <div class="filter-date-group">
+              <input type="date" id="filter-date-from" class="filter-date" aria-label="From date" />
+              <span class="filter-date-sep">–</span>
+              <input type="date" id="filter-date-to" class="filter-date" aria-label="To date" />
+            </div>
+
+            <button type="button" id="filter-clear" class="filter-clear-btn">Clear</button>
+          </div>
+
+          <div class="history-table-scroll">
           <table class="history-table">
+            <colgroup>
+              <col style="width:11%;">
+              <col style="width:13%;">
+              <col style="width:24%;">
+              <col style="width:9%;">
+              <col style="width:12%;">
+              <col style="width:12%;">
+              <col style="width:11%;">
+              <col style="width:8%;">
+            </colgroup>
             <thead>
               <tr>
                 <th>Date</th>
                 <th>Barangay</th>
                 <th>Protected Area</th>
-                <th>Transect</th>
-                <th>Canopy Cover</th>
-                <th>Water Quality</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th class="cell-center">Transect</th>
+                <th class="cell-right">Canopy Cover</th>
+                <th class="cell-center">Water Quality</th>
+                <th class="cell-center">Status</th>
+                <th class="cell-center">Actions</th>
               </tr>
             </thead>
             <tbody id="history-table-body">
@@ -260,6 +308,7 @@
               </tr>
             </tbody>
           </table>
+          </div>
           <div class="history-note" id="history-note">Loading…</div>
         </div>
       </section>
