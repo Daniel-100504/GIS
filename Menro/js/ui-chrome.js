@@ -17,7 +17,7 @@ function closeSignOutConfirm() {
 
 function confirmSignOut() {
     localStorage.removeItem("menro_remembered_user");
-    window.location.href = "../Login/Login.html";
+    window.location.href = "../../Login/Login.html";
 }
 
 if (btnCloseSignOut)   btnCloseSignOut.addEventListener("click", closeSignOutConfirm);
@@ -84,11 +84,6 @@ if (guideOverlay) {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
-    const surveyDetailOpen = document.getElementById("surveyDetailOverlay")?.classList.contains("open");
-    if (surveyDetailOpen && typeof closeSurveyDetail === "function") {
-      closeSurveyDetail();
-      return;
-    }
     const signOutOpen = document.getElementById("signOutOverlay")?.classList.contains("open");
     if (signOutOpen) {
       closeSignOutConfirm();
@@ -169,6 +164,8 @@ if (!sessionStorage.getItem("aquaguard_guide_shown")) {
   openGuide();
   sessionStorage.setItem("aquaguard_guide_shown", "1");
 }
+
+initIdleLogout(15, confirmSignOut, { overlayClass: "dashboard-overlay" });
 
 // App bootstrap — runs last, after every module above has defined what it needs.
 async function initWithKobo() {

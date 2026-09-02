@@ -67,7 +67,39 @@ const osmTile = L.tileLayer(
 
 osmTile.addTo(map);
 
-const SENTINEL_PROXY_URL = "API/sentinel-proxy.php";
+const satelliteBasemap = L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    {
+        attribution: "Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics",
+        maxZoom: 19
+    }
+);
+
+const layersToggleThumbEl = document.getElementById("layersToggleThumb");
+const layersToggleLabelEl = document.getElementById("layersToggleLabel");
+let satelliteBasemapActive = false;
+
+function setMapType(satellite) {
+    satelliteBasemapActive = satellite;
+
+    if (satellite) {
+        map.removeLayer(osmTile);
+        satelliteBasemap.addTo(map);
+    } else {
+        map.removeLayer(satelliteBasemap);
+        osmTile.addTo(map);
+    }
+
+    if (layersToggleThumbEl) {
+        layersToggleThumbEl.classList.toggle("mode-satellite", !satellite);
+        layersToggleThumbEl.classList.toggle("mode-map", satellite);
+    }
+    if (layersToggleLabelEl) layersToggleLabelEl.textContent = satellite ? "Map" : "Satellite";
+}
+
+setMapType(false);
+
+const SENTINEL_PROXY_URL = "../API/sentinel-proxy.php";
 
 function sceneDateInputValueOrToday() {
     const el = document.getElementById("sceneDate");
@@ -256,8 +288,22 @@ const layersToggleBtn  = document.getElementById("layersToggleBtn");
 if (layersToggleBtn && mapLayersControl) {
     layersToggleBtn.addEventListener("click", function (e) {
         e.stopPropagation();
-        const isOpen = mapLayersControl.classList.toggle("open");
-        layersToggleBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        setMapType(!satelliteBasemapActive);
+    });
+
+    let layersHoverCloseTimer = null;
+
+    mapLayersControl.addEventListener("mouseenter", function () {
+        clearTimeout(layersHoverCloseTimer);
+        mapLayersControl.classList.add("open");
+        layersToggleBtn.setAttribute("aria-expanded", "true");
+    });
+
+    mapLayersControl.addEventListener("mouseleave", function () {
+        layersHoverCloseTimer = setTimeout(function () {
+            mapLayersControl.classList.remove("open");
+            layersToggleBtn.setAttribute("aria-expanded", "false");
+        }, 150);
     });
 
     document.addEventListener("click", function (e) {
@@ -271,14 +317,6 @@ if (layersToggleBtn && mapLayersControl) {
         .addEventListener("click", function (e) {
             e.stopPropagation();
         });
-
-    const layersPopupCloseBtn = document.getElementById("layersPopupClose");
-    if (layersPopupCloseBtn) {
-        layersPopupCloseBtn.addEventListener("click", function () {
-            mapLayersControl.classList.remove("open");
-            layersToggleBtn.setAttribute("aria-expanded", "false");
-        });
-    }
 }
 
 document.getElementById("layerZones")

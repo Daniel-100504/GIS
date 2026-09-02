@@ -66,10 +66,28 @@ function getAccessToken() {
 $mode = $_GET['mode'] ?? 'wms';
 
 if ($mode === 'wms') {
-    $token = getAccessToken();
-
     $params = $_GET;
     unset($params['mode']);
+    ksort($params);
+
+    $tileCacheDir = __DIR__ . '/tile-cache';
+    if (!is_dir($tileCacheDir)) {
+        @mkdir($tileCacheDir, 0775, true);
+    }
+    $cacheKey  = md5(http_build_query($params));
+    $cacheFile = "{$tileCacheDir}/{$cacheKey}.tile";
+    $cacheMeta = "{$cacheFile}.meta";
+    $cacheTtl  = 86400; // tiles for a given bbox/date/layer don't change; safe to keep a day
+
+    if (is_file($cacheFile) && is_file($cacheMeta) && (time() - filemtime($cacheFile)) < $cacheTtl) {
+        header('Content-Type: ' . trim(file_get_contents($cacheMeta)));
+        header('Cache-Control: public, max-age=3600');
+        header('X-Tile-Cache: HIT');
+        readfile($cacheFile);
+        exit;
+    }
+
+    $token = getAccessToken();
     $url = CDSE_WMS_BASE . '?' . http_build_query($params);
 
     $ch = curl_init($url);
@@ -88,8 +106,12 @@ if ($mode === 'wms') {
         exit;
     }
 
+    @file_put_contents($cacheFile, $body);
+    @file_put_contents($cacheMeta, $contentType);
+
     header('Content-Type: ' . $contentType);
     header('Cache-Control: public, max-age=3600');
+    header('X-Tile-Cache: MISS');
     echo $body;
     exit;
 }
