@@ -11,13 +11,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 
-  <link rel="icon" href="../assets/calatagan-seal.png"/>
+  <link rel="icon" href="../../assets/calatagan-seal.png"/>
 
-        <link rel="stylesheet" href="../assets/theme.css"/>
-        <link rel="stylesheet" href="css/style.css"/>
-        <link rel="stylesheet" href="css/right-panel.css"/>
-        <link rel="stylesheet" href="css/side-menu.css"/>
-        <link rel="stylesheet" href="css/dashboard.css"/>
+        <link rel="stylesheet" href="../../assets/theme.css"/>
+        <link rel="stylesheet" href="../css/style.css"/>
+        <link rel="stylesheet" href="../css/right-panel.css"/>
+        <link rel="stylesheet" href="../css/side-menu.css"/>
+        <link rel="stylesheet" href="../css/Dashboard.css"/>
 </head>
 
 <body>
@@ -34,7 +34,7 @@
           </svg>
         </button>
 
-        <img src="../assets/calatagan-seal.png" width="26" height="26" alt="Calatagan Seal" class="topbar-logo">
+        <img src="../../assets/calatagan-seal.png" width="26" height="26" alt="Calatagan Seal" class="topbar-logo">
 
         <span class="topbar-brand">
             AquaGuard
@@ -81,38 +81,50 @@ Lng: ---
 
 <div class="map-layers-control" id="mapLayersControl">
 
-    <button class="layers-toggle-btn" id="layersToggleBtn" aria-label="Map layers" aria-expanded="false" title="Map layers">
-        <span class="layers-toggle-thumb"></span>
-        <span class="layers-toggle-label">Layers</span>
+    <button class="layers-toggle-btn" id="layersToggleBtn" aria-label="Switch to satellite view" aria-expanded="false" title="Click to switch map/satellite view">
+        <span class="layers-toggle-thumb" id="layersToggleThumb"></span>
+        <span class="layers-toggle-label" id="layersToggleLabel">Satellite</span>
     </button>
 
     <div class="layers-popup">
-
-        <div class="layers-popup-header">
-            <p class="layers-popup-title">Map Layers</p>
-            <button type="button" class="layers-popup-close" id="layersPopupClose" aria-label="Close map layers">&times;</button>
-        </div>
 
         <div class="layer-tile-grid">
 
             <label class="layer-tile">
                 <input type="checkbox" id="layerSentinel2" class="layer-tile-input">
-                <span class="layer-tile-icon layer-tile-icon-sentinel" aria-hidden="true"></span>
+                <span class="layer-tile-icon layer-tile-icon-sentinel" aria-hidden="true">
+                    <span class="layer-tile-art"></span>
+                    <span class="layer-tile-badge">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                    </span>
+                </span>
                 <span class="layer-tile-label">Sentinel-2</span>
             </label>
 
             <label class="layer-tile">
                 <input type="checkbox" id="layerNdvi" class="layer-tile-input">
-                <span class="layer-tile-icon layer-tile-icon-ndvi" aria-hidden="true"></span>
-                <span class="layer-tile-label">NDVI Overlay</span>
+                <span class="layer-tile-icon layer-tile-icon-ndvi" aria-hidden="true">
+                    <span class="layer-tile-art"></span>
+                    <span class="layer-tile-badge">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c0-4 3-5 3-9a3 3 0 0 0-6 0c0 4 3 5 3 9Z"/><path d="M12 13V3"/><path d="M12 7 8 3"/><path d="M12 9 17 4"/></svg>
+                    </span>
+                </span>
+                <span class="layer-tile-label">NDVI</span>
             </label>
 
             <label class="layer-tile">
                 <input type="checkbox" id="layerZones" class="layer-tile-input" checked>
                 <span class="layer-tile-icon layer-tile-icon-zones" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c0-4 3-5 3-9a3 3 0 0 0-6 0c0 4 3 5 3 9Z"/><path d="M12 13V3"/><path d="M12 7 8 3"/><path d="M12 9 17 4"/></svg>
+                    <span class="layer-tile-art">
+                        <span class="layer-tile-dot" style="top:28%;left:32%;"></span>
+                        <span class="layer-tile-dot" style="top:52%;left:60%;"></span>
+                        <span class="layer-tile-dot" style="top:68%;left:30%;"></span>
+                    </span>
+                    <span class="layer-tile-badge">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                    </span>
                 </span>
-                <span class="layer-tile-label">Zone Markers</span>
+                <span class="layer-tile-label">Mangroves</span>
             </label>
 
         </div>
@@ -303,7 +315,7 @@ Lng: ---
         <div class="guide-number">4</div>
         <div class="guide-text">
           <h3>Layers</h3>
-          <p>Toggle Sentinel-2 imagery, NDVI overlay, and zone markers under <strong>Map Layers</strong>.</p>
+          <p>Hover over the <strong>Layers</strong> button (bottom-left of the map) to toggle Sentinel-2 imagery, NDVI overlay, and Mangroves markers. Click the button itself to switch the base map between <strong>Map</strong> and <strong>Satellite</strong> view.</p>
         </div>
       </div>
 
@@ -339,25 +351,14 @@ Lng: ---
         </div>
       </div>
 
-    </div>
-
-  </div>
-
-</div>
-
-<div class="dashboard-overlay" id="surveyDetailOverlay">
-
-  <div class="dashboard-modal survey-detail-modal">
-
-    <div class="dashboard-modal-header">
-      <div>
-        <h2 id="surveyDetailTitle">Zone name</h2>
-        <p class="dashboard-modal-sub" id="surveyDetailSub">Field survey submission</p>
+      <div class="guide-item">
+        <div class="guide-number">9</div>
+        <div class="guide-text">
+          <h3>Auto Sign-Out</h3>
+          <p>For security, you'll be signed out automatically after 15 minutes of inactivity. A warning appears 30 seconds beforehand — click <strong>Stay signed in</strong> to keep your session active.</p>
+        </div>
       </div>
-      <button class="dashboard-close" id="btnCloseSurveyDetail" aria-label="Close survey detail">&times;</button>
-    </div>
 
-    <div class="dashboard-modal-body" id="surveyDetailBody">
     </div>
 
   </div>
@@ -468,7 +469,7 @@ Lng: ---
 
   <div class="side-menu-header">
     <div class="side-menu-brand-group">
-      <img src="../assets/calatagan-seal.png" width="30" height="30" alt="Calatagan Seal" class="side-menu-logo">
+      <img src="../../assets/calatagan-seal.png" width="30" height="30" alt="Calatagan Seal" class="side-menu-logo">
       <span class="side-menu-brand">AquaGuard</span>
     </div>
     <button class="side-menu-close" id="btnCloseSideMenu" aria-label="Close menu">&times;</button>
@@ -550,14 +551,14 @@ Lng: ---
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/5.0.8/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="../assets/utils.js"></script>
-<script src="js/kobo-data.js"></script>
-<script src="js/map-core.js"></script>
-<script src="js/zones-panel.js"></script>
-<script src="js/scene-calendar.js"></script>
-<script src="js/export-report.js"></script>
-<script src="js/ui-chrome.js"></script>
-<script src="js/Dashboard.js"></script>
+<script src="../../assets/utils.js"></script>
+<script src="../js/kobo-data.js"></script>
+<script src="../js/map-core.js"></script>
+<script src="../js/zones-panel.js"></script>
+<script src="../js/scene-calendar.js"></script>
+<script src="../js/export-report.js"></script>
+<script src="../js/ui-chrome.js"></script>
+<script src="../js/Dashboard.js"></script>
 
 </body>
 </html>

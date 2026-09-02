@@ -189,68 +189,6 @@ function selectZone(zone){
 
 }
 
-let sceneSummary = { meanNDVI: "0.00", zonesSurveyed: 0, totalZones: 0, healthyCount: 0, atRiskCount: 0 };
-
-function updateSummary(){
-
-    const withNdvi = ZONES.filter(z => z.ndvi !== null);
-
-    const mean =
-        withNdvi.length > 0
-            ? withNdvi.reduce((sum,z)=>sum+z.ndvi,0)/withNdvi.length
-            : 0;
-
-    const healthy=
-        ZONES.filter(z=>z.status==="healthy").length;
-
-    const risk=
-        ZONES.filter(z=>z.status==="degraded").length;
-
-    const surveyed=
-        ZONES.filter(z=>z.lastRanger && z.lastRanger !== "—").length;
-
-    sceneSummary = {
-        meanNDVI: mean.toFixed(2),
-        zonesSurveyed: surveyed,
-        totalZones: ZONES.length,
-        healthyCount: healthy,
-        atRiskCount: risk
-    };
-
-    updateNDVIBar();
-
-}
-
-function updateNDVIBar(){
-  const total = ZONES.length;
-  const groups = [
-    { label: "Healthy",  status: "healthy",  color: "#1c7d61" },
-    { label: "Moderate", status: "moderate", color: "#c98a2c" },
-    { label: "Degraded", status: "degraded", color: "#c1473a" },
-  ];
-
-  const container = document.getElementById("ndviRows");
-  if (!container) return;
-  container.innerHTML = "";
-
-  groups.forEach(g => {
-    const count = ZONES.filter(z => z.status === g.status).length;
-    const pct   = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
-
-    container.innerHTML += `
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-        <span style="font-size:0.7rem;color:var(--panel-muted);width:68px;flex-shrink:0;text-align:right;">${g.label}</span>
-        <div style="flex:1;background:rgba(255,255,255,0.08);border-radius:4px;height:16px;overflow:hidden;">
-          <div style="width:${pct}%;height:100%;background:${g.color};border-radius:4px;transition:width 0.4s ease;"></div>
-        </div>
-        <span style="font-size:0.7rem;color:var(--panel-muted);width:44px;flex-shrink:0;">${count} zone${count !== 1 ? "s" : ""}</span>
-      </div>
-    `;
-  });
-}
-
-updateSummary();
-
 function rebuildMapLayers() {
   markersLayer.clearLayers();
 
@@ -294,5 +232,4 @@ function applyDataForDate(dateStr) {
   if (submissions.length > 0) mergeKoboIntoZones(submissions);
 
   rebuildMapLayers();
-  updateSummary();
 }

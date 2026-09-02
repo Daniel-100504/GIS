@@ -1,0 +1,672 @@
+function computeFieldBreakdown(submissions, fieldKey, excludeValues = ["none_observed", "none", "n_a"]) {
+  const counts = {};
+  submissions.forEach(sub => {
+    const raw = sub[fieldKey];
+    if (!raw || excludeValues.includes(raw)) return;
+    counts[raw] = (counts[raw] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .map(([val, count]) => ({ threat: val.replace(/_/g, " "), count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function computeCanopyCoverBuckets(submissions) {
+  const buckets = [
+    { label: "0–20%",   min: 0,  max: 20,  count: 0 },
+    { label: "20–40%",  min: 20, max: 40,  count: 0 },
+    { label: "40–60%",  min: 40, max: 60,  count: 0 },
+    { label: "60–80%",  min: 60, max: 80,  count: 0 },
+    { label: "80–100%", min: 80, max: 101, count: 0 },
+  ];
+  submissions.forEach(sub => {
+    const cover = parseFloat(sub["Estimated_Canopy_Cover_"]);
+    if (isNaN(cover)) return;
+    const bucket = buckets.find(b => cover >= b.min && cover < b.max);
+    if (bucket) bucket.count++;
+  });
+  return buckets
+    .filter(b => b.count > 0)
+    .map(b => ({ threat: b.label, count: b.count }));
+}
+
+function computeNdviTrend(submissions) {
+  const byDate = {};
+  submissions.forEach(sub => {
+    const date = sub["Inspection_Date"];
+    const cover = sub["Estimated_Canopy_Cover_"];
+    if (!date || !cover) return;
+    const ndvi = coverToNDVI(cover);
+    if (!byDate[date]) byDate[date] = [];
+    byDate[date].push(ndvi);
+  });
+  return Object.keys(byDate)
+    .sort()
+    .map(date => ({
+      date,
+      avg: byDate[date].reduce((a, b) => a + b, 0) / byDate[date].length,
+    }));
+}
+
+function computeZoneSnapshotForDate(dateStr) {
+  const subs = typeof submissionsUpToDate === "function" ? submissionsUpToDate(dateStr) : ALL_SUBMISSIONS;
+  const byZone = latestSubmissionByZone(subs);
+
+  return ZONES.map(zone => {
+    const sub = byZone[zone.id];
+    if (!sub) {
+      return {
+        id: zone.id, name: zone.name, area: zone.area, partner: zone.partner,
+        ndvi: null, status: "pending", canopyCover: "—",
+      };
+    }
+    return {
+      id: zone.id,
+      name: zone.name,
+      area: zone.area,
+      partner: zone.partner,
+      ndvi: sub["Estimated_Canopy_Cover_"] ? coverToNDVI(sub["Estimated_Canopy_Cover_"]) : null,
+      status: deriveStatus(sub),
+      canopyCover: sub["Estimated_Canopy_Cover_"] ? sub["Estimated_Canopy_Cover_"] + "%" : "—",
+    };
+  });
+}
+
+function computeDashboardStats(dateStr) {
+  const subsUpToDate = typeof submissionsUpToDate === "function" ? submissionsUpToDate(dateStr) : ALL_SUBMISSIONS;
+  const zoneSnapshot  = computeZoneSnapshotForDate(dateStr);
+
+  const total    = zoneSnapshot.length;
+  const healthy  = zoneSnapshot.filter(z => z.status === "healthy").length;
+  const moderate = zoneSnapshot.filter(z => z.status === "moderate").length;
+  const degraded = zoneSnapshot.filter(z => z.status === "degraded").length;
+  const pending  = zoneSnapshot.filter(z => z.status === "pending").length;
+
+  const avgNdvi = (() => {
+    const withNdvi = zoneSnapshot.filter(z => z.ndvi !== null);
+    return withNdvi.length > 0
+      ? withNdvi.reduce((sum, z) => sum + z.ndvi, 0) / withNdvi.length
+      : 0;
+  })();
+
+  const coverValues = zoneSnapshot
+    .map(z => parseFloat(z.canopyCover))
+    .filter(v => !isNaN(v));
+  const avgCanopy = coverValues.length > 0
+    ? coverValues.reduce((a, b) => a + b, 0) / coverValues.length
+    : null;
+
+  const threatCounts = {};
+  subsUpToDate.forEach(sub => {
+    const threat = sub["Observed_Threats"];
+    if (!threat || threat === "none_observed") return;
+    threatCounts[threat] = (threatCounts[threat] || 0) + 1;
+  });
+  const threatBreakdown = Object.entries(threatCounts)
+    .map(([threat, count]) => ({ threat, count }))
+    .sort((a, b) => b.count - a.count);
+  const topThreat      = threatBreakdown.length > 0 ? threatBreakdown[0].threat : null;
+  const topThreatCount = threatBreakdown.length > 0 ? threatBreakdown[0].count : 0;
+
+  const dates = subsUpToDate
+    .map(sub => sub["Inspection_Date"])
+    .filter(Boolean)
+    .sort();
+  const latestDate = dates.length > 0 ? dates[dates.length - 1] : null;
+
+  const ndviTrend           = computeNdviTrend(subsUpToDate);
+  const waterColorBreakdown = computeFieldBreakdown(subsUpToDate, "Water_Color");
+  const aquafarmBreakdown   = computeFieldBreakdown(subsUpToDate, "Nearby_Aquafarm_Activity");
+  const canopyBuckets       = computeCanopyCoverBuckets(subsUpToDate);
+
+  return {
+    total, healthy, moderate, degraded, pending,
+    avgNdvi, avgCanopy,
+    totalSurveys: subsUpToDate.length,
+    latestDate,
+    topThreat: topThreat ? topThreat.replace(/_/g, " ") : null,
+    topThreatCount,
+    threatBreakdown: threatBreakdown.map(t => ({ threat: t.threat.replace(/_/g, " "), count: t.count })),
+    waterColorBreakdown,
+    aquafarmBreakdown,
+    canopyBuckets,
+    ndviTrend,
+    zoneSnapshot,
+  };
+}
+
+function formatDate(iso) {
+  if (!iso || iso === "—") return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+let dashboardSelectedDate  = null;
+let dashboardCalendarYear  = null;
+let dashboardCalendarMonth = null;
+
+function ensureDashboardSelectedDate() {
+  const dates = availableSurveyDates();
+
+  if (dates.length === 0) {
+    dashboardSelectedDate = null;
+    return;
+  }
+
+  if (!dashboardSelectedDate) {
+    dashboardSelectedDate = dates[dates.length - 1];
+  }
+
+  if (dashboardCalendarYear === null) {
+    const d = new Date(dashboardSelectedDate + "T00:00:00");
+    dashboardCalendarYear  = d.getFullYear();
+    dashboardCalendarMonth = d.getMonth();
+  }
+}
+
+function availableSurveyDates() {
+  return [...new Set(ALL_SUBMISSIONS.map(s => s["Inspection_Date"]).filter(Boolean))].sort();
+}
+
+function submissionsOnDate(dateStr) {
+  return ALL_SUBMISSIONS.filter(sub => sub["Inspection_Date"] === dateStr);
+}
+
+function submissionsInRange(startIso, endIso) {
+  return ALL_SUBMISSIONS.filter(sub => {
+    const d = sub["Inspection_Date"];
+    return d && d >= startIso && d <= endIso;
+  });
+}
+
+function isoDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function mondayOf(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  const offset = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - offset);
+  return isoDate(d);
+}
+
+function weekRange(dateStr) {
+  const start = mondayOf(dateStr);
+  const endD = new Date(start + "T00:00:00");
+  endD.setDate(endD.getDate() + 6);
+  return { start, end: isoDate(endD) };
+}
+
+function buildMonthGrid(year, month) {
+  const firstOfMonth = new Date(year, month, 1);
+  const leadDays = (firstOfMonth.getDay() + 6) % 7;
+  const start = new Date(year, month, 1 - leadDays);
+  const cells = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    cells.push(d);
+  }
+  return cells;
+}
+
+function renderHealthDonut(healthy, moderate, degraded, pending = 0) {
+  const total    = healthy + moderate + degraded + pending;
+  const surveyed = healthy + moderate + degraded;
+  const r = 50, cx = 64, cy = 64, sw = 19;
+  const circumference = 2 * Math.PI * r;
+
+  const segments = [
+    { value: healthy,  color: "#1c7d61", label: "Healthy" },
+    { value: moderate, color: "#c98a2c", label: "Moderate" },
+    { value: degraded, color: "#c1473a", label: "Degraded" },
+  ];
+  if (pending > 0) segments.push({ value: pending, color: "#c3cdc7", label: "Pending" });
+
+  const gap = segments.filter(s => s.value > 0).length > 1 ? 2.2 : 0;
+  let offset = 0;
+  const arcs = segments.map(seg => {
+    const pct  = total > 0 ? seg.value / total : 0;
+    const rawDash = pct * circumference;
+    const dash = Math.max(rawDash - gap, 0);
+    const circle = pct > 0
+      ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${seg.color}" stroke-width="${sw}"
+           stroke-dasharray="${dash.toFixed(2)} ${(circumference - dash).toFixed(2)}"
+           stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})" stroke-linecap="butt"/>`
+      : "";
+    offset += rawDash;
+    return circle;
+  }).join("");
+
+  const legend = segments.map(seg => `
+    <div class="donut-legend-item">
+      <span class="donut-legend-dot ${seg.label.toLowerCase()}"></span>
+      <span class="donut-legend-label">${seg.label}</span>
+      <span class="donut-legend-value">${seg.value}</span>
+    </div>
+  `).join("");
+
+  return `
+    <div class="donut-chart-wrap">
+      <svg viewBox="0 0 128 128" width="128" height="128" class="donut-svg">
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#eef4f0" stroke-width="${sw}"/>
+        ${arcs}
+        <text x="${cx}" y="${cy - 3}" text-anchor="middle" font-size="27" font-weight="700" fill="#0a3128" font-family="'Space Grotesk', sans-serif">${surveyed}</text>
+        <text x="${cx}" y="${cy + 15}" text-anchor="middle" font-size="9" letter-spacing="1.5" fill="#869790" font-weight="600">ZONES</text>
+      </svg>
+      <div class="donut-legend">${legend}</div>
+    </div>
+    <p class="donut-surveyed-note">${surveyed} of ${total} zones have data</p>
+  `;
+}
+
+function renderNDVIBarChart(zones) {
+  const withData = zones.filter(z => z.ndvi !== null).sort((a, b) => b.ndvi - a.ndvi);
+  const noData   = zones.filter(z => z.ndvi === null).sort((a, b) => a.name.localeCompare(b.name));
+  const max = Math.max(...withData.map(z => z.ndvi), 0.1);
+
+  const legend = `
+    <div class="hbar-legend">
+      <span><span class="hbar-legend-dot healthy"></span>Healthy</span>
+      <span><span class="hbar-legend-dot moderate"></span>Moderate</span>
+      <span><span class="hbar-legend-dot degraded"></span>Degraded</span>
+    </div>
+  `;
+
+  const dataRows = withData.map(z => {
+    const pct = Math.max((z.ndvi / max) * 100, 4);
+    return `
+      <div class="hbar-row">
+        <span class="hbar-label" title="${escapeHtml(z.name)}">${escapeHtml(z.name)}</span>
+        <div class="hbar-track">
+          <div class="hbar-fill ${z.status}" style="--pct:${pct.toFixed(1)}%"></div>
+        </div>
+        <span class="hbar-value">${z.ndvi.toFixed(2)}</span>
+      </div>
+    `;
+  }).join("");
+
+  const noDataRows = noData.map(z => `
+    <div class="hbar-row no-data">
+      <span class="hbar-label" title="${escapeHtml(z.name)}">${escapeHtml(z.name)}</span>
+      <div class="hbar-track dashed"><div class="hbar-fill-empty"></div></div>
+      <span class="hbar-value muted">No data</span>
+    </div>
+  `).join("");
+
+  const footnote = noData.length > 0
+    ? `<div class="hbar-footnote">${noData.length} zone${noData.length !== 1 ? "s" : ""} awaiting a field survey or satellite sync</div>`
+    : "";
+
+  if (withData.length === 0 && noData.length === 0) {
+    return `<div class="dashboard-empty">No zone data recorded yet.</div>`;
+  }
+
+  return `${legend}<div class="hbar-chart">${dataRows}${noDataRows}</div>${footnote}`;
+}
+
+function renderBreakdownBarChart(breakdown, emptyText) {
+  if (!breakdown || breakdown.length === 0) {
+    return `<div class="dashboard-empty">${emptyText}</div>`;
+  }
+  const max = Math.max(...breakdown.map(t => t.count));
+
+  const rows = breakdown.map(t => {
+    const pct = Math.max((t.count / max) * 100, 4);
+    return `
+      <div class="hbar-row">
+        <span class="hbar-label" title="${escapeHtml(capitalise(t.threat))}">${escapeHtml(capitalise(t.threat))}</span>
+        <div class="hbar-track">
+          <div class="hbar-fill threat-fill" style="--pct:${pct.toFixed(1)}%"></div>
+        </div>
+        <span class="hbar-value">${t.count}</span>
+      </div>
+    `;
+  }).join("");
+
+  return `<div class="hbar-chart">${rows}</div>`;
+}
+
+function renderThreatBarChart(threatBreakdown) {
+  return renderBreakdownBarChart(threatBreakdown, "No threats reported in field surveys.");
+}
+
+function renderNDVITrendChart(ndviTrend) {
+  const points = ndviTrend.filter(p => p.avg !== null);
+  if (points.length < 2) {
+    return `<div class="dashboard-empty">Not enough scene dates yet to plot a trend.</div>`;
+  }
+
+  const padL = 46, padR = 20, padT = 30, padB = 34;
+  const h = 220;
+  const innerH = h - padT - padB;
+
+  const slotWidth = 88;
+  const innerW = Math.min(Math.max(points.length * slotWidth, 320), 620);
+  const w = innerW + padL + padR;
+
+  const rawMax = Math.max(...points.map(p => p.avg));
+  const minV = 0;
+  const maxV = rawMax + Math.max(rawMax * 0.18, 0.03);
+
+  const baseline = padT + innerH;
+  const slot = innerW / points.length;
+  const barWidth = Math.min(slot * 0.6, 48);
+
+  const xCenter = i => padL + slot * i + slot / 2;
+  const y = v => padT + innerH - ((v - minV) / (maxV - minV)) * innerH;
+
+  const gridSteps = 4;
+  const gridLines = Array.from({ length: gridSteps + 1 }).map((_, i) => {
+    const v  = minV + ((maxV - minV) * i) / gridSteps;
+    const gy = y(v);
+    return `
+      <line x1="${padL}" y1="${gy.toFixed(1)}" x2="${w - padR}" y2="${gy.toFixed(1)}" stroke="#eef4f0" stroke-width="1"/>
+      <text x="${padL - 8}" y="${(gy + 3).toFixed(1)}" font-size="9.5" fill="#869790" text-anchor="end" font-family="'JetBrains Mono', monospace">${v.toFixed(2)}</text>
+    `;
+  }).join("");
+
+  const bars = points.map((p, i) => {
+    const cx = xCenter(i);
+    const barTop = y(p.avg);
+    const barH = Math.max(baseline - barTop, 2);
+    return `<rect x="${(cx - barWidth / 2).toFixed(1)}" y="${barTop.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" rx="3" fill="url(#ndviBarFill)"/>`;
+  }).join("");
+
+  const showEveryValue = barWidth >= 26;
+  const valueLabels = points.map((p, i) => {
+    if (!showEveryValue && i !== points.length - 1) return "";
+    const barTop = y(p.avg);
+    return `<text x="${xCenter(i).toFixed(1)}" y="${(barTop - 7).toFixed(1)}" font-size="9.5" font-weight="700" fill="#0a3128" text-anchor="middle" font-family="'JetBrains Mono', monospace">${p.avg.toFixed(2)}</text>`;
+  }).join("");
+
+  const maxLabels = Math.max(Math.floor(innerW / 50), 3);
+  const labelStep = points.length > maxLabels ? Math.ceil(points.length / maxLabels) : 1;
+  const labels = points.map((p, i) => {
+    if (labelStep > 1 && i % labelStep !== 0 && i !== points.length - 1) return "";
+    const d = new Date(p.date);
+    const label = isNaN(d.getTime()) ? p.date : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `<text x="${xCenter(i).toFixed(1)}" y="${h - 10}" font-size="9.5" fill="#869790" text-anchor="middle">${label}</text>`;
+  }).join("");
+
+  return `
+    <svg viewBox="0 0 ${w} ${h}" class="trend-svg" preserveAspectRatio="xMidYMid meet" style="width:auto; max-width:${w}px; aspect-ratio:${w} / ${h}; margin:0 auto;">
+      <defs>
+        <linearGradient id="ndviBarFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#3f9b7a"/>
+          <stop offset="100%" stop-color="#1c7d61"/>
+        </linearGradient>
+      </defs>
+      ${gridLines}
+      <line x1="${padL}" y1="${baseline.toFixed(1)}" x2="${w - padR}" y2="${baseline.toFixed(1)}" stroke="#c7d4cd" stroke-width="1"/>
+      ${bars}
+      ${valueLabels}
+      ${labels}
+    </svg>
+  `;
+}
+
+function renderCalendarWidget(weekStart, weekEnd) {
+  const monthLabel = new Date(dashboardCalendarYear, dashboardCalendarMonth, 1)
+    .toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const cells   = buildMonthGrid(dashboardCalendarYear, dashboardCalendarMonth);
+  const todayIso = todayISO();
+
+  const dowRow = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+    .map(d => `<span class="cal-dow">${d}</span>`).join("");
+
+  const dayCells = cells.map(d => {
+    const iso     = isoDate(d);
+    const inMonth = d.getMonth() === dashboardCalendarMonth;
+    const count   = submissionsOnDate(iso).length;
+
+    const classes = ["cal-day"];
+    if (!inMonth) classes.push("outside");
+    if (count > 0) classes.push("has-data");
+    if (iso >= weekStart && iso <= weekEnd) classes.push("in-week");
+    if (iso === dashboardSelectedDate) classes.push("selected");
+    if (iso === todayIso) classes.push("today");
+
+    return `
+      <button type="button" class="${classes.join(" ")}" data-date="${iso}"
+        aria-label="${formatDate(iso)}, ${count} survey${count !== 1 ? "s" : ""}">
+        <span class="cal-day-num">${d.getDate()}</span>
+        ${count > 0 ? `<span class="cal-day-dot"></span>` : ""}
+      </button>
+    `;
+  }).join("");
+
+  return `
+    <div class="cal-header">
+      <button type="button" class="date-nav-btn" id="calPrevMonth" aria-label="Previous month">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span class="cal-month-label">${monthLabel}</span>
+      <button type="button" class="date-nav-btn" id="calNextMonth" aria-label="Next month">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+    <div class="cal-grid cal-dow-row">${dowRow}</div>
+    <div class="cal-grid cal-days">${dayCells}</div>
+    <div class="cal-legend">
+      <span><span class="cal-legend-dot"></span> Has survey data</span>
+      <span><span class="cal-legend-swatch"></span> Selected week</span>
+    </div>
+  `;
+}
+
+function renderDateSelector(weekStart, weekEnd) {
+  if (dashboardCalendarYear === null || dashboardCalendarMonth === null) {
+    return `<div class="dashboard-empty">No field survey submissions recorded yet.</div>`;
+  }
+  return `<div class="survey-calendar">${renderCalendarWidget(weekStart, weekEnd)}</div>`;
+}
+
+function shiftCalendarMonth(dir) {
+  dashboardCalendarMonth += dir;
+  if (dashboardCalendarMonth < 0)  { dashboardCalendarMonth = 11; dashboardCalendarYear--; }
+  if (dashboardCalendarMonth > 11) { dashboardCalendarMonth = 0;  dashboardCalendarYear++; }
+
+  const hasSurveyDates = availableSurveyDates().length > 0;
+  const weekRangeObj = hasSurveyDates ? weekRange(dashboardSelectedDate) : null;
+  renderDatePicker(weekRangeObj);
+}
+
+function renderDatePicker(weekRangeObj) {
+  const el = document.getElementById("dashboardDatePicker");
+  if (!el) return;
+  el.innerHTML = renderDateSelector(weekRangeObj && weekRangeObj.start, weekRangeObj && weekRangeObj.end);
+}
+
+function renderSurveyLogCard(sub) {
+  const zoneId = BARANGAY_TO_ZONE[sub["Barangay"]];
+  const zone = ZONES.find(z => z.id === zoneId);
+  const hasThreat = sub["Observed_Threats"] && sub["Observed_Threats"] !== "none_observed";
+
+  return `
+    <div class="survey-log-card">
+      <div class="survey-log-card-head">
+        <span class="survey-log-zone">${escapeHtml(zone ? zone.name : (sub["Barangay"] || "Unknown zone").replace(/_/g, " "))}</span>
+        <span class="threat-tag ${hasThreat ? "flagged" : "none"}">
+          ${hasThreat ? escapeHtml(capitalise(sub["Observed_Threats"].replace(/_/g, " "))) : "None observed"}
+        </span>
+      </div>
+      <div class="survey-log-grid">
+        <div class="survey-log-field">
+          <span class="survey-log-label">Ranger</span>
+          <span class="survey-log-value">${escapeHtml(sub["Ranger_Name"] || "—")}</span>
+        </div>
+        <div class="survey-log-field">
+          <span class="survey-log-label">Canopy Cover</span>
+          <span class="survey-log-value">${sub["Estimated_Canopy_Cover_"] ? sub["Estimated_Canopy_Cover_"] + "%" : "—"}</span>
+        </div>
+        <div class="survey-log-field">
+          <span class="survey-log-label">Water Color</span>
+          <span class="survey-log-value">${escapeHtml(sub["Water_Color"] ? sub["Water_Color"].replace(/_/g, " ") : "—")}</span>
+        </div>
+        <div class="survey-log-field">
+          <span class="survey-log-label">Aquafarm Nearby</span>
+          <span class="survey-log-value">${escapeHtml(sub["Nearby_Aquafarm_Activity"] ? sub["Nearby_Aquafarm_Activity"].replace(/_/g, " ") : "—")}</span>
+        </div>
+      </div>
+      ${sub["Additional_Notes"] ? `<p class="survey-log-notes">${escapeHtml(sub["Additional_Notes"])}</p>` : ""}
+    </div>
+  `;
+}
+
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+function renderDashboardHeader(s) {
+  setText("dashboardSummaryDate", `Summary as of ${dashboardSelectedDate ? formatDate(dashboardSelectedDate) : "—"}`);
+
+  const dot    = document.getElementById("dashboardLatestDot");
+  const latest = document.getElementById("dashboardLatestInspection");
+  if (s.latestDate) {
+    if (dot)    dot.hidden = false;
+    if (latest) { latest.hidden = false; latest.textContent = `Latest field inspection ${formatDate(s.latestDate)}`; }
+  } else {
+    if (dot)    dot.hidden = true;
+    if (latest) { latest.hidden = true; latest.textContent = ""; }
+  }
+}
+
+function renderStatCards(s) {
+  setText("statTotalZonesValue", s.total);
+  setText("statTotalZonesHint", s.pending > 0 ? `${s.pending} zone${s.pending !== 1 ? "s" : ""} awaiting data` : `Across ${s.total} barangays`);
+
+  setText("statHealthyValue", s.healthy);
+  setText("statHealthyHint", `${s.total ? Math.round((s.healthy / s.total) * 100) : 0}% of total`);
+
+  setText("statModerateValue", s.moderate);
+  setText("statModerateHint", `${s.total ? Math.round((s.moderate / s.total) * 100) : 0}% of total`);
+
+  setText("statDegradedValue", s.degraded);
+  setText("statDegradedHint", `${s.total ? Math.round((s.degraded / s.total) * 100) : 0}% of total`);
+
+  setText("statAvgNdviValue", s.avgNdvi.toFixed(2));
+
+  setText("statAvgCanopyValue", s.avgCanopy !== null ? s.avgCanopy.toFixed(0) + "%" : "—");
+  setText("statAvgCanopyHint", s.avgCanopy !== null ? "From field surveys" : "No field data yet");
+
+  setText("statTotalSurveysValue", s.totalSurveys);
+
+  setText("statLatestInspectionValue", s.latestDate ? formatDate(s.latestDate) : "—");
+}
+
+function renderWeekSubmissions(weekRangeObj) {
+  const headEl     = document.getElementById("weekSummaryHead");
+  const cardsEl    = document.getElementById("weekSummaryCards");
+  const emptyWeekEl = document.getElementById("weekSummaryEmpty");
+  const noDatesEl  = document.getElementById("noSurveyDatesEmpty");
+  if (!headEl || !cardsEl || !emptyWeekEl || !noDatesEl) return;
+
+  if (!weekRangeObj) {
+    headEl.hidden = true;
+    cardsEl.innerHTML = "";
+    emptyWeekEl.hidden = true;
+    noDatesEl.hidden = false;
+    return;
+  }
+
+  noDatesEl.hidden = true;
+  headEl.hidden = false;
+
+  const weekSubs = submissionsInRange(weekRangeObj.start, weekRangeObj.end)
+    .sort((a, b) => (a["Inspection_Date"] || "").localeCompare(b["Inspection_Date"] || ""));
+
+  const rangeLabel = weekRangeObj.start.slice(0, 7) === weekRangeObj.end.slice(0, 7)
+    ? `${formatDate(weekRangeObj.start)} – ${new Date(weekRangeObj.end + "T00:00:00").toLocaleDateString("en-US", { day: "numeric" })}, ${weekRangeObj.end.slice(0, 4)}`
+    : `${formatDate(weekRangeObj.start)} – ${formatDate(weekRangeObj.end)}`;
+
+  setText("weekSummaryRange", rangeLabel);
+  setText("weekSummaryCount", `${weekSubs.length} survey${weekSubs.length !== 1 ? "s" : ""} gathered this week`);
+
+  if (weekSubs.length > 0) {
+    cardsEl.innerHTML = weekSubs.map(renderSurveyLogCard).join("");
+    emptyWeekEl.hidden = true;
+  } else {
+    cardsEl.innerHTML = "";
+    emptyWeekEl.hidden = false;
+  }
+}
+
+function bindDashboardControls() {
+  const datePicker = document.getElementById("dashboardDatePicker");
+  if (datePicker && !datePicker.dataset.bound) {
+    datePicker.dataset.bound = "true";
+    datePicker.addEventListener("click", (e) => {
+      const dayBtn = e.target.closest(".cal-day");
+      if (dayBtn) {
+        dashboardSelectedDate = dayBtn.dataset.date;
+        renderDashboard();
+        return;
+      }
+      if (e.target.closest("#calPrevMonth")) { shiftCalendarMonth(-1); return; }
+      if (e.target.closest("#calNextMonth")) { shiftCalendarMonth(1); return; }
+    });
+  }
+}
+
+function renderDashboard() {
+  if (!document.getElementById("dashboardBody")) return;
+
+  ensureDashboardSelectedDate();
+
+  const s = computeDashboardStats(dashboardSelectedDate);
+  const hasSurveyDates = availableSurveyDates().length > 0;
+  const weekRangeObj = hasSurveyDates ? weekRange(dashboardSelectedDate) : null;
+
+  renderDashboardHeader(s);
+  renderStatCards(s);
+  renderDatePicker(weekRangeObj);
+  document.getElementById("healthDonutChart").innerHTML = renderHealthDonut(s.healthy, s.moderate, s.degraded, s.pending);
+  document.getElementById("ndviBarChart").innerHTML     = renderNDVIBarChart(s.zoneSnapshot);
+  renderWeekSubmissions(weekRangeObj);
+  document.getElementById("ndviTrendChart").innerHTML  = renderNDVITrendChart(s.ndviTrend);
+  document.getElementById("threatBarChart").innerHTML  = renderThreatBarChart(s.threatBreakdown);
+  document.getElementById("canopyBucketsChart").innerHTML = renderBreakdownBarChart(s.canopyBuckets, "No canopy cover data recorded yet.");
+  document.getElementById("waterColorChart").innerHTML    = renderBreakdownBarChart(s.waterColorBreakdown, "No water color data recorded yet.");
+  document.getElementById("aquafarmChart").innerHTML      = renderBreakdownBarChart(s.aquafarmBreakdown, "No aquafarm activity data recorded yet.");
+
+  bindDashboardControls();
+}
+
+const mapView       = document.getElementById("mapView");
+const dashboardView = document.getElementById("dashboardView");
+
+let dashboardMarkupLoaded = false;
+
+async function ensureDashboardMarkup() {
+  if (dashboardMarkupLoaded) return;
+  const body = document.getElementById("dashboardBody");
+  if (!body) return;
+
+  const res = await fetch("Dashboard.html");
+  body.innerHTML = await res.text();
+  dashboardMarkupLoaded = true;
+}
+
+async function switchTab(tab) {
+  const toDashboard = tab === "dashboard";
+
+  if (mapView)       mapView.style.display = toDashboard ? "none" : "flex";
+  if (dashboardView) dashboardView.classList.toggle("active", toDashboard);
+
+  if (toDashboard) {
+    await ensureDashboardMarkup();
+    renderDashboard();
+  } else if (typeof map !== "undefined" && map.invalidateSize) {
+    setTimeout(() => map.invalidateSize(), 0);
+  }
+}
+
+function openDashboard() {
+  switchTab("dashboard");
+}
+function closeDashboard() { switchTab("map"); }

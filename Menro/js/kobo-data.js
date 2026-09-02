@@ -1,4 +1,4 @@
-const KOBO_API_URL  = "API/kobo-proxy.php";
+const KOBO_API_URL  = "../API/kobo-proxy.php";
 
 const BARANGAY_TO_ZONE = {
   "bagong_silang":  "bagong-silang",
@@ -50,11 +50,17 @@ async function fetchKoboData() {
     setConnectionStatus(true);
     return ALL_SUBMISSIONS;
   } catch (err) {
-    console.warn("KoboToolbox fetch failed — no submissions available until the proxy is reachable.", err);
-    ALL_SUBMISSIONS = [];
+    console.warn("KoboToolbox fetch failed — showing last available data until the proxy is reachable.", err);
     setConnectionStatus(false);
     return null;
   }
+}
+
+async function refreshAfterReconnect() {
+  await fetchKoboData();
+  dataReady = true;
+  if (typeof applyDataForDate === "function") applyDataForDate(sceneDate.value);
+  if (typeof renderDashboard === "function") renderDashboard();
 }
 
 const connectionStatusEl     = document.getElementById("connectionStatus");
@@ -81,7 +87,7 @@ function setConnectionStatus(online) {
   if (!connectionStatusEl || online === isOnline) return;
   isOnline = online;
 
-  connectionStatusEl.classList.remove("online", "offline", "checking");
+  connectionStatusEl.classList.remove("online", "offline");
   connectionStatusEl.classList.add(online ? "online" : "offline");
   connectionStatusEl.title = online
     ? "Connected — live data from KoboToolbox"
@@ -93,13 +99,19 @@ function setConnectionStatus(online) {
 
 setConnectionStatus(navigator.onLine);
 
-window.addEventListener("online",  () => setConnectionStatus(true));
+window.addEventListener("online", () => {
+  const wasOffline = isOnline === false;
+  setConnectionStatus(true);
+  if (wasOffline) refreshAfterReconnect();
+});
 window.addEventListener("offline", () => setConnectionStatus(false));
 
 async function pingBackend() {
+  const wasOffline = isOnline === false;
   try {
     const res = await fetch(KOBO_API_URL, { method: "HEAD", cache: "no-store" });
     setConnectionStatus(res.ok);
+    if (res.ok && wasOffline) await refreshAfterReconnect();
   } catch (err) {
     setConnectionStatus(false);
   }

@@ -70,9 +70,13 @@ const AQUAGUARD_CONFIG = {
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) closeSignoutConfirm();
   });
-  confirmBtn.addEventListener('click', () => {
+  function signOutRanger() {
     window.location.href = '../Login/Login.html';
-  });
+  }
+
+  confirmBtn.addEventListener('click', signOutRanger);
+
+  initIdleLogout(15, signOutRanger, { overlayClass: "confirm-overlay" });
 })();
 
 function switchView(viewName, btn) {
