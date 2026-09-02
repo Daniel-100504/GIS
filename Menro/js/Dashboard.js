@@ -118,23 +118,6 @@ function computeDashboardStats(dateStr) {
   const aquafarmBreakdown   = computeFieldBreakdown(subsUpToDate, "Nearby_Aquafarm_Activity");
   const canopyBuckets       = computeCanopyCoverBuckets(subsUpToDate);
 
-  const recent = [...subsUpToDate]
-    .filter(sub => sub["Inspection_Date"])
-    .sort((a, b) => (b["Inspection_Date"] || "").localeCompare(a["Inspection_Date"] || ""))
-    .slice(0, 5)
-    .map(sub => {
-      const zoneId = BARANGAY_TO_ZONE[sub["Barangay"]];
-      const snap   = zoneSnapshot.find(z => z.id === zoneId);
-      return {
-        zoneName: snap ? snap.name : (sub["Barangay"] || "Unknown zone").replace(/_/g, " "),
-        zoneStatus: snap ? snap.status : "pending",
-        ranger: sub["Ranger_Name"] || "—",
-        date: sub["Inspection_Date"] || "—",
-        threat: sub["Observed_Threats"] ? sub["Observed_Threats"].replace(/_/g, " ") : "none observed",
-        raw: sub,
-      };
-    });
-
   return {
     total, healthy, moderate, degraded, pending,
     avgNdvi, avgCanopy,
@@ -147,7 +130,6 @@ function computeDashboardStats(dateStr) {
     aquafarmBreakdown,
     canopyBuckets,
     ndviTrend,
-    recent,
     zoneSnapshot,
   };
 }
@@ -157,6 +139,78 @@ function formatDate(iso) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+let dashboardSelectedDate  = null;
+let dashboardCalendarYear  = null;
+let dashboardCalendarMonth = null;
+
+function ensureDashboardSelectedDate() {
+  const dates = availableSurveyDates();
+
+  if (dates.length === 0) {
+    dashboardSelectedDate = null;
+    return;
+  }
+
+  if (!dashboardSelectedDate) {
+    dashboardSelectedDate = dates[dates.length - 1];
+  }
+
+  if (dashboardCalendarYear === null) {
+    const d = new Date(dashboardSelectedDate + "T00:00:00");
+    dashboardCalendarYear  = d.getFullYear();
+    dashboardCalendarMonth = d.getMonth();
+  }
+}
+
+function availableSurveyDates() {
+  return [...new Set(ALL_SUBMISSIONS.map(s => s["Inspection_Date"]).filter(Boolean))].sort();
+}
+
+function submissionsOnDate(dateStr) {
+  return ALL_SUBMISSIONS.filter(sub => sub["Inspection_Date"] === dateStr);
+}
+
+function submissionsInRange(startIso, endIso) {
+  return ALL_SUBMISSIONS.filter(sub => {
+    const d = sub["Inspection_Date"];
+    return d && d >= startIso && d <= endIso;
+  });
+}
+
+function isoDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function mondayOf(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  const offset = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - offset);
+  return isoDate(d);
+}
+
+function weekRange(dateStr) {
+  const start = mondayOf(dateStr);
+  const endD = new Date(start + "T00:00:00");
+  endD.setDate(endD.getDate() + 6);
+  return { start, end: isoDate(endD) };
+}
+
+function buildMonthGrid(year, month) {
+  const firstOfMonth = new Date(year, month, 1);
+  const leadDays = (firstOfMonth.getDay() + 6) % 7;
+  const start = new Date(year, month, 1 - leadDays);
+  const cells = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    cells.push(d);
+  }
+  return cells;
 }
 
 function renderHealthDonut(healthy, moderate, degraded, pending = 0) {
@@ -355,115 +409,6 @@ function renderNDVITrendChart(ndviTrend) {
   `;
 }
 
-
-let dashboardSelectedDate  = null;
-let dashboardCalendarYear  = null;
-let dashboardCalendarMonth = null;
-
-function ensureDashboardSelectedDate() {
-  const dates = availableSurveyDates();
-
-  if (dates.length === 0) {
-    dashboardSelectedDate = null;
-    return;
-  }
-
-  if (!dashboardSelectedDate) {
-    dashboardSelectedDate = dates[dates.length - 1];
-  }
-
-  if (dashboardCalendarYear === null) {
-    const d = new Date(dashboardSelectedDate + "T00:00:00");
-    dashboardCalendarYear  = d.getFullYear();
-    dashboardCalendarMonth = d.getMonth();
-  }
-}
-
-function availableSurveyDates() {
-  return [...new Set(ALL_SUBMISSIONS.map(s => s["Inspection_Date"]).filter(Boolean))].sort();
-}
-
-function submissionsOnDate(dateStr) {
-  return ALL_SUBMISSIONS.filter(sub => sub["Inspection_Date"] === dateStr);
-}
-
-function submissionsInRange(startIso, endIso) {
-  return ALL_SUBMISSIONS.filter(sub => {
-    const d = sub["Inspection_Date"];
-    return d && d >= startIso && d <= endIso;
-  });
-}
-
-function isoDate(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function mondayOf(dateStr) {
-  const d = new Date(dateStr + "T00:00:00");
-  const offset = (d.getDay() + 6) % 7; 
-  d.setDate(d.getDate() - offset);
-  return isoDate(d);
-}
-
-function weekRange(dateStr) {
-  const start = mondayOf(dateStr);
-  const endD = new Date(start + "T00:00:00");
-  endD.setDate(endD.getDate() + 6);
-  return { start, end: isoDate(endD) };
-}
-
-function buildMonthGrid(year, month) {
-  const firstOfMonth = new Date(year, month, 1);
-  const leadDays = (firstOfMonth.getDay() + 6) % 7;
-  const start = new Date(year, month, 1 - leadDays);
-  const cells = [];
-  for (let i = 0; i < 42; i++) {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    cells.push(d);
-  }
-  return cells;
-}
-
-function renderSurveyLogCard(sub) {
-  const zoneId = BARANGAY_TO_ZONE[sub["Barangay"]];
-  const zone = ZONES.find(z => z.id === zoneId);
-  const hasThreat = sub["Observed_Threats"] && sub["Observed_Threats"] !== "none_observed";
-
-  return `
-    <div class="survey-log-card">
-      <div class="survey-log-card-head">
-        <span class="survey-log-zone">${escapeHtml(zone ? zone.name : (sub["Barangay"] || "Unknown zone").replace(/_/g, " "))}</span>
-        <span class="threat-tag ${hasThreat ? "flagged" : "none"}">
-          ${hasThreat ? escapeHtml(capitalise(sub["Observed_Threats"].replace(/_/g, " "))) : "None observed"}
-        </span>
-      </div>
-      <div class="survey-log-grid">
-        <div class="survey-log-field">
-          <span class="survey-log-label">Ranger</span>
-          <span class="survey-log-value">${escapeHtml(sub["Ranger_Name"] || "—")}</span>
-        </div>
-        <div class="survey-log-field">
-          <span class="survey-log-label">Canopy Cover</span>
-          <span class="survey-log-value">${sub["Estimated_Canopy_Cover_"] ? sub["Estimated_Canopy_Cover_"] + "%" : "—"}</span>
-        </div>
-        <div class="survey-log-field">
-          <span class="survey-log-label">Water Color</span>
-          <span class="survey-log-value">${escapeHtml(sub["Water_Color"] ? sub["Water_Color"].replace(/_/g, " ") : "—")}</span>
-        </div>
-        <div class="survey-log-field">
-          <span class="survey-log-label">Aquafarm Nearby</span>
-          <span class="survey-log-value">${escapeHtml(sub["Nearby_Aquafarm_Activity"] ? sub["Nearby_Aquafarm_Activity"].replace(/_/g, " ") : "—")}</span>
-        </div>
-      </div>
-      ${sub["Additional_Notes"] ? `<p class="survey-log-notes">${escapeHtml(sub["Additional_Notes"])}</p>` : ""}
-    </div>
-  `;
-}
-
 function renderCalendarWidget(weekStart, weekEnd) {
   const monthLabel = new Date(dashboardCalendarYear, dashboardCalendarMonth, 1)
     .toLocaleDateString("en-US", { month: "long", year: "numeric" });
@@ -513,84 +458,6 @@ function renderCalendarWidget(weekStart, weekEnd) {
   `;
 }
 
-function detailField(label, value) {
-  return `
-    <div class="survey-detail-field">
-      <span class="survey-detail-label">${escapeHtml(label)}</span>
-      <span class="survey-detail-value">${escapeHtml(value || "—")}</span>
-    </div>
-  `;
-}
-
-function renderSurveyDetailBody(sub, zoneName, zoneStatus) {
-  const hasThreat = sub["Observed_Threats"] && sub["Observed_Threats"] !== "none_observed";
-  const gpsParts  = (sub["GPS"] || "").split(" ").map(Number);
-  const hasGps    = gpsParts.length >= 2 && !isNaN(gpsParts[0]) && !isNaN(gpsParts[1]);
-
-  return `
-    <div class="survey-detail-topline">
-      <span class="status-chip status-${zoneStatus || "pending"}">${capitalise(zoneStatus || "pending")}</span>
-      <span class="threat-tag ${hasThreat ? "flagged" : "none"}">
-        ${hasThreat ? escapeHtml(capitalise(sub["Observed_Threats"].replace(/_/g, " "))) : "None observed"}
-      </span>
-    </div>
-
-    <div class="survey-detail-grid">
-      ${detailField("Ranger name", sub["Ranger_Name"])}
-      ${detailField("Inspection date", formatDate(sub["Inspection_Date"]))}
-      ${detailField("Transect / quadrat", sub["Transect_Number"])}
-      ${detailField("Estimated canopy cover", sub["Estimated_Canopy_Cover_"] ? sub["Estimated_Canopy_Cover_"] + "%" : "—")}
-      ${detailField("Species observed", sub["Species_Name"])}
-      ${detailField("Tree count", sub["Tree_Count"])}
-      ${detailField("Water color", sub["Water_Color"] ? sub["Water_Color"].replace(/_/g, " ") : "—")}
-      ${detailField("Nearby aquafarm activity", sub["Nearby_Aquafarm_Activity"] ? sub["Nearby_Aquafarm_Activity"].replace(/_/g, " ") : "—")}
-      ${hasGps ? detailField("GPS coordinates", `${gpsParts[0].toFixed(5)}, ${gpsParts[1].toFixed(5)}`) : ""}
-    </div>
-
-    ${sub["Additional_Notes"] ? `
-      <div class="survey-detail-notes">
-        <span class="survey-detail-label">Additional notes</span>
-        <p>${escapeHtml(sub["Additional_Notes"])}</p>
-      </div>
-    ` : ""}
-
-    <div class="survey-detail-source">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1Z"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/></svg>
-      Synced from KoboToolbox field survey submission
-    </div>
-  `;
-}
-
-function openSurveyDetail(sub, zoneName, zoneStatus) {
-  const overlay = document.getElementById("surveyDetailOverlay");
-  const titleEl = document.getElementById("surveyDetailTitle");
-  const subEl   = document.getElementById("surveyDetailSub");
-  const bodyEl  = document.getElementById("surveyDetailBody");
-  if (!overlay || !titleEl || !subEl || !bodyEl) return;
-
-  titleEl.textContent = zoneName;
-  subEl.textContent   = `Field survey · ${formatDate(sub["Inspection_Date"])}`;
-  bodyEl.innerHTML     = renderSurveyDetailBody(sub, zoneName, zoneStatus);
-
-  overlay.classList.add("open");
-}
-
-function closeSurveyDetail() {
-  const overlay = document.getElementById("surveyDetailOverlay");
-  if (overlay) overlay.classList.remove("open");
-}
-
-(function bindSurveyDetailModal() {
-  const overlay  = document.getElementById("surveyDetailOverlay");
-  const closeBtn = document.getElementById("btnCloseSurveyDetail");
-  if (closeBtn) closeBtn.addEventListener("click", closeSurveyDetail);
-  if (overlay) {
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) closeSurveyDetail();
-    });
-  }
-})();
-
 function renderDateSelector(weekStart, weekEnd) {
   if (dashboardCalendarYear === null || dashboardCalendarMonth === null) {
     return `<div class="dashboard-empty">No field survey submissions recorded yet.</div>`;
@@ -612,6 +479,42 @@ function renderDatePicker(weekRangeObj) {
   const el = document.getElementById("dashboardDatePicker");
   if (!el) return;
   el.innerHTML = renderDateSelector(weekRangeObj && weekRangeObj.start, weekRangeObj && weekRangeObj.end);
+}
+
+function renderSurveyLogCard(sub) {
+  const zoneId = BARANGAY_TO_ZONE[sub["Barangay"]];
+  const zone = ZONES.find(z => z.id === zoneId);
+  const hasThreat = sub["Observed_Threats"] && sub["Observed_Threats"] !== "none_observed";
+
+  return `
+    <div class="survey-log-card">
+      <div class="survey-log-card-head">
+        <span class="survey-log-zone">${escapeHtml(zone ? zone.name : (sub["Barangay"] || "Unknown zone").replace(/_/g, " "))}</span>
+        <span class="threat-tag ${hasThreat ? "flagged" : "none"}">
+          ${hasThreat ? escapeHtml(capitalise(sub["Observed_Threats"].replace(/_/g, " "))) : "None observed"}
+        </span>
+      </div>
+      <div class="survey-log-grid">
+        <div class="survey-log-field">
+          <span class="survey-log-label">Ranger</span>
+          <span class="survey-log-value">${escapeHtml(sub["Ranger_Name"] || "—")}</span>
+        </div>
+        <div class="survey-log-field">
+          <span class="survey-log-label">Canopy Cover</span>
+          <span class="survey-log-value">${sub["Estimated_Canopy_Cover_"] ? sub["Estimated_Canopy_Cover_"] + "%" : "—"}</span>
+        </div>
+        <div class="survey-log-field">
+          <span class="survey-log-label">Water Color</span>
+          <span class="survey-log-value">${escapeHtml(sub["Water_Color"] ? sub["Water_Color"].replace(/_/g, " ") : "—")}</span>
+        </div>
+        <div class="survey-log-field">
+          <span class="survey-log-label">Aquafarm Nearby</span>
+          <span class="survey-log-value">${escapeHtml(sub["Nearby_Aquafarm_Activity"] ? sub["Nearby_Aquafarm_Activity"].replace(/_/g, " ") : "—")}</span>
+        </div>
+      </div>
+      ${sub["Additional_Notes"] ? `<p class="survey-log-notes">${escapeHtml(sub["Additional_Notes"])}</p>` : ""}
+    </div>
+  `;
 }
 
 function setText(id, text) {
@@ -693,37 +596,6 @@ function renderWeekSubmissions(weekRangeObj) {
   }
 }
 
-let dashboardRecentList = [];
-
-function renderActivityTable(recent) {
-  dashboardRecentList = recent;
-
-  const table = document.getElementById("recentActivityTable");
-  const body  = document.getElementById("recentActivityBody");
-  const empty = document.getElementById("recentActivityEmpty");
-  if (!table || !body || !empty) return;
-
-  if (recent.length === 0) {
-    table.hidden = true;
-    empty.hidden = false;
-    body.innerHTML = "";
-    return;
-  }
-
-  table.hidden = false;
-  empty.hidden = true;
-  body.innerHTML = recent.map((r, i) => `
-    <tr class="activity-row" data-idx="${i}" tabindex="0">
-      <td class="activity-zone-cell">${escapeHtml(r.zoneName)}</td>
-      <td>${escapeHtml(r.ranger)}</td>
-      <td>${r.threat === "none observed"
-            ? `<span class="threat-tag none">None observed</span>`
-            : `<span class="threat-tag flagged">${escapeHtml(capitalise(r.threat))}</span>`}</td>
-      <td class="activity-date-cell">${escapeHtml(formatDate(r.date))}</td>
-    </tr>
-  `).join("");
-}
-
 function bindDashboardControls() {
   const datePicker = document.getElementById("dashboardDatePicker");
   if (datePicker && !datePicker.dataset.bound) {
@@ -737,29 +609,6 @@ function bindDashboardControls() {
       }
       if (e.target.closest("#calPrevMonth")) { shiftCalendarMonth(-1); return; }
       if (e.target.closest("#calNextMonth")) { shiftCalendarMonth(1); return; }
-    });
-  }
-
-  const activityBody = document.getElementById("recentActivityBody");
-  if (activityBody && !activityBody.dataset.bound) {
-    activityBody.dataset.bound = "true";
-
-    const openFromRow = (row) => {
-      const item = dashboardRecentList[parseInt(row.dataset.idx, 10)];
-      if (item && item.raw) openSurveyDetail(item.raw, item.zoneName, item.zoneStatus);
-    };
-
-    activityBody.addEventListener("click", (e) => {
-      const row = e.target.closest("tr[data-idx]");
-      if (row) openFromRow(row);
-    });
-
-    activityBody.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter" && e.key !== " ") return;
-      const row = e.target.closest("tr[data-idx]");
-      if (!row) return;
-      e.preventDefault();
-      openFromRow(row);
     });
   }
 }
@@ -784,7 +633,6 @@ function renderDashboard() {
   document.getElementById("canopyBucketsChart").innerHTML = renderBreakdownBarChart(s.canopyBuckets, "No canopy cover data recorded yet.");
   document.getElementById("waterColorChart").innerHTML    = renderBreakdownBarChart(s.waterColorBreakdown, "No water color data recorded yet.");
   document.getElementById("aquafarmChart").innerHTML      = renderBreakdownBarChart(s.aquafarmBreakdown, "No aquafarm activity data recorded yet.");
-  renderActivityTable(s.recent);
 
   bindDashboardControls();
 }

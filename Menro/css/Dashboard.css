@@ -218,6 +218,10 @@
   box-shadow: 0 4px 12px rgba(10, 49, 40, 0.08);
 }
 
+/* The following survey-detail-* styles are unused leftovers from a deleted
+   feature (a modal that opened when clicking a recent survey row). Kept
+   as-is per user request rather than deleted during this file split. */
+
 .survey-detail-topline {
   display: flex;
   align-items: center;
@@ -511,6 +515,36 @@
 
 .survey-log-panel {
   padding: 18px 20px 20px;
+}
+
+@media (max-width: 760px) {
+  .dashboard-charts-row { grid-template-columns: 1fr; }
+  .dashboard-charts-row-reverse { grid-template-columns: 1fr; }
+  .dashboard-charts-row-with-date { grid-template-columns: 1fr; }
+  .dashboard-charts-row-with-date .chart-card:last-child { grid-column: auto; }
+}
+
+@media (max-width: 700px) {
+  .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.dashboard-view::-webkit-scrollbar,
+.dashboard-modal-body::-webkit-scrollbar,
+.hbar-chart::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dashboard-view::-webkit-scrollbar-thumb,
+.dashboard-modal-body::-webkit-scrollbar-thumb,
+.hbar-chart::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 10px;
+}
+
+.dashboard-view::-webkit-scrollbar-track,
+.dashboard-modal-body::-webkit-scrollbar-track,
+.hbar-chart::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .survey-calendar {
@@ -954,58 +988,6 @@
   filter: drop-shadow(0 3px 8px rgba(10, 49, 40, 0.10));
 }
 
-.activity-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.81rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-}
-
-.activity-table thead th {
-  text-align: left;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--ink-400);
-  padding: 11px 14px;
-  background: var(--surface-alt);
-  border-bottom: 1.5px solid var(--border);
-}
-
-.activity-table tbody td {
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--border);
-  color: var(--ink-700);
-}
-
-.activity-table tbody tr:last-child td { border-bottom: none; }
-
-.activity-table tbody tr:hover { background: var(--brand-50); }
-
-.activity-row { cursor: pointer; }
-
-.activity-row:focus-visible {
-  outline: 2px solid var(--brand-500);
-  outline-offset: -2px;
-}
-
-.activity-zone-cell {
-  font-weight: 700;
-  color: var(--brand-800);
-}
-
-.activity-date-cell {
-  color: var(--ink-400);
-  white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: 0.76rem;
-}
-
 .dashboard-empty {
   font-size: 0.82rem;
   color: var(--ink-400);
@@ -1013,32 +995,5 @@
 }
 
 @media (max-width: 760px) {
-  .dashboard-charts-row { grid-template-columns: 1fr; }
-  .dashboard-charts-row-reverse { grid-template-columns: 1fr; }
-  .dashboard-charts-row-with-date { grid-template-columns: 1fr; }
-  .dashboard-charts-row-with-date .chart-card:last-child { grid-column: auto; }
   .hbar-row { grid-template-columns: 92px 1fr 48px; }
-}
-
-@media (max-width: 700px) {
-  .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
-}
-
-.dashboard-view::-webkit-scrollbar,
-.dashboard-modal-body::-webkit-scrollbar,
-.hbar-chart::-webkit-scrollbar {
-  width: 8px;
-}
-
-.dashboard-view::-webkit-scrollbar-thumb,
-.dashboard-modal-body::-webkit-scrollbar-thumb,
-.hbar-chart::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 10px;
-}
-
-.dashboard-view::-webkit-scrollbar-track,
-.dashboard-modal-body::-webkit-scrollbar-track,
-.hbar-chart::-webkit-scrollbar-track {
-  background: transparent;
 }

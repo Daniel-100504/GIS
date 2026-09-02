@@ -106,7 +106,7 @@
 
       if (success) {
         if (selectedRole === 'menro') {
-          window.location.href = '../Menro/satellite.html';
+          window.location.href = '../Menro/html/satellite.html';
         } else if (selectedRole === 'ranger') {
           window.location.href = '../ranger/ranger.html';
         }
