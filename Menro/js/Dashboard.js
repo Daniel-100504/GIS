@@ -152,28 +152,6 @@ function computeDashboardStats(dateStr) {
   };
 }
 
-const STAT_ICONS = {
-  zones: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>`,
-  healthy: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c0-4 3-5 3-9a3 3 0 0 0-6 0c0 4 3 5 3 9Z"/><path d="M12 13V3"/><path d="M12 7 8 3"/><path d="M12 9 17 4"/></svg>`,
-  moderate: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
-  degraded: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="14.83" y1="9.17" x2="9.17" y2="14.83"/><line x1="9.17" y1="9.17" x2="14.83" y2="14.83"/></svg>`,
-  ndvi: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`,
-  canopy: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-6.5"/><path d="M7 12.5a5 5 0 1 1 10 0c0 3.2-5 6.5-5 6.5s-5-3.3-5-6.5Z"/><path d="M9.5 7a2.5 2.5 0 1 1 5 0c0 1.7-2.5 3.3-2.5 3.3S9.5 8.7 9.5 7Z"/></svg>`,
-  surveys: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1Z"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="13" y2="16"/></svg>`,
-  calendar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="16" y1="2.5" x2="16" y2="6.5"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
-};
-
-function statCard({ label, value, hint, icon, accent, valueClass }) {
-  return `
-    <div class="dashboard-stat-card${accent ? ` accent-${accent}` : ""}">
-      <div class="dashboard-stat-icon${accent ? ` icon-${accent}` : ""}">${STAT_ICONS[icon] || ""}</div>
-      <span class="dashboard-stat-label">${label}</span>
-      <span class="dashboard-stat-value${valueClass ? ` ${valueClass}` : ""}">${value}</span>
-      <span class="dashboard-stat-hint">${hint}</span>
-    </div>
-  `;
-}
-
 function formatDate(iso) {
   if (!iso || iso === "—") return "—";
   const d = new Date(iso);
@@ -613,29 +591,6 @@ function closeSurveyDetail() {
   }
 })();
 
-function bindActivityTableControls(recentList) {
-  const table = document.querySelector(".activity-table tbody");
-  if (!table) return;
-
-  const openFromRow = (row) => {
-    const item = recentList[parseInt(row.dataset.idx, 10)];
-    if (item && item.raw) openSurveyDetail(item.raw, item.zoneName, item.zoneStatus);
-  };
-
-  table.addEventListener("click", (e) => {
-    const row = e.target.closest("tr[data-idx]");
-    if (row) openFromRow(row);
-  });
-
-  table.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" && e.key !== " ") return;
-    const row = e.target.closest("tr[data-idx]");
-    if (!row) return;
-    e.preventDefault();
-    openFromRow(row);
-  });
-}
-
 function renderDateSelector(weekStart, weekEnd) {
   if (dashboardCalendarYear === null || dashboardCalendarMonth === null) {
     return `<div class="dashboard-empty">No field survey submissions recorded yet.</div>`;
@@ -643,187 +598,220 @@ function renderDateSelector(weekStart, weekEnd) {
   return `<div class="survey-calendar">${renderCalendarWidget(weekStart, weekEnd)}</div>`;
 }
 
-function renderSurveyWeekCards(weekStart, weekEnd) {
-  const weekSubs = submissionsInRange(weekStart, weekEnd)
-    .sort((a, b) => (a["Inspection_Date"] || "").localeCompare(b["Inspection_Date"] || ""));
-
-  const summaryCards = weekSubs.length > 0
-    ? `<div class="survey-log-cards">${weekSubs.map(renderSurveyLogCard).join("")}</div>`
-    : `<div class="dashboard-empty">No field surveys gathered this week.</div>`;
-
-  const rangeLabel = weekStart.slice(0, 7) === weekEnd.slice(0, 7)
-    ? `${formatDate(weekStart)} – ${new Date(weekEnd + "T00:00:00").toLocaleDateString("en-US", { day: "numeric" })}, ${weekEnd.slice(0, 4)}`
-    : `${formatDate(weekStart)} – ${formatDate(weekEnd)}`;
-
-  return `
-    <div class="week-summary-head">
-      <span class="week-summary-range">${rangeLabel}</span>
-      <span class="week-summary-count">${weekSubs.length} survey${weekSubs.length !== 1 ? "s" : ""} gathered this week</span>
-    </div>
-    ${summaryCards}
-  `;
-}
-
 function shiftCalendarMonth(dir) {
   dashboardCalendarMonth += dir;
   if (dashboardCalendarMonth < 0)  { dashboardCalendarMonth = 11; dashboardCalendarYear--; }
   if (dashboardCalendarMonth > 11) { dashboardCalendarMonth = 0;  dashboardCalendarYear++; }
-  renderDashboard();
+
+  const hasSurveyDates = availableSurveyDates().length > 0;
+  const weekRangeObj = hasSurveyDates ? weekRange(dashboardSelectedDate) : null;
+  renderDatePicker(weekRangeObj);
 }
 
-function bindSurveyLogControls() {
-  const grid = document.querySelector(".survey-calendar .cal-days");
-  if (grid) {
-    grid.addEventListener("click", (e) => {
-      const btn = e.target.closest(".cal-day");
-      if (!btn) return;
-      dashboardSelectedDate = btn.dataset.date;
-      renderDashboard();
+function renderDatePicker(weekRangeObj) {
+  const el = document.getElementById("dashboardDatePicker");
+  if (!el) return;
+  el.innerHTML = renderDateSelector(weekRangeObj && weekRangeObj.start, weekRangeObj && weekRangeObj.end);
+}
+
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+function renderDashboardHeader(s) {
+  setText("dashboardSummaryDate", `Summary as of ${dashboardSelectedDate ? formatDate(dashboardSelectedDate) : "—"}`);
+
+  const dot    = document.getElementById("dashboardLatestDot");
+  const latest = document.getElementById("dashboardLatestInspection");
+  if (s.latestDate) {
+    if (dot)    dot.hidden = false;
+    if (latest) { latest.hidden = false; latest.textContent = `Latest field inspection ${formatDate(s.latestDate)}`; }
+  } else {
+    if (dot)    dot.hidden = true;
+    if (latest) { latest.hidden = true; latest.textContent = ""; }
+  }
+}
+
+function renderStatCards(s) {
+  setText("statTotalZonesValue", s.total);
+  setText("statTotalZonesHint", s.pending > 0 ? `${s.pending} zone${s.pending !== 1 ? "s" : ""} awaiting data` : `Across ${s.total} barangays`);
+
+  setText("statHealthyValue", s.healthy);
+  setText("statHealthyHint", `${s.total ? Math.round((s.healthy / s.total) * 100) : 0}% of total`);
+
+  setText("statModerateValue", s.moderate);
+  setText("statModerateHint", `${s.total ? Math.round((s.moderate / s.total) * 100) : 0}% of total`);
+
+  setText("statDegradedValue", s.degraded);
+  setText("statDegradedHint", `${s.total ? Math.round((s.degraded / s.total) * 100) : 0}% of total`);
+
+  setText("statAvgNdviValue", s.avgNdvi.toFixed(2));
+
+  setText("statAvgCanopyValue", s.avgCanopy !== null ? s.avgCanopy.toFixed(0) + "%" : "—");
+  setText("statAvgCanopyHint", s.avgCanopy !== null ? "From field surveys" : "No field data yet");
+
+  setText("statTotalSurveysValue", s.totalSurveys);
+
+  setText("statLatestInspectionValue", s.latestDate ? formatDate(s.latestDate) : "—");
+}
+
+function renderWeekSubmissions(weekRangeObj) {
+  const headEl     = document.getElementById("weekSummaryHead");
+  const cardsEl    = document.getElementById("weekSummaryCards");
+  const emptyWeekEl = document.getElementById("weekSummaryEmpty");
+  const noDatesEl  = document.getElementById("noSurveyDatesEmpty");
+  if (!headEl || !cardsEl || !emptyWeekEl || !noDatesEl) return;
+
+  if (!weekRangeObj) {
+    headEl.hidden = true;
+    cardsEl.innerHTML = "";
+    emptyWeekEl.hidden = true;
+    noDatesEl.hidden = false;
+    return;
+  }
+
+  noDatesEl.hidden = true;
+  headEl.hidden = false;
+
+  const weekSubs = submissionsInRange(weekRangeObj.start, weekRangeObj.end)
+    .sort((a, b) => (a["Inspection_Date"] || "").localeCompare(b["Inspection_Date"] || ""));
+
+  const rangeLabel = weekRangeObj.start.slice(0, 7) === weekRangeObj.end.slice(0, 7)
+    ? `${formatDate(weekRangeObj.start)} – ${new Date(weekRangeObj.end + "T00:00:00").toLocaleDateString("en-US", { day: "numeric" })}, ${weekRangeObj.end.slice(0, 4)}`
+    : `${formatDate(weekRangeObj.start)} – ${formatDate(weekRangeObj.end)}`;
+
+  setText("weekSummaryRange", rangeLabel);
+  setText("weekSummaryCount", `${weekSubs.length} survey${weekSubs.length !== 1 ? "s" : ""} gathered this week`);
+
+  if (weekSubs.length > 0) {
+    cardsEl.innerHTML = weekSubs.map(renderSurveyLogCard).join("");
+    emptyWeekEl.hidden = true;
+  } else {
+    cardsEl.innerHTML = "";
+    emptyWeekEl.hidden = false;
+  }
+}
+
+let dashboardRecentList = [];
+
+function renderActivityTable(recent) {
+  dashboardRecentList = recent;
+
+  const table = document.getElementById("recentActivityTable");
+  const body  = document.getElementById("recentActivityBody");
+  const empty = document.getElementById("recentActivityEmpty");
+  if (!table || !body || !empty) return;
+
+  if (recent.length === 0) {
+    table.hidden = true;
+    empty.hidden = false;
+    body.innerHTML = "";
+    return;
+  }
+
+  table.hidden = false;
+  empty.hidden = true;
+  body.innerHTML = recent.map((r, i) => `
+    <tr class="activity-row" data-idx="${i}" tabindex="0">
+      <td class="activity-zone-cell">${escapeHtml(r.zoneName)}</td>
+      <td>${escapeHtml(r.ranger)}</td>
+      <td>${r.threat === "none observed"
+            ? `<span class="threat-tag none">None observed</span>`
+            : `<span class="threat-tag flagged">${escapeHtml(capitalise(r.threat))}</span>`}</td>
+      <td class="activity-date-cell">${escapeHtml(formatDate(r.date))}</td>
+    </tr>
+  `).join("");
+}
+
+function bindDashboardControls() {
+  const datePicker = document.getElementById("dashboardDatePicker");
+  if (datePicker && !datePicker.dataset.bound) {
+    datePicker.dataset.bound = "true";
+    datePicker.addEventListener("click", (e) => {
+      const dayBtn = e.target.closest(".cal-day");
+      if (dayBtn) {
+        dashboardSelectedDate = dayBtn.dataset.date;
+        renderDashboard();
+        return;
+      }
+      if (e.target.closest("#calPrevMonth")) { shiftCalendarMonth(-1); return; }
+      if (e.target.closest("#calNextMonth")) { shiftCalendarMonth(1); return; }
     });
   }
 
-  const prevBtn = document.getElementById("calPrevMonth");
-  const nextBtn = document.getElementById("calNextMonth");
-  if (prevBtn) prevBtn.addEventListener("click", () => shiftCalendarMonth(-1));
-  if (nextBtn) nextBtn.addEventListener("click", () => shiftCalendarMonth(1));
+  const activityBody = document.getElementById("recentActivityBody");
+  if (activityBody && !activityBody.dataset.bound) {
+    activityBody.dataset.bound = "true";
+
+    const openFromRow = (row) => {
+      const item = dashboardRecentList[parseInt(row.dataset.idx, 10)];
+      if (item && item.raw) openSurveyDetail(item.raw, item.zoneName, item.zoneStatus);
+    };
+
+    activityBody.addEventListener("click", (e) => {
+      const row = e.target.closest("tr[data-idx]");
+      if (row) openFromRow(row);
+    });
+
+    activityBody.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const row = e.target.closest("tr[data-idx]");
+      if (!row) return;
+      e.preventDefault();
+      openFromRow(row);
+    });
+  }
 }
 
 function renderDashboard() {
-  const body = document.getElementById("dashboardBody");
-  if (!body) return;
+  if (!document.getElementById("dashboardBody")) return;
 
   ensureDashboardSelectedDate();
 
   const s = computeDashboardStats(dashboardSelectedDate);
   const hasSurveyDates = availableSurveyDates().length > 0;
   const weekRangeObj = hasSurveyDates ? weekRange(dashboardSelectedDate) : null;
-  const dateSelectorHtml = renderDateSelector(weekRangeObj && weekRangeObj.start, weekRangeObj && weekRangeObj.end);
-  const weekCardsHtml = weekRangeObj
-    ? renderSurveyWeekCards(weekRangeObj.start, weekRangeObj.end)
-    : `<div class="dashboard-empty">No field survey submissions recorded yet.</div>`;
 
-  const activityHtml = s.recent.length > 0
-    ? `<table class="activity-table">
-        <thead>
-          <tr>
-            <th>Zone</th>
-            <th>Ranger</th>
-            <th>Observed Threat</th>
-            <th>Date</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${s.recent.map((r, i) => `
-            <tr class="activity-row" data-idx="${i}" tabindex="0">
-              <td class="activity-zone-cell">${escapeHtml(r.zoneName)}</td>
-              <td>${escapeHtml(r.ranger)}</td>
-              <td>${r.threat === "none observed"
-                    ? `<span class="threat-tag none">None observed</span>`
-                    : `<span class="threat-tag flagged">${escapeHtml(capitalise(r.threat))}</span>`}</td>
-              <td class="activity-date-cell">${escapeHtml(formatDate(r.date))}</td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>`
-    : `<div class="dashboard-empty">No field survey submissions recorded yet.</div>`;
+  renderDashboardHeader(s);
+  renderStatCards(s);
+  renderDatePicker(weekRangeObj);
+  document.getElementById("healthDonutChart").innerHTML = renderHealthDonut(s.healthy, s.moderate, s.degraded, s.pending);
+  document.getElementById("ndviBarChart").innerHTML     = renderNDVIBarChart(s.zoneSnapshot);
+  renderWeekSubmissions(weekRangeObj);
+  document.getElementById("ndviTrendChart").innerHTML  = renderNDVITrendChart(s.ndviTrend);
+  document.getElementById("threatBarChart").innerHTML  = renderThreatBarChart(s.threatBreakdown);
+  document.getElementById("canopyBucketsChart").innerHTML = renderBreakdownBarChart(s.canopyBuckets, "No canopy cover data recorded yet.");
+  document.getElementById("waterColorChart").innerHTML    = renderBreakdownBarChart(s.waterColorBreakdown, "No water color data recorded yet.");
+  document.getElementById("aquafarmChart").innerHTML      = renderBreakdownBarChart(s.aquafarmBreakdown, "No aquafarm activity data recorded yet.");
+  renderActivityTable(s.recent);
 
-  body.innerHTML = `
-    <div class="dashboard-header">
-      <div class="dashboard-header-badge">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c0-4 3-5 3-9a3 3 0 0 0-6 0c0 4 3 5 3 9Z"/><path d="M12 13V3"/><path d="M12 7 8 3"/><path d="M12 9 17 4"/></svg>
-      </div>
-      <div>
-        <h2 class="dashboard-page-title">Mangrove Monitoring Dashboard</h2>
-        <div class="dashboard-meta-row">
-          <span>MENRO Calatagan · Batangas</span>
-          <span class="dashboard-meta-dot">•</span>
-          <span>Summary as of ${dashboardSelectedDate ? formatDate(dashboardSelectedDate) : "—"}</span>
-          ${s.latestDate ? `<span class="dashboard-meta-dot">•</span><span>Latest field inspection ${formatDate(s.latestDate)}</span>` : ""}
-        </div>
-      </div>
-    </div>
-
-    <p class="dashboard-section-title">Zone Health Overview</p>
-    <div class="dashboard-grid">
-      ${statCard({ icon: "zones", accent: "", label: "Total Mangrove Zones", value: s.total, hint: s.pending > 0 ? `${s.pending} zone${s.pending !== 1 ? "s" : ""} awaiting data` : `Across ${s.total} barangays` })}
-      ${statCard({ icon: "healthy", accent: "healthy", label: "Healthy Zones", value: s.healthy, hint: `${s.total ? Math.round((s.healthy / s.total) * 100) : 0}% of total` })}
-      ${statCard({ icon: "moderate", accent: "moderate", label: "Moderate Zones", value: s.moderate, hint: `${s.total ? Math.round((s.moderate / s.total) * 100) : 0}% of total`, valueClass: "amber" })}
-      ${statCard({ icon: "degraded", accent: "degraded", label: "Degraded Zones", value: s.degraded, hint: `${s.total ? Math.round((s.degraded / s.total) * 100) : 0}% of total`, valueClass: "red" })}
-    </div>
-
-    <div class="dashboard-charts-row dashboard-charts-row-with-date">
-      <div class="chart-card dashboard-date-picker">
-        <p class="chart-card-title">Summary Date</p>
-        ${dateSelectorHtml}
-      </div>
-      <div class="chart-card chart-card-narrow">
-        <p class="chart-card-title">Health Distribution</p>
-        ${renderHealthDonut(s.healthy, s.moderate, s.degraded, s.pending)}
-      </div>
-      <div class="chart-card">
-        <p class="chart-card-title">NDVI by Zone</p>
-        ${renderNDVIBarChart(s.zoneSnapshot)}
-      </div>
-    </div>
-
-    <p class="dashboard-section-title">Satellite &amp; Field Metrics</p>
-    <div class="dashboard-grid">
-      ${statCard({ icon: "ndvi", label: "Average NDVI", value: s.avgNdvi.toFixed(2), hint: "Scene-wide mean" })}
-      ${statCard({ icon: "canopy", label: "Average Canopy Cover", value: s.avgCanopy !== null ? s.avgCanopy.toFixed(0) + "%" : "—", hint: s.avgCanopy !== null ? "From field surveys" : "No field data yet" })}
-      ${statCard({ icon: "surveys", label: "Total Field Surveys", value: s.totalSurveys, hint: "KoboToolbox submissions" })}
-      ${statCard({ icon: "calendar", label: "Latest Inspection", value: s.latestDate ? formatDate(s.latestDate) : "—", hint: "Most recent ranger visit", valueClass: "date-value" })}
-    </div>
-
-    <p class="dashboard-section-title">This Week's Field Submissions</p>
-    <div class="chart-card survey-log-panel">
-      ${weekCardsHtml}
-    </div>
-
-    <div class="dashboard-charts-row dashboard-charts-row-reverse">
-      <div class="chart-card">
-        <p class="chart-card-title">Average NDVI Trend</p>
-        ${renderNDVITrendChart(s.ndviTrend)}
-      </div>
-      <div class="chart-card chart-card-narrow">
-        <p class="chart-card-title">Observed Threats</p>
-        ${renderThreatBarChart(s.threatBreakdown)}
-      </div>
-    </div>
-
-    <p class="dashboard-section-title">Field Survey Insights</p>
-    <div class="dashboard-charts-row-3">
-      <div class="chart-card">
-        <p class="chart-card-title">Canopy Cover Distribution</p>
-        ${renderBreakdownBarChart(s.canopyBuckets, "No canopy cover data recorded yet.")}
-      </div>
-      <div class="chart-card">
-        <p class="chart-card-title">Water Color</p>
-        ${renderBreakdownBarChart(s.waterColorBreakdown, "No water color data recorded yet.")}
-      </div>
-      <div class="chart-card">
-        <p class="chart-card-title">Nearby Aquafarm Activity</p>
-        ${renderBreakdownBarChart(s.aquafarmBreakdown, "No aquafarm activity data recorded yet.")}
-      </div>
-    </div>
-
-    <p class="dashboard-section-title">Recent Survey Activity</p>
-    ${activityHtml}
-  `;
-
-  bindSurveyLogControls();
-  bindActivityTableControls(s.recent);
+  bindDashboardControls();
 }
 
 const mapView       = document.getElementById("mapView");
 const dashboardView = document.getElementById("dashboardView");
 
-function switchTab(tab) {
+let dashboardMarkupLoaded = false;
+
+async function ensureDashboardMarkup() {
+  if (dashboardMarkupLoaded) return;
+  const body = document.getElementById("dashboardBody");
+  if (!body) return;
+
+  const res = await fetch("Dashboard.html");
+  body.innerHTML = await res.text();
+  dashboardMarkupLoaded = true;
+}
+
+async function switchTab(tab) {
   const toDashboard = tab === "dashboard";
 
   if (mapView)       mapView.style.display = toDashboard ? "none" : "flex";
   if (dashboardView) dashboardView.classList.toggle("active", toDashboard);
 
   if (toDashboard) {
+    await ensureDashboardMarkup();
     renderDashboard();
   } else if (typeof map !== "undefined" && map.invalidateSize) {
     setTimeout(() => map.invalidateSize(), 0);
