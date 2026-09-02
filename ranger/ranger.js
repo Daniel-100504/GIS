@@ -126,6 +126,43 @@ function switchView(viewName, btn) {
     return null;
   }
 
+  // Converts raw KoboToolbox values (e.g. "balibago_mpa__calmada",
+  // "not_a_protected_area", "poblacion_1") into clean, human-readable
+  // text (e.g. "Balibago MPA – Calmada", "Not a Protected Area", "Poblacion 1")
+  // so the dashboard never shows raw form-field slugs to the ranger.
+  const ACRONYMS = new Set(['mpa', 'menro', 'gis', 'id']);
+  const LOWERCASE_WORDS = new Set(['a', 'an', 'of', 'the', 'and', 'in', 'at']);
+  const SPECIAL_WORDS = { sta: 'Sta.', sto: 'Sto.' };
+
+  function titleCaseWord(word, isFirst) {
+    const lower = word.toLowerCase();
+    if (!lower) return '';
+    if (ACRONYMS.has(lower)) return lower.toUpperCase();
+    if (SPECIAL_WORDS[lower]) return SPECIAL_WORDS[lower];
+    if (!isFirst && LOWERCASE_WORDS.has(lower)) return lower;
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+  }
+
+  function titleCaseSegment(segment) {
+    return segment
+      .replace(/[_\-]+/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w, i) => titleCaseWord(w, i === 0))
+      .join(' ');
+  }
+
+  function prettifyLabel(raw) {
+    if (raw === null || raw === undefined) return null;
+    const str = String(raw).trim();
+    if (str === '' || str === '—') return null;
+    // A double underscore separates a parent area from a sub-site,
+    // e.g. "balibago_mpa__calmada" -> "Balibago MPA – Calmada"
+    const parts = str.split('__').map(titleCaseSegment).filter(Boolean);
+    return parts.join(' – ') || null;
+  }
+
   function parseCanopyValue(raw) {
     if (raw === null || raw === undefined) return null;
     const n = parseFloat(String(raw).replace('%', '').trim());
@@ -137,8 +174,8 @@ function switchView(viewName, btn) {
     if (wq.includes('discharge')) return { label: 'Discharge', cls: 'wq-discharge' };
     if (wq.includes('turbid'))    return { label: 'Turbid',    cls: 'wq-turbid' };
     if (wq.includes('clear'))     return { label: 'Clear',     cls: 'wq-clear' };
-    if (!wq) return { label: '—', cls: 'wq-clear' };
-    return { label: raw, cls: 'wq-clear' };
+    if (!wq) return { label: 'No data', cls: 'wq-pending' };
+    return { label: prettifyLabel(raw) || raw, cls: 'wq-clear' };
   }
 
   function deriveStatus(canopyNum, waterRaw) {
@@ -165,13 +202,17 @@ function switchView(viewName, btn) {
     const waterRaw  = findField(flat, FIELD_CANDIDATES.water);
     const dateRaw   = findField(flat, FIELD_CANDIDATES.date) || flat['_submission_time'] || null;
 
+    const areaRaw = findField(flat, FIELD_CANDIDATES.area);
+    const transectRaw = findField(flat, FIELD_CANDIDATES.transect);
+
     return {
       id: flat['_id'] || flat['_uuid'] || Math.random().toString(36).slice(2),
       koboId: flat['_id'] || null,
       date: dateRaw ? new Date(dateRaw) : null,
-      barangay: findField(flat, FIELD_CANDIDATES.barangay) || 'Unknown',
-      area: findField(flat, FIELD_CANDIDATES.area) || '—',
-      transect: findField(flat, FIELD_CANDIDATES.transect) || '—',
+      barangay: prettifyLabel(findField(flat, FIELD_CANDIDATES.barangay)) || 'Unknown',
+      area: prettifyLabel(areaRaw) || '—',
+      areaRaw: areaRaw || '',
+      transect: (transectRaw ? String(transectRaw).toUpperCase() : null) || '—',
       canopy: canopyNum,
       water: waterQualityInfo(waterRaw),
       status: deriveStatus(canopyNum, waterRaw),
@@ -255,14 +296,25 @@ function switchView(viewName, btn) {
     }).join('');
   }
 
-  function renderHistoryTable(submissions) {
+  function renderHistoryTable(submissions, totalCount) {
     const tbody = document.getElementById('history-table-body');
     const note = document.getElementById('history-note');
     if (!tbody) return;
 
-    if (submissions.length === 0) {
+    const total = typeof totalCount === 'number' ? totalCount : submissions.length;
+
+    if (total === 0) {
       tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--ink-400); padding:20px;">No submissions yet.</td></tr>`;
       if (note) note.textContent = 'Showing 0 of 0 submissions. Records will appear here after each field inspection.';
+      return;
+    }
+
+    if (submissions.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8" class="filter-empty-state">No submissions match your filters.
+        <button class="inline-link" id="filter-empty-clear">Clear filters</button></td></tr>`;
+      if (note) note.textContent = `Showing 0 of ${total} submissions.`;
+      const clearLink = document.getElementById('filter-empty-clear');
+      if (clearLink) clearLink.addEventListener('click', clearFilters);
       return;
     }
 
@@ -285,18 +337,18 @@ function switchView(viewName, btn) {
         : '—';
       return `
         <tr>
-          <td>${formatDate(s.date)}</td>
+          <td class="cell-nowrap">${formatDate(s.date)}</td>
           <td>${escapeHtml(s.barangay)}</td>
-          <td>${escapeHtml(s.area)}</td>
-          <td>${escapeHtml(s.transect)}</td>
-          <td>${canopyText}</td>
-          <td><span class="wq ${s.water.cls}">${escapeHtml(String(s.water.label))}</span></td>
-          <td><span class="badge ${badge.badgeCls}">${badge.label}</span></td>
-          <td>${deleteBtn}</td>
+          <td class="cell-truncate" title="${escapeHtml(s.areaRaw || s.area)}">${escapeHtml(s.area)}</td>
+          <td class="cell-center cell-nowrap">${escapeHtml(s.transect)}</td>
+          <td class="cell-right cell-nowrap">${canopyText}</td>
+          <td class="cell-center"><span class="wq ${s.water.cls}">${escapeHtml(String(s.water.label))}</span></td>
+          <td class="cell-center"><span class="badge ${badge.badgeCls}">${badge.label}</span></td>
+          <td class="cell-center">${deleteBtn}</td>
         </tr>`;
     }).join('');
 
-    if (note) note.textContent = `Showing ${sorted.length} of ${sorted.length} submissions.`;
+    if (note) note.textContent = `Showing ${sorted.length} of ${total} submissions.`;
   }
 
   function renderAlert(submissions) {
@@ -343,10 +395,164 @@ function switchView(viewName, btn) {
   let currentSubmissions = [];
   let pendingDeleteId = null;
 
+  const filterState = {
+    search: '',
+    barangay: '',
+    area: '',
+    status: '',
+    dateFrom: null,
+    dateTo: null,
+  };
+
+  function isFilterActive() {
+    return !!(filterState.search || filterState.barangay || filterState.area ||
+      filterState.status || filterState.dateFrom || filterState.dateTo);
+  }
+
+  function getFilteredSubmissions() {
+    const q = filterState.search.trim().toLowerCase();
+    return currentSubmissions.filter(s => {
+      if (filterState.barangay && s.barangay !== filterState.barangay) return false;
+      if (filterState.area && s.area !== filterState.area) return false;
+      if (filterState.status && s.status !== filterState.status) return false;
+
+      if (filterState.dateFrom) {
+        if (!s.date || isNaN(s.date.getTime()) || s.date < filterState.dateFrom) return false;
+      }
+      if (filterState.dateTo) {
+        if (!s.date || isNaN(s.date.getTime()) || s.date > filterState.dateTo) return false;
+      }
+
+      if (q) {
+        const haystack = `${s.barangay} ${s.area} ${s.transect}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  function populateFilterOptions(submissions) {
+    const barangaySelect = document.getElementById('filter-barangay');
+    const areaSelect = document.getElementById('filter-area');
+    if (!barangaySelect || !areaSelect) return;
+
+    const barangays = [...new Set(submissions.map(s => s.barangay).filter(Boolean))].sort();
+    const areas = [...new Set(submissions.map(s => s.area).filter(a => a && a !== '—'))].sort();
+
+    const prevBarangay = barangaySelect.value;
+    const prevArea = areaSelect.value;
+
+    barangaySelect.innerHTML = '<option value="">All barangays</option>' +
+      barangays.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+    areaSelect.innerHTML = '<option value="">All protected areas</option>' +
+      areas.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('');
+
+    if (barangays.includes(prevBarangay)) barangaySelect.value = prevBarangay;
+    if (areas.includes(prevArea)) areaSelect.value = prevArea;
+  }
+
+  function updateClearButtonState() {
+    const clearBtn = document.getElementById('filter-clear');
+    if (clearBtn) clearBtn.classList.toggle('is-inactive', !isFilterActive());
+  }
+
+  function applyFilters() {
+    updateClearButtonState();
+    renderHistoryTable(getFilteredSubmissions(), currentSubmissions.length);
+  }
+
+  function clearFilters() {
+    filterState.search = '';
+    filterState.barangay = '';
+    filterState.area = '';
+    filterState.status = '';
+    filterState.dateFrom = null;
+    filterState.dateTo = null;
+
+    const searchInput = document.getElementById('filter-search');
+    const barangaySelect = document.getElementById('filter-barangay');
+    const areaSelect = document.getElementById('filter-area');
+    const statusSelect = document.getElementById('filter-status');
+    const dateFromInput = document.getElementById('filter-date-from');
+    const dateToInput = document.getElementById('filter-date-to');
+
+    if (searchInput) searchInput.value = '';
+    if (barangaySelect) barangaySelect.value = '';
+    if (areaSelect) areaSelect.value = '';
+    if (statusSelect) statusSelect.value = '';
+    if (dateFromInput) dateFromInput.value = '';
+    if (dateToInput) dateToInput.value = '';
+
+    applyFilters();
+  }
+
+  function parseDateInput(value) {
+    if (!value) return null;
+    const d = new Date(value + 'T00:00:00');
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function bindFilterBar() {
+    const searchInput = document.getElementById('filter-search');
+    const barangaySelect = document.getElementById('filter-barangay');
+    const areaSelect = document.getElementById('filter-area');
+    const statusSelect = document.getElementById('filter-status');
+    const dateFromInput = document.getElementById('filter-date-from');
+    const dateToInput = document.getElementById('filter-date-to');
+    const clearBtn = document.getElementById('filter-clear');
+
+    let searchDebounce = null;
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => {
+          filterState.search = searchInput.value;
+          applyFilters();
+        }, 180);
+      });
+    }
+    if (barangaySelect) {
+      barangaySelect.addEventListener('change', () => {
+        filterState.barangay = barangaySelect.value;
+        applyFilters();
+      });
+    }
+    if (areaSelect) {
+      areaSelect.addEventListener('change', () => {
+        filterState.area = areaSelect.value;
+        applyFilters();
+      });
+    }
+    if (statusSelect) {
+      statusSelect.addEventListener('change', () => {
+        filterState.status = statusSelect.value;
+        applyFilters();
+      });
+    }
+    if (dateFromInput) {
+      dateFromInput.addEventListener('change', () => {
+        filterState.dateFrom = parseDateInput(dateFromInput.value);
+        applyFilters();
+      });
+    }
+    if (dateToInput) {
+      dateToInput.addEventListener('change', () => {
+        const d = parseDateInput(dateToInput.value);
+        if (d) d.setHours(23, 59, 59, 999);
+        filterState.dateTo = d;
+        applyFilters();
+      });
+    }
+    if (clearBtn) clearBtn.addEventListener('click', clearFilters);
+
+    updateClearButtonState();
+  }
+
   function renderAll() {
     renderStats(currentSubmissions);
     renderRecentSubmissions(currentSubmissions);
-    renderHistoryTable(currentSubmissions);
+    populateFilterOptions(currentSubmissions);
+    renderHistoryTable(getFilteredSubmissions(), currentSubmissions.length);
     renderAlert(currentSubmissions);
   }
 
@@ -456,5 +662,6 @@ function switchView(viewName, btn) {
 
   bindDeleteDelegation();
   bindDeleteModal();
+  bindFilterBar();
   loadSubmissions();
 })();
