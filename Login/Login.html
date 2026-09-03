@@ -54,20 +54,6 @@
           <p class="form-subtitle">Sign in to access the monitoring dashboard.</p>
         </div>
 
-        <div class="role-section">
-          <label class="role-label">Sign In As</label>
-          <div class="role-buttons">
-            <button class="role-btn" data-role="menro" type="button">
-              <span class="role-icon">👤</span>
-              MENRO Officer
-            </button>
-            <button class="role-btn" data-role="ranger" type="button">
-              <span class="role-icon">🌳</span>
-              Forest Ranger
-            </button>
-          </div>
-        </div>
-
         <div class="form-body">
           <div class="field-group">
             <label for="username">Username</label>
@@ -97,6 +83,10 @@
             </div>
           </div>
 
+          <div class="form-row-end">
+            <button type="button" class="forgot-link" id="btnForgotPassword">Forgot password?</button>
+          </div>
+
           <button class="btn-signin" id="btnSignIn" type="button">
             <span class="btn-text">Sign In</span>
             <span class="btn-arrow">→</span>
@@ -108,6 +98,35 @@
       </div>
     </main>
 
+  </div>
+
+  <div class="auth-overlay" id="forgotOverlay">
+    <div class="auth-modal">
+      <button class="auth-modal-close" id="btnCloseForgot" aria-label="Close">&times;</button>
+
+      <div id="forgotFormView">
+        <h2 class="auth-modal-title">Forgot your password?</h2>
+        <p class="auth-modal-text">Enter your username. An admin will be notified and can reset your password for you.</p>
+        <form id="forgotForm" class="form-body">
+          <div class="field-group">
+            <label for="forgotUsername">Username</label>
+            <input type="text" id="forgotUsername" placeholder="Enter your username" autocomplete="username" required>
+          </div>
+          <button type="submit" class="btn-signin">
+            <span class="btn-text">Send Request</span>
+          </button>
+          <div id="forgotErrorMsg" class="error-msg" role="alert" aria-live="polite"></div>
+        </form>
+      </div>
+
+      <div id="forgotSentView" hidden>
+        <h2 class="auth-modal-title">Request sent</h2>
+        <p class="auth-modal-text">If that account exists, an admin has been notified and will reset your password soon.</p>
+        <button type="button" class="btn-signin" id="btnForgotDone">
+          <span class="btn-text">Done</span>
+        </button>
+      </div>
+    </div>
   </div>
 
   <script src="script.js?v=3"></script>

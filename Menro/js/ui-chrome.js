@@ -16,9 +16,29 @@ function closeSignOutConfirm() {
 }
 
 function confirmSignOut() {
-    localStorage.removeItem("menro_remembered_user");
+    localStorage.removeItem("aquaguard_current_user");
     window.location.href = "../../Login/Login.html";
 }
+
+(function displayLoggedInUser() {
+    const sideMenuAccountName = document.getElementById("sideMenuAccountName");
+    const sideMenuAvatar = document.getElementById("sideMenuAvatar");
+    if (!sideMenuAccountName || !sideMenuAvatar) return;
+
+    try {
+        const stored = localStorage.getItem("aquaguard_current_user");
+        if (!stored) return;
+
+        const user = JSON.parse(stored);
+        const displayName = user.fullName || user.username;
+        if (!displayName) return;
+
+        sideMenuAccountName.textContent = displayName;
+        sideMenuAvatar.textContent = displayName.charAt(0).toUpperCase();
+    } catch (err) {
+        // Malformed or missing stored user info — leave the default placeholder as-is.
+    }
+})();
 
 if (btnCloseSignOut)   btnCloseSignOut.addEventListener("click", closeSignOutConfirm);
 if (btnCancelSignOut)  btnCancelSignOut.addEventListener("click", closeSignOutConfirm);

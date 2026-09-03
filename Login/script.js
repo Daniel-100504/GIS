@@ -5,23 +5,12 @@
   const togglePw      = document.getElementById('togglePw');
   const eyeIcon       = document.getElementById('eyeIcon');
   const errorMsg      = document.getElementById('errorMsg');
-  const roleBtns      = document.querySelectorAll('.role-btn');
 
-  let selectedRole = null;
-
-  const CREDENTIALS = {
-    menro:  { username: 'menro', password: 'menro123' },
-    ranger: { username: 'ranger', password: 'ranger123' },
+  const REDIRECT_BY_ROLE = {
+    menro:  '../Menro/html/satellite.html',
+    ranger: '../ranger/ranger.html',
+    admin:  '../Admin/admin.html',
   };
-
-  roleBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      roleBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      selectedRole = btn.dataset.role;
-      clearError();
-    });
-  });
 
   togglePw.addEventListener('click', () => {
     if (passwordInput.type === 'password') {
@@ -52,10 +41,6 @@
     const user = usernameInput.value.trim();
     const pass = passwordInput.value;
 
-    if (!selectedRole) {
-      showError('Please select your role before signing in.');
-      return false;
-    }
     if (!user && !pass) {
       showError('Please enter your username and password.');
       return false;
@@ -80,7 +65,7 @@
     input.addEventListener('input', clearError);
   });
 
-  function handleSignIn() {
+  async function handleSignIn() {
     clearError();
     if (!validateFields()) return;
 
@@ -89,32 +74,86 @@
 
     btnSignIn.disabled = true;
 
-    setTimeout(() => {
-      const creds = CREDENTIALS[selectedRole];
-      let success = false;
+    try {
+      const res = await fetch('Database/api.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ action: 'login', username: user, password: pass }),
+      });
+      const data = await res.json();
 
-      if (creds && user === creds.username && pass === creds.password) {
-        success = true;
-      }
-
-      if (!success) {
-        const accounts = JSON.parse(localStorage.getItem('gis_accounts')) || {};
-        if (accounts[user] && accounts[user].password === pass) {
-          success = true;
-        }
-      }
-
-      if (success) {
-        if (selectedRole === 'menro') {
-          window.location.href = '../Menro/html/satellite.html';
-        } else if (selectedRole === 'ranger') {
-          window.location.href = '../ranger/ranger.html';
-        }
+      if (data.success && REDIRECT_BY_ROLE[data.role]) {
+        localStorage.setItem('aquaguard_current_user', JSON.stringify({
+          username: data.username,
+          fullName: data.fullName,
+          role: data.role,
+        }));
+        window.location.href = REDIRECT_BY_ROLE[data.role];
         return;
       }
 
-      showError('Invalid username or password. Please try again.');
+      showError(data.error || 'Invalid username or password. Please try again.');
       btnSignIn.disabled = false;
-    }, 900);
+    } catch (err) {
+      showError('Could not reach the server. Please try again.');
+      btnSignIn.disabled = false;
+    }
   }
+
+  const forgotOverlay   = document.getElementById('forgotOverlay');
+  const btnForgotPassword = document.getElementById('btnForgotPassword');
+  const btnCloseForgot  = document.getElementById('btnCloseForgot');
+  const forgotForm      = document.getElementById('forgotForm');
+  const forgotFormView  = document.getElementById('forgotFormView');
+  const forgotSentView  = document.getElementById('forgotSentView');
+  const forgotUsername  = document.getElementById('forgotUsername');
+  const forgotErrorMsg  = document.getElementById('forgotErrorMsg');
+  const btnForgotDone   = document.getElementById('btnForgotDone');
+
+  function openForgotModal() {
+    forgotFormView.hidden = false;
+    forgotSentView.hidden = true;
+    forgotUsername.value = usernameInput.value.trim();
+    forgotErrorMsg.textContent = '';
+    forgotOverlay.classList.add('open');
+  }
+
+  function closeForgotModal() {
+    forgotOverlay.classList.remove('open');
+  }
+
+  btnForgotPassword.addEventListener('click', openForgotModal);
+  btnCloseForgot.addEventListener('click', closeForgotModal);
+  btnForgotDone.addEventListener('click', closeForgotModal);
+  forgotOverlay.addEventListener('click', (e) => {
+    if (e.target === forgotOverlay) closeForgotModal();
+  });
+
+  forgotForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    forgotErrorMsg.textContent = '';
+
+    const submitBtn = forgotForm.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+
+    try {
+      const res = await fetch('Database/api.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ action: 'submitRequest', username: forgotUsername.value.trim() }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        forgotFormView.hidden = true;
+        forgotSentView.hidden = false;
+      } else {
+        forgotErrorMsg.textContent = data.error || 'Something went wrong. Please try again.';
+      }
+    } catch (err) {
+      forgotErrorMsg.textContent = 'Could not reach the server. Please try again.';
+    }
+
+    submitBtn.disabled = false;
+  });
 })();

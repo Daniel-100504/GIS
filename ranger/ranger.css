@@ -219,6 +219,12 @@ body {
   padding: 18px 20px;
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-md);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
 .stat-icon {
@@ -262,6 +268,7 @@ body {
 .dash-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  align-items: start;
   gap: 14px;
   margin-bottom: 14px;
 }
@@ -310,6 +317,11 @@ body {
   gap: 12px;
   padding: 12px 20px;
   border-bottom: 1px solid var(--border);
+  transition: background 0.15s ease;
+}
+
+.submission-item:hover {
+  background: var(--surface-alt);
 }
 
 .submission-dot {

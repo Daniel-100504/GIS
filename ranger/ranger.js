@@ -71,12 +71,33 @@ const AQUAGUARD_CONFIG = {
     if (e.target === overlay) closeSignoutConfirm();
   });
   function signOutRanger() {
+    localStorage.removeItem('aquaguard_current_user');
     window.location.href = '../Login/Login.html';
   }
 
   confirmBtn.addEventListener('click', signOutRanger);
 
   initIdleLogout(15, signOutRanger, { overlayClass: "confirm-overlay" });
+})();
+
+(function displayLoggedInUser() {
+  const rangerName = document.getElementById('rangerName');
+  const rangerAvatar = document.getElementById('rangerAvatar');
+  if (!rangerName || !rangerAvatar) return;
+
+  try {
+    const stored = localStorage.getItem('aquaguard_current_user');
+    if (!stored) return;
+
+    const user = JSON.parse(stored);
+    const displayName = user.fullName || user.username;
+    if (!displayName) return;
+
+    rangerName.textContent = displayName;
+    rangerAvatar.textContent = displayName.charAt(0).toUpperCase();
+  } catch (err) {
+    // Malformed or missing stored user info — leave the default placeholder as-is.
+  }
 })();
 
 function switchView(viewName, btn) {
@@ -261,7 +282,7 @@ function switchView(viewName, btn) {
       canopy: canopyNum,
       water: waterQualityInfo(waterRaw),
       status: deriveStatus(canopyNum, waterRaw),
-      photos: photos,
+      photos: collectPhotos(flat, record),
     };
   }
 
@@ -344,29 +365,14 @@ function switchView(viewName, btn) {
 
   function renderHistoryTable(submissions, totalCount) {
     const tbody = document.getElementById('history-table-body');
-    const footerText = document.getElementById('history-footer-text');
-    const paginationEl = document.getElementById('history-pagination');
-    const pageIndicator = document.getElementById('page-indicator');
-    const prevBtn = document.getElementById('page-prev');
-    const nextBtn = document.getElementById('page-next');
+    const note = document.getElementById('history-note');
     if (!tbody) return;
 
     const total = typeof totalCount === 'number' ? totalCount : submissions.length;
 
     if (total === 0) {
       tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--ink-400); padding:20px;">No submissions yet.</td></tr>`;
-      if (footerText) footerText.textContent = 'Showing 0 of 0 submissions. Records will appear here after each field inspection.';
-      if (paginationEl) paginationEl.style.display = 'none';
-      return;
-    }
-
-    if (submissions.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" class="filter-empty-state">No submissions match your filters.
-        <button class="inline-link" id="filter-empty-clear">Clear filters</button></td></tr>`;
-      if (footerText) footerText.textContent = `Showing 0 of ${total} submissions.`;
-      if (paginationEl) paginationEl.style.display = 'none';
-      const clearLink = document.getElementById('filter-empty-clear');
-      if (clearLink) clearLink.addEventListener('click', clearFilters);
+      if (note) note.textContent = 'Showing 0 of 0 submissions. Records will appear here after each field inspection.';
       return;
     }
 
@@ -385,12 +391,7 @@ function switchView(viewName, btn) {
       return bt - at;
     });
 
-    const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-    currentPage = clampPage(currentPage, totalPages);
-    const start = (currentPage - 1) * PAGE_SIZE;
-    const pageItems = sorted.slice(start, start + PAGE_SIZE);
-
-    tbody.innerHTML = pageItems.map(s => {
+    tbody.innerHTML = sorted.map(s => {
       const badge = statusBadge(s.status);
       const canopyText = s.canopy !== null ? `${s.canopy}%` : '—';
       const deleteBtn = s.koboId
@@ -454,10 +455,8 @@ function switchView(viewName, btn) {
     if (tbody) {
       tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--degraded); padding:20px;">Couldn't load submissions: ${escapeHtml(message)}</td></tr>`;
     }
-    const footerText = document.getElementById('history-footer-text');
-    if (footerText) footerText.textContent = 'Check that kobo-proxy.php is reachable and correctly configured.';
-    const paginationEl = document.getElementById('history-pagination');
-    if (paginationEl) paginationEl.style.display = 'none';
+    const note = document.getElementById('history-note');
+    if (note) note.textContent = 'Check that kobo-proxy.php is reachable and correctly configured.';
   }
 
   let currentSubmissions = [];

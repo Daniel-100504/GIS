@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AquaGuard – Admin Panel</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<link rel="icon" href="../assets/calatagan-seal.png"/>
+<link rel="stylesheet" href="../assets/theme.css"/>
+<link rel="stylesheet" href="admin.css"/>
+</head>
+<body>
+
+<canvas id="gisCanvas" aria-hidden="true"></canvas>
+
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="../assets/calatagan-seal.png" width="36" height="36" alt="Calatagan Seal" style="border-radius:50%;object-fit:contain;">
+      <div>
+        <div class="sidebar-brand-name">AquaGuard</div>
+        <div class="sidebar-brand-sub">Admin Panel</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item active" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        Accounts
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="adminAvatar">A</div>
+        <div>
+          <div class="user-name" id="adminName">Admin</div>
+          <div class="user-role">Administrator</div>
+        </div>
+      </div>
+      <button class="btn-logout" id="btnSignOut" type="button">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        Sign Out
+      </button>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Accounts</div>
+        <div class="topbar-sub">Calatagan Mangrove Reserve &middot; <span id="topbar-date"></span></div>
+      </div>
+      <div class="topbar-coord">13.8317&deg; N, 120.6400&deg; E</div>
+    </header>
+
+    <section class="view active">
+
+      <div class="account-section" id="resetRequestsSection" hidden>
+        <div class="account-section-head">
+          <h2 id="resetRequestsHeading">Password Reset Requests</h2>
+        </div>
+        <div class="account-table-wrap">
+          <table class="account-table">
+            <thead>
+              <tr><th>Username</th><th>Role</th><th>Requested</th><th></th></tr>
+            </thead>
+            <tbody id="resetRequestsBody">
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="account-section">
+        <div class="account-section-head">
+          <h2>MENRO Officers</h2>
+          <button class="btn-add" data-role="menro">+ Add MENRO Account</button>
+        </div>
+        <div class="account-table-wrap">
+          <table class="account-table">
+            <thead>
+              <tr><th>Username</th><th>Full Name</th><th>Email</th><th>Created</th><th></th></tr>
+            </thead>
+            <tbody id="menroAccountsBody">
+              <tr><td colspan="5" class="account-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="account-section">
+        <div class="account-section-head">
+          <h2>Forest Rangers</h2>
+          <button class="btn-add" data-role="ranger">+ Add Ranger Account</button>
+        </div>
+        <div class="account-table-wrap">
+          <table class="account-table">
+            <thead>
+              <tr><th>Username</th><th>Full Name</th><th>Email</th><th>Created</th><th></th></tr>
+            </thead>
+            <tbody id="rangerAccountsBody">
+              <tr><td colspan="5" class="account-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+</div>
+
+<div class="dashboard-overlay" id="signoutOverlay">
+  <div class="confirm-modal">
+    <button class="confirm-modal-close" id="btnCloseSignout" aria-label="Close">&times;</button>
+    <div class="confirm-modal-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+    </div>
+    <div class="confirm-modal-title">Sign out?</div>
+    <div class="confirm-modal-text">You'll need to sign in again to access the Admin Panel.</div>
+    <div class="confirm-modal-actions">
+      <button class="btn-confirm-cancel" id="btnCancelSignout">Cancel</button>
+      <button class="btn-confirm-danger" id="btnConfirmSignout">Sign Out</button>
+    </div>
+  </div>
+</div>
+
+<div class="dashboard-overlay" id="editOverlay">
+  <div class="confirm-modal">
+    <button class="confirm-modal-close" id="btnCloseEdit" aria-label="Close">&times;</button>
+    <h2 class="confirm-modal-title">Edit Account</h2>
+    <form id="editForm" class="account-form">
+      <label>Username
+        <input type="text" id="editUsername" required autocomplete="off">
+      </label>
+      <label>Full Name <span class="optional">(optional)</span>
+        <input type="text" id="editFullName" autocomplete="off">
+      </label>
+      <label>Email <span class="optional">(optional, used for password reset)</span>
+        <input type="email" id="editEmail" autocomplete="off">
+      </label>
+      <div class="confirm-modal-actions">
+        <button type="button" class="btn-confirm-cancel" id="btnCancelEdit">Cancel</button>
+        <button type="submit" class="btn-confirm-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="dashboard-overlay" id="createOverlay">
+  <div class="confirm-modal">
+    <button class="confirm-modal-close" id="btnCloseCreate" aria-label="Close">&times;</button>
+    <h2 class="confirm-modal-title" id="createModalTitle">Add Account</h2>
+    <form id="createForm" class="account-form">
+      <label>Username
+        <input type="text" id="createUsername" required autocomplete="off">
+      </label>
+      <label>Full Name <span class="optional">(optional)</span>
+        <input type="text" id="createFullName" autocomplete="off">
+      </label>
+      <label>Email <span class="optional">(optional, used for password reset)</span>
+        <input type="email" id="createEmail" autocomplete="off">
+      </label>
+      <label>Password
+        <input type="password" id="createPassword" required autocomplete="new-password">
+      </label>
+      <div class="confirm-modal-actions">
+        <button type="button" class="btn-confirm-cancel" id="btnCancelCreate">Cancel</button>
+        <button type="submit" class="btn-confirm-primary">Create Account</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="dashboard-overlay" id="resetOverlay">
+  <div class="confirm-modal">
+    <button class="confirm-modal-close" id="btnCloseReset" aria-label="Close">&times;</button>
+    <h2 class="confirm-modal-title">Reset Password</h2>
+    <p class="confirm-modal-text" id="resetTargetLabel"></p>
+    <form id="resetForm" class="account-form">
+      <label>New Password
+        <input type="password" id="resetPassword" required autocomplete="new-password">
+      </label>
+      <div class="confirm-modal-actions">
+        <button type="button" class="btn-confirm-cancel" id="btnCancelReset">Cancel</button>
+        <button type="submit" class="btn-confirm-primary">Save Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="dashboard-overlay" id="deleteOverlay">
+  <div class="confirm-modal">
+    <button class="confirm-modal-close" id="btnCloseDelete" aria-label="Close">&times;</button>
+    <div class="confirm-modal-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="3 6 5 6 21 6"/>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+      </svg>
+    </div>
+    <h2 class="confirm-modal-title">Delete this account?</h2>
+    <p class="confirm-modal-text" id="deleteTargetLabel"></p>
+    <div class="confirm-modal-actions">
+      <button type="button" class="btn-confirm-cancel" id="btnCancelDelete">Cancel</button>
+      <button type="button" class="btn-confirm-danger" id="btnConfirmDelete">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/utils.js"></script>
+<script src="admin.js?v=2"></script>
+</body>
+</html>
