@@ -11,12 +11,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23146b52' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22c0-4 3-5 3-9a3 3 0 0 0-6 0c0 4 3 5 3 9Z'/%3E%3Cpath d='M12 13V3'/%3E%3Cpath d='M12 7 8 3'/%3E%3Cpath d='M12 9 17 4'/%3E%3C/svg%3E"/>
+  <link rel="icon" href="../../assets/calatagan-seal.png"/>
 
-        <link rel="stylesheet" href="css/style.css"/>
-        <link rel="stylesheet" href="css/right-panel.css"/>
-        <link rel="stylesheet" href="css/side-menu.css"/>
-        <link rel="stylesheet" href="css/dashboard.css"/>
+        <link rel="stylesheet" href="../../assets/theme.css"/>
+        <link rel="stylesheet" href="../css/style.css"/>
+        <link rel="stylesheet" href="../css/right-panel.css"/>
+        <link rel="stylesheet" href="../css/side-menu.css"/>
+        <link rel="stylesheet" href="../css/Dashboard.css"/>
 </head>
 
 <body>
@@ -33,7 +34,7 @@
           </svg>
         </button>
 
-        <img src="../assets/calatagan-seal.png" width="26" height="26" alt="Calatagan Seal" class="topbar-logo">
+        <img src="../../assets/calatagan-seal.png" width="26" height="26" alt="Calatagan Seal" class="topbar-logo">
 
         <span class="topbar-brand">
             AquaGuard
@@ -80,60 +81,50 @@ Lng: ---
 
 <div class="map-layers-control" id="mapLayersControl">
 
-    <button class="layers-toggle-btn" id="layersToggleBtn" aria-label="Map layers" aria-expanded="false" title="Map layers">
-        <span class="layers-toggle-thumb"></span>
-        <span class="layers-toggle-label">Layers</span>
+    <button class="layers-toggle-btn" id="layersToggleBtn" aria-label="Switch to satellite view" aria-expanded="false" title="Click to switch map/satellite view">
+        <span class="layers-toggle-thumb" id="layersToggleThumb"></span>
+        <span class="layers-toggle-label" id="layersToggleLabel">Satellite</span>
     </button>
 
     <div class="layers-popup">
 
-        <p class="layers-popup-title">Map Layers</p>
+        <div class="layer-tile-grid">
 
-        <div class="toggle-row">
-
-            <span>NDVI Overlay</span>
-
-            <label class="toggle">
-
-                <input
-                    type="checkbox"
-                    id="layerNdvi">
-
-                <span class="slider"></span>
-
+            <label class="layer-tile">
+                <input type="checkbox" id="layerSentinel2" class="layer-tile-input">
+                <span class="layer-tile-icon layer-tile-icon-sentinel" aria-hidden="true">
+                    <span class="layer-tile-art"></span>
+                    <span class="layer-tile-badge">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                    </span>
+                </span>
+                <span class="layer-tile-label">Sentinel-2</span>
             </label>
 
-        </div>
-
-        <div class="toggle-row">
-
-            <span>Sentinel-2 Imagery</span>
-
-            <label class="toggle">
-
-                <input
-                    type="checkbox"
-                    id="layerSentinel2">
-
-                <span class="slider"></span>
-
+            <label class="layer-tile">
+                <input type="checkbox" id="layerNdvi" class="layer-tile-input">
+                <span class="layer-tile-icon layer-tile-icon-ndvi" aria-hidden="true">
+                    <span class="layer-tile-art"></span>
+                    <span class="layer-tile-badge">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c0-4 3-5 3-9a3 3 0 0 0-6 0c0 4 3 5 3 9Z"/><path d="M12 13V3"/><path d="M12 7 8 3"/><path d="M12 9 17 4"/></svg>
+                    </span>
+                </span>
+                <span class="layer-tile-label">NDVI</span>
             </label>
 
-        </div>
-
-        <div class="toggle-row">
-
-            <span>Mangrove Zones</span>
-
-            <label class="toggle">
-
-                <input
-                    type="checkbox"
-                    id="layerZones"
-                    checked>
-
-                <span class="slider"></span>
-
+            <label class="layer-tile">
+                <input type="checkbox" id="layerZones" class="layer-tile-input" checked>
+                <span class="layer-tile-icon layer-tile-icon-zones" aria-hidden="true">
+                    <span class="layer-tile-art">
+                        <span class="layer-tile-dot" style="top:28%;left:32%;"></span>
+                        <span class="layer-tile-dot" style="top:52%;left:60%;"></span>
+                        <span class="layer-tile-dot" style="top:68%;left:30%;"></span>
+                    </span>
+                    <span class="layer-tile-badge">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                    </span>
+                </span>
+                <span class="layer-tile-label">Mangroves</span>
             </label>
 
         </div>
@@ -324,7 +315,7 @@ Lng: ---
         <div class="guide-number">4</div>
         <div class="guide-text">
           <h3>Layers</h3>
-          <p>Toggle Sentinel-2 imagery, NDVI overlay, and zone markers under <strong>Map Layers</strong>.</p>
+          <p>Hover over the <strong>Layers</strong> button (bottom-left of the map) to toggle Sentinel-2 imagery, NDVI overlay, and Mangroves markers. Click the button itself to switch the base map between <strong>Map</strong> and <strong>Satellite</strong> view.</p>
         </div>
       </div>
 
@@ -340,7 +331,7 @@ Lng: ---
         <div class="guide-number">6</div>
         <div class="guide-text">
           <h3>Export Report</h3>
-          <p>Choose <strong>Export Field Survey Report</strong> from the menu to generate a PDF summary.</p>
+          <p>Choose <strong>Export Field Survey Report</strong> from the menu, then pick PDF or Excel to download all recorded field surveys.</p>
         </div>
       </div>
 
@@ -360,25 +351,14 @@ Lng: ---
         </div>
       </div>
 
-    </div>
-
-  </div>
-
-</div>
-
-<div class="dashboard-overlay" id="surveyDetailOverlay">
-
-  <div class="dashboard-modal survey-detail-modal">
-
-    <div class="dashboard-modal-header">
-      <div>
-        <h2 id="surveyDetailTitle">Zone name</h2>
-        <p class="dashboard-modal-sub" id="surveyDetailSub">Field survey submission</p>
+      <div class="guide-item">
+        <div class="guide-number">9</div>
+        <div class="guide-text">
+          <h3>Auto Sign-Out</h3>
+          <p>For security, you'll be signed out automatically after 15 minutes of inactivity. A warning appears 30 seconds beforehand — click <strong>Stay signed in</strong> to keep your session active.</p>
+        </div>
       </div>
-      <button class="dashboard-close" id="btnCloseSurveyDetail" aria-label="Close survey detail">&times;</button>
-    </div>
 
-    <div class="dashboard-modal-body" id="surveyDetailBody">
     </div>
 
   </div>
@@ -411,6 +391,70 @@ Lng: ---
 
 </div>
 
+<div class="dashboard-overlay" id="exportReportOverlay">
+
+  <div class="confirm-modal export-modal">
+
+    <button class="confirm-modal-close" id="btnCloseExportReport" aria-label="Close">&times;</button>
+
+    <div class="confirm-modal-icon export-modal-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="12" y1="11" x2="12" y2="17"/>
+        <polyline points="9.5 14.5 12 17 14.5 14.5"/>
+      </svg>
+    </div>
+
+    <h2 class="confirm-modal-title">Export Field Survey Report</h2>
+    <p class="confirm-modal-text">Choose a file format to download all recorded field survey submissions.</p>
+
+    <div class="export-format-group">
+
+      <label class="export-format-option">
+        <input type="radio" name="exportFormat" value="pdf" class="export-format-input" checked>
+        <span class="export-format-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        <span class="export-format-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
+            <line x1="9" y1="11" x2="12" y2="11"/>
+          </svg>
+        </span>
+        <span class="export-format-label">PDF</span>
+      </label>
+
+      <label class="export-format-option">
+        <input type="radio" name="exportFormat" value="excel" class="export-format-input">
+        <span class="export-format-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        <span class="export-format-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <line x1="3" y1="9" x2="21" y2="9"/>
+            <line x1="3" y1="15" x2="21" y2="15"/>
+            <line x1="9" y1="9" x2="9" y2="21"/>
+            <line x1="15" y1="9" x2="15" y2="21"/>
+          </svg>
+        </span>
+        <span class="export-format-label">Excel</span>
+      </label>
+
+    </div>
+
+    <div class="confirm-modal-actions">
+      <button type="button" class="btn-confirm-cancel" id="btnCancelExportReport">Cancel</button>
+      <button type="button" class="btn-confirm-primary" id="btnConfirmExportReport">Export</button>
+    </div>
+
+  </div>
+
+</div>
+
 <section class="dashboard-view" id="dashboardView">
 
   <div class="dashboard-view-inner" id="dashboardBody">
@@ -425,7 +469,7 @@ Lng: ---
 
   <div class="side-menu-header">
     <div class="side-menu-brand-group">
-      <img src="../assets/calatagan-seal.png" width="30" height="30" alt="Calatagan Seal" class="side-menu-logo">
+      <img src="../../assets/calatagan-seal.png" width="30" height="30" alt="Calatagan Seal" class="side-menu-logo">
       <span class="side-menu-brand">AquaGuard</span>
     </div>
     <button class="side-menu-close" id="btnCloseSideMenu" aria-label="Close menu">&times;</button>
@@ -504,8 +548,17 @@ Lng: ---
 </aside>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="js/satellite.js"></script>
-<script src="js/Dashboard.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/5.0.8/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="../../assets/utils.js"></script>
+<script src="../js/kobo-data.js"></script>
+<script src="../js/map-core.js"></script>
+<script src="../js/zones-panel.js"></script>
+<script src="../js/scene-calendar.js"></script>
+<script src="../js/export-report.js"></script>
+<script src="../js/ui-chrome.js"></script>
+<script src="../js/Dashboard.js"></script>
 
 </body>
 </html>

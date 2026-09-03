@@ -10,6 +10,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap"
     rel="stylesheet">
+  <link rel="stylesheet" href="../assets/theme.css" />
   <link rel="stylesheet" href="ranger.css" />
 </head>
 
@@ -282,10 +283,10 @@
             <colgroup>
               <col style="width:11%;">
               <col style="width:13%;">
-              <col style="width:27%;">
-              <col style="width:8%;">
-              <col style="width:11%;">
-              <col style="width:11%;">
+              <col style="width:24%;">
+              <col style="width:9%;">
+              <col style="width:12%;">
+              <col style="width:12%;">
               <col style="width:11%;">
               <col style="width:8%;">
             </colgroup>
@@ -308,18 +309,7 @@
             </tbody>
           </table>
           </div>
-          <div class="history-footer" id="history-footer">
-            <span class="history-footer-text" id="history-footer-text">Loading…</span>
-            <div class="history-pagination" id="history-pagination" style="display:none;">
-              <button type="button" class="page-btn" id="page-prev" aria-label="Previous page">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-              </button>
-              <span class="page-indicator" id="page-indicator">Page 1 of 1</span>
-              <button type="button" class="page-btn" id="page-next" aria-label="Next page">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-              </button>
-            </div>
-          </div>
+          <div class="history-note" id="history-note">Loading…</div>
         </div>
       </section>
 
@@ -367,25 +357,7 @@
     </div>
   </div>
 
-  <div class="lightbox-overlay" id="photoLightbox">
-    <div class="lightbox-modal">
-      <button class="lightbox-close" id="btnCloseLightbox" aria-label="Close">&times;</button>
-      <button class="lightbox-nav lightbox-nav-prev" id="btnLightboxPrev" aria-label="Previous photo">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-      </button>
-      <div class="lightbox-image-wrap">
-        <img class="lightbox-image" id="lightboxImage" src="" alt="Site photo" />
-      </div>
-      <button class="lightbox-nav lightbox-nav-next" id="btnLightboxNext" aria-label="Next photo">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-      </button>
-      <div class="lightbox-caption">
-        <span id="lightboxCaption"></span>
-        <span class="lightbox-counter" id="lightboxCounter"></span>
-      </div>
-    </div>
-  </div>
-
+  <script src="../assets/utils.js"></script>
   <script src="ranger.js"></script>
 </body>
 

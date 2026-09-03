@@ -1,14 +1,13 @@
 (function () {
   const usernameInput = document.getElementById('username');
   const passwordInput = document.getElementById('password');
-  const rememberMe    = document.getElementById('rememberMe');
   const btnSignIn     = document.getElementById('btnSignIn');
   const togglePw      = document.getElementById('togglePw');
   const eyeIcon       = document.getElementById('eyeIcon');
   const errorMsg      = document.getElementById('errorMsg');
   const roleBtns      = document.querySelectorAll('.role-btn');
 
-  let selectedRole = 'menro';
+  let selectedRole = null;
 
   const CREDENTIALS = {
     menro:  { username: 'menro', password: 'menro123' },
@@ -41,12 +40,6 @@
     }
   });
 
-  const saved = localStorage.getItem('menro_remembered_user');
-  if (saved) {
-    usernameInput.value = saved;
-    rememberMe.checked = true;
-  }
-
   function showError(msg) {
     errorMsg.textContent = msg;
   }
@@ -59,6 +52,10 @@
     const user = usernameInput.value.trim();
     const pass = passwordInput.value;
 
+    if (!selectedRole) {
+      showError('Please select your role before signing in.');
+      return false;
+    }
     if (!user && !pass) {
       showError('Please enter your username and password.');
       return false;
@@ -90,12 +87,6 @@
     const user = usernameInput.value.trim();
     const pass = passwordInput.value;
 
-    if (rememberMe.checked) {
-      localStorage.setItem('menro_remembered_user', user);
-    } else {
-      localStorage.removeItem('menro_remembered_user');
-    }
-
     btnSignIn.disabled = true;
 
     setTimeout(() => {
@@ -115,7 +106,7 @@
 
       if (success) {
         if (selectedRole === 'menro') {
-          window.location.href = '../Menro/satellite.html';
+          window.location.href = '../Menro/html/satellite.html';
         } else if (selectedRole === 'ranger') {
           window.location.href = '../ranger/ranger.html';
         }

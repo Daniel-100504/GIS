@@ -70,9 +70,13 @@ const AQUAGUARD_CONFIG = {
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) closeSignoutConfirm();
   });
-  confirmBtn.addEventListener('click', () => {
+  function signOutRanger() {
     window.location.href = '../Login/Login.html';
-  });
+  }
+
+  confirmBtn.addEventListener('click', signOutRanger);
+
+  initIdleLogout(15, signOutRanger, { overlayClass: "confirm-overlay" });
 })();
 
 function switchView(viewName, btn) {
@@ -245,7 +249,6 @@ function switchView(viewName, btn) {
 
     const areaRaw = findField(flat, FIELD_CANDIDATES.area);
     const transectRaw = findField(flat, FIELD_CANDIDATES.transect);
-    const photos = collectPhotos(flat, record);
 
     return {
       id: flat['_id'] || flat['_uuid'] || Math.random().toString(36).slice(2),
@@ -339,15 +342,6 @@ function switchView(viewName, btn) {
     }).join('');
   }
 
-  const PAGE_SIZE = 20;
-  let currentPage = 1;
-
-  function clampPage(page, totalPages) {
-    if (page < 1) return 1;
-    if (page > totalPages) return totalPages;
-    return page;
-  }
-
   function renderHistoryTable(submissions, totalCount) {
     const tbody = document.getElementById('history-table-body');
     const footerText = document.getElementById('history-footer-text');
@@ -371,6 +365,15 @@ function switchView(viewName, btn) {
         <button class="inline-link" id="filter-empty-clear">Clear filters</button></td></tr>`;
       if (footerText) footerText.textContent = `Showing 0 of ${total} submissions.`;
       if (paginationEl) paginationEl.style.display = 'none';
+      const clearLink = document.getElementById('filter-empty-clear');
+      if (clearLink) clearLink.addEventListener('click', clearFilters);
+      return;
+    }
+
+    if (submissions.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8" class="filter-empty-state">No submissions match your filters.
+        <button class="inline-link" id="filter-empty-clear">Clear filters</button></td></tr>`;
+      if (note) note.textContent = `Showing 0 of ${total} submissions.`;
       const clearLink = document.getElementById('filter-empty-clear');
       if (clearLink) clearLink.addEventListener('click', clearFilters);
       return;
@@ -411,17 +414,7 @@ function switchView(viewName, btn) {
         </tr>`;
     }).join('');
 
-    const rangeStart = start + 1;
-    const rangeEnd = start + pageItems.length;
-    const filteredNote = sorted.length !== total ? ` (filtered from ${total})` : '';
-    if (footerText) {
-      footerText.textContent = `Showing ${rangeStart}–${rangeEnd} of ${sorted.length} submissions${filteredNote}.`;
-    }
-
-    if (paginationEl) paginationEl.style.display = totalPages > 1 ? 'flex' : 'none';
-    if (pageIndicator) pageIndicator.textContent = `Page ${currentPage} of ${totalPages}`;
-    if (prevBtn) prevBtn.disabled = currentPage <= 1;
-    if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
+    if (note) note.textContent = `Showing ${sorted.length} of ${total} submissions.`;
   }
 
   function renderAlert(submissions) {
@@ -446,14 +439,6 @@ function switchView(viewName, btn) {
     if (titleEl) titleEl.textContent = `Water quality concern detected — ${topZone}`;
     if (subEl) subEl.textContent = `${flagged.length} submission${flagged.length === 1 ? '' : 's'} flagged degraded or discharge conditions. Prioritize water quality checks on your next inspection.`;
     panel.style.display = 'flex';
-  }
-
-  function escapeHtml(str) {
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
   }
 
   function showError(message) {
@@ -540,27 +525,8 @@ function switchView(viewName, btn) {
   }
 
   function applyFilters() {
-    currentPage = 1;
     updateClearButtonState();
     renderHistoryTable(getFilteredSubmissions(), currentSubmissions.length);
-  }
-
-  function rerenderHistory() {
-    renderHistoryTable(getFilteredSubmissions(), currentSubmissions.length);
-  }
-
-  function goToPage(delta) {
-    currentPage += delta;
-    rerenderHistory();
-    const scrollTarget = document.getElementById('history-table-body');
-    if (scrollTarget) scrollTarget.closest('.panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  function bindPagination() {
-    const prevBtn = document.getElementById('page-prev');
-    const nextBtn = document.getElementById('page-next');
-    if (prevBtn) prevBtn.addEventListener('click', () => goToPage(-1));
-    if (nextBtn) nextBtn.addEventListener('click', () => goToPage(1));
   }
 
   function clearFilters() {
@@ -654,7 +620,7 @@ function switchView(viewName, btn) {
     renderStats(currentSubmissions);
     renderRecentSubmissions(currentSubmissions);
     populateFilterOptions(currentSubmissions);
-    rerenderHistory();
+    renderHistoryTable(getFilteredSubmissions(), currentSubmissions.length);
     renderAlert(currentSubmissions);
   }
 
@@ -851,8 +817,5 @@ function switchView(viewName, btn) {
   bindDeleteDelegation();
   bindDeleteModal();
   bindFilterBar();
-  bindPagination();
-  bindPhotoDelegation();
-  bindLightbox();
   loadSubmissions();
 })();

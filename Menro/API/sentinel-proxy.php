@@ -1,8 +1,6 @@
 <?php
 
-define('CDSE_CLIENT_ID',     'sh-70f32f1b-d5f0-477e-8141-5271e145f2b1');
-define('CDSE_CLIENT_SECRET', '4AIkqqYHJG5ZuMN1UmUzqRtNLZqfRhf9');
-define('CDSE_INSTANCE_ID',   '3f1a0299-ea8a-45d6-a1a3-91684cb34b91');
+require_once __DIR__ . '/config.php';
 
 define('CDSE_TOKEN_URL', 'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token');
 define('CDSE_WMS_BASE',  'https://sh.dataspace.copernicus.eu/ogc/wms/' . CDSE_INSTANCE_ID);
@@ -68,10 +66,28 @@ function getAccessToken() {
 $mode = $_GET['mode'] ?? 'wms';
 
 if ($mode === 'wms') {
-    $token = getAccessToken();
-
     $params = $_GET;
     unset($params['mode']);
+    ksort($params);
+
+    $tileCacheDir = __DIR__ . '/tile-cache';
+    if (!is_dir($tileCacheDir)) {
+        @mkdir($tileCacheDir, 0775, true);
+    }
+    $cacheKey  = md5(http_build_query($params));
+    $cacheFile = "{$tileCacheDir}/{$cacheKey}.tile";
+    $cacheMeta = "{$cacheFile}.meta";
+    $cacheTtl  = 86400; // tiles for a given bbox/date/layer don't change; safe to keep a day
+
+    if (is_file($cacheFile) && is_file($cacheMeta) && (time() - filemtime($cacheFile)) < $cacheTtl) {
+        header('Content-Type: ' . trim(file_get_contents($cacheMeta)));
+        header('Cache-Control: public, max-age=3600');
+        header('X-Tile-Cache: HIT');
+        readfile($cacheFile);
+        exit;
+    }
+
+    $token = getAccessToken();
     $url = CDSE_WMS_BASE . '?' . http_build_query($params);
 
     $ch = curl_init($url);
@@ -90,8 +106,12 @@ if ($mode === 'wms') {
         exit;
     }
 
+    @file_put_contents($cacheFile, $body);
+    @file_put_contents($cacheMeta, $contentType);
+
     header('Content-Type: ' . $contentType);
     header('Cache-Control: public, max-age=3600');
+    header('X-Tile-Cache: MISS');
     echo $body;
     exit;
 }
