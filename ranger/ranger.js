@@ -104,6 +104,8 @@ function switchView(viewName, btn) {
     water:     ['water_quality', 'water_quality_status', 'wq', 'water_condition', 'water_quality_observed'],
   };
 
+  const PHOTO_FIELD_PATTERN = /photo|image|picture|snapshot/i;
+
   function flattenKeys(record) {
     const flat = {};
     for (const key in record) {
@@ -169,6 +171,49 @@ function switchView(viewName, btn) {
     return isNaN(n) ? null : n;
   }
 
+  // Kobo stores an uploaded photo's original filename as the question's
+  // value, while the actual downloadable URL lives in the submission's
+  // "_attachments" array. This matches each photo question to its
+  // attachment and returns thumbnail + full-size URLs for the lightbox.
+  function collectPhotoValues(flat) {
+    return Object.keys(flat)
+      .filter(k => PHOTO_FIELD_PATTERN.test(k) && flat[k] !== '' && flat[k] != null)
+      .map(k => flat[k]);
+  }
+
+  function resolvePhoto(value, attachments) {
+    if (value === null || value === undefined) return null;
+    const raw = String(value).trim();
+    if (!raw) return null;
+
+    if (/^https?:\/\//i.test(raw)) {
+      return { thumb: raw, full: raw };
+    }
+
+    if (!Array.isArray(attachments) || attachments.length === 0) return null;
+
+    const target = raw.toLowerCase();
+    const match = attachments.find(a => {
+      const filename = (a && a.filename ? String(a.filename) : '').toLowerCase();
+      const question = (a && a.question ? String(a.question) : '').toLowerCase();
+      return filename.endsWith(target) || filename.includes(target) || question === target;
+    });
+    if (!match) return null;
+
+    const thumb = match.download_small_url || match.download_medium_url ||
+      match.download_url || match.download_large_url;
+    const full = match.download_large_url || match.download_url ||
+      match.download_medium_url || thumb;
+    return thumb ? { thumb, full } : null;
+  }
+
+  function collectPhotos(flat, record) {
+    const attachments = flat['_attachments'] || (record && record['_attachments']) || [];
+    return collectPhotoValues(flat)
+      .map(v => resolvePhoto(v, attachments))
+      .filter(Boolean);
+  }
+
   function waterQualityInfo(raw) {
     const wq = (raw || '').toString().toLowerCase();
     if (wq.includes('discharge')) return { label: 'Discharge', cls: 'wq-discharge' };
@@ -216,6 +261,7 @@ function switchView(viewName, btn) {
       canopy: canopyNum,
       water: waterQualityInfo(waterRaw),
       status: deriveStatus(canopyNum, waterRaw),
+      photos: photos,
     };
   }
 
@@ -298,14 +344,29 @@ function switchView(viewName, btn) {
 
   function renderHistoryTable(submissions, totalCount) {
     const tbody = document.getElementById('history-table-body');
-    const note = document.getElementById('history-note');
+    const footerText = document.getElementById('history-footer-text');
+    const paginationEl = document.getElementById('history-pagination');
+    const pageIndicator = document.getElementById('page-indicator');
+    const prevBtn = document.getElementById('page-prev');
+    const nextBtn = document.getElementById('page-next');
     if (!tbody) return;
 
     const total = typeof totalCount === 'number' ? totalCount : submissions.length;
 
     if (total === 0) {
       tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--ink-400); padding:20px;">No submissions yet.</td></tr>`;
-      if (note) note.textContent = 'Showing 0 of 0 submissions. Records will appear here after each field inspection.';
+      if (footerText) footerText.textContent = 'Showing 0 of 0 submissions. Records will appear here after each field inspection.';
+      if (paginationEl) paginationEl.style.display = 'none';
+      return;
+    }
+
+    if (submissions.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8" class="filter-empty-state">No submissions match your filters.
+        <button class="inline-link" id="filter-empty-clear">Clear filters</button></td></tr>`;
+      if (footerText) footerText.textContent = `Showing 0 of ${total} submissions.`;
+      if (paginationEl) paginationEl.style.display = 'none';
+      const clearLink = document.getElementById('filter-empty-clear');
+      if (clearLink) clearLink.addEventListener('click', clearFilters);
       return;
     }
 
@@ -324,7 +385,12 @@ function switchView(viewName, btn) {
       return bt - at;
     });
 
-    tbody.innerHTML = sorted.map(s => {
+    const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+    currentPage = clampPage(currentPage, totalPages);
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const pageItems = sorted.slice(start, start + PAGE_SIZE);
+
+    tbody.innerHTML = pageItems.map(s => {
       const badge = statusBadge(s.status);
       const canopyText = s.canopy !== null ? `${s.canopy}%` : '—';
       const deleteBtn = s.koboId
@@ -388,8 +454,10 @@ function switchView(viewName, btn) {
     if (tbody) {
       tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--degraded); padding:20px;">Couldn't load submissions: ${escapeHtml(message)}</td></tr>`;
     }
-    const note = document.getElementById('history-note');
-    if (note) note.textContent = 'Check that kobo-proxy.php is reachable and correctly configured.';
+    const footerText = document.getElementById('history-footer-text');
+    if (footerText) footerText.textContent = 'Check that kobo-proxy.php is reachable and correctly configured.';
+    const paginationEl = document.getElementById('history-pagination');
+    if (paginationEl) paginationEl.style.display = 'none';
   }
 
   let currentSubmissions = [];
@@ -594,6 +662,92 @@ function switchView(viewName, btn) {
       });
     });
   }
+
+  // --- Photo lightbox ---------------------------------------------------
+  const lightboxState = { photos: [], index: 0, caption: '' };
+
+  function findPhotoTarget(e) {
+    return e.target.closest('[data-photo-owner]');
+  }
+
+  function bindPhotoDelegation() {
+    const recentContainer = document.getElementById('recent-submission-list');
+    const historyBody = document.getElementById('history-table-body');
+    [recentContainer, historyBody].forEach(el => {
+      if (!el) return;
+      el.addEventListener('click', (e) => {
+        const target = findPhotoTarget(e);
+        if (!target) return;
+        const ownerId = target.getAttribute('data-photo-owner');
+        const submission = currentSubmissions.find(s => String(s.id) === ownerId);
+        if (!submission || !submission.photos || submission.photos.length === 0) return;
+        openLightbox(submission, 0);
+      });
+    });
+  }
+
+  function renderLightboxFrame() {
+    const img = document.getElementById('lightboxImage');
+    const caption = document.getElementById('lightboxCaption');
+    const counter = document.getElementById('lightboxCounter');
+    const prevBtn = document.getElementById('btnLightboxPrev');
+    const nextBtn = document.getElementById('btnLightboxNext');
+    const photo = lightboxState.photos[lightboxState.index];
+    if (img && photo) img.src = photo.full;
+    if (caption) caption.textContent = lightboxState.caption;
+    if (counter) {
+      counter.textContent = lightboxState.photos.length > 1
+        ? `${lightboxState.index + 1} of ${lightboxState.photos.length}`
+        : '';
+    }
+    const multi = lightboxState.photos.length > 1;
+    if (prevBtn) prevBtn.style.display = multi ? 'flex' : 'none';
+    if (nextBtn) nextBtn.style.display = multi ? 'flex' : 'none';
+  }
+
+  function openLightbox(submission, index) {
+    lightboxState.photos = submission.photos;
+    lightboxState.index = index || 0;
+    lightboxState.caption = `${submission.barangay} · ${formatDate(submission.date)}`;
+    renderLightboxFrame();
+    const overlay = document.getElementById('photoLightbox');
+    if (overlay) overlay.classList.add('open');
+  }
+
+  function closeLightbox() {
+    const overlay = document.getElementById('photoLightbox');
+    if (overlay) overlay.classList.remove('open');
+    lightboxState.photos = [];
+  }
+
+  function lightboxNav(delta) {
+    if (lightboxState.photos.length === 0) return;
+    const len = lightboxState.photos.length;
+    lightboxState.index = (lightboxState.index + delta + len) % len;
+    renderLightboxFrame();
+  }
+
+  function bindLightbox() {
+    const overlay = document.getElementById('photoLightbox');
+    const closeBtn = document.getElementById('btnCloseLightbox');
+    const prevBtn = document.getElementById('btnLightboxPrev');
+    const nextBtn = document.getElementById('btnLightboxNext');
+    if (!overlay) return;
+
+    if (closeBtn) closeBtn.addEventListener('click', closeLightbox);
+    if (prevBtn) prevBtn.addEventListener('click', () => lightboxNav(-1));
+    if (nextBtn) nextBtn.addEventListener('click', () => lightboxNav(1));
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeLightbox();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (!overlay.classList.contains('open')) return;
+      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowLeft') lightboxNav(-1);
+      if (e.key === 'ArrowRight') lightboxNav(1);
+    });
+  }
+  // ------------------------------------------------------------------------
 
   function openDeleteConfirm() {
     const overlay = document.getElementById('deleteOverlay');
