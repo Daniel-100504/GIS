@@ -17,10 +17,56 @@ function zoneNameForBarangay(barangay) {
     return zone ? zone.name : (barangay || "Unknown").replace(/_/g, " ");
 }
 
+function getExportDateRange() {
+    const rangeSelect = document.getElementById("exportDateRange");
+    const mode = rangeSelect ? rangeSelect.value : "all";
+    const toISO = (d) => d.toISOString().slice(0, 10);
+    const today = new Date();
+
+    if (mode === "month") {
+        return { from: toISO(new Date(today.getFullYear(), today.getMonth(), 1)), to: toISO(today) };
+    }
+    if (mode === "7days") {
+        const from = new Date(today);
+        from.setDate(from.getDate() - 6);
+        return { from: toISO(from), to: toISO(today) };
+    }
+    if (mode === "30days") {
+        const from = new Date(today);
+        from.setDate(from.getDate() - 29);
+        return { from: toISO(from), to: toISO(today) };
+    }
+    if (mode === "custom") {
+        const fromInput = document.getElementById("exportDateFrom");
+        const toInput = document.getElementById("exportDateTo");
+        return {
+            from: fromInput && fromInput.value ? fromInput.value : null,
+            to: toInput && toInput.value ? toInput.value : null,
+        };
+    }
+    return { from: null, to: null };
+}
+
+function exportRangeLabel() {
+    const { from, to } = getExportDateRange();
+    if (!from && !to) return `Generated ${new Date().toLocaleString("en-US")}`;
+
+    const fmt = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+    if (from && to) return `${fmt(from)} – ${fmt(to)}`;
+    if (from) return `From ${fmt(from)}`;
+    return `Through ${fmt(to)}`;
+}
+
 function sortedSubmissions() {
-    return [...ALL_SUBMISSIONS].sort((a, b) =>
-        (a["Inspection_Date"] || "").localeCompare(b["Inspection_Date"] || "")
-    );
+    const { from, to } = getExportDateRange();
+    return [...ALL_SUBMISSIONS]
+        .filter(sub => {
+            const date = sub["Inspection_Date"] || "";
+            if (from && date < from) return false;
+            if (to && date > to) return false;
+            return true;
+        })
+        .sort((a, b) => (a["Inspection_Date"] || "").localeCompare(b["Inspection_Date"] || ""));
 }
 
 function exportFieldSurveyExcel() {
@@ -60,7 +106,7 @@ function exportFieldSurveyExcel() {
     const sheetData = [
         ["AquaGuard — Field Survey Report"],
         ["DENR-MENRO Batangas · Calatagan Mangrove Reserve"],
-        [`Generated ${new Date().toLocaleString("en-US")}  ·  ${rows.length} survey${rows.length !== 1 ? "s" : ""} recorded`],
+        [`${exportRangeLabel()}  ·  ${rows.length} survey${rows.length !== 1 ? "s" : ""} recorded`],
         [],
         header,
         ...body,
@@ -111,7 +157,7 @@ function exportFieldSurveyPdf() {
         doc.setFontSize(9);
         doc.text("DENR-MENRO Batangas · Calatagan Mangrove Reserve", marginX, 46);
         doc.text(
-            `Generated ${new Date().toLocaleString("en-US")}  ·  ${rows.length} survey${rows.length !== 1 ? "s" : ""} recorded`,
+            `${exportRangeLabel()}  ·  ${rows.length} survey${rows.length !== 1 ? "s" : ""} recorded`,
             pageWidth - marginX, 46, { align: "right" }
         );
 
@@ -170,6 +216,14 @@ function exportFieldSurveyPdf() {
     });
 
     doc.save(`aquaguard-field-survey-report-${todayISO()}.pdf`);
+}
+
+const exportDateRangeSelect = document.getElementById("exportDateRange");
+const exportDateCustom      = document.getElementById("exportDateCustom");
+if (exportDateRangeSelect && exportDateCustom) {
+    exportDateRangeSelect.addEventListener("change", () => {
+        exportDateCustom.hidden = exportDateRangeSelect.value !== "custom";
+    });
 }
 
 if (btnCloseExportReport)  btnCloseExportReport.addEventListener("click", closeExportReport);

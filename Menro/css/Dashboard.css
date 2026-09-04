@@ -74,8 +74,6 @@
   overflow-y: auto;
 }
 
-.survey-detail-modal { width: min(640px, 94vw); }
-
 /* .confirm-modal and .btn-confirm-cancel/.btn-confirm-danger live in assets/theme.css (shared with ranger.css). */
 
 .btn-confirm-primary {
@@ -218,90 +216,51 @@
   box-shadow: 0 4px 12px rgba(10, 49, 40, 0.08);
 }
 
-/* The following survey-detail-* styles are unused leftovers from a deleted
-   feature (a modal that opened when clicking a recent survey row). Kept
-   as-is per user request rather than deleted during this file split. */
-
-.survey-detail-topline {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 18px;
+.export-daterange-group {
+  width: 100%;
+  margin-bottom: 22px;
+  text-align: left;
 }
 
-.status-chip {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
-
-.status-chip.status-healthy  { background: #e6f4ee; color: var(--healthy); }
-
-.status-chip.status-moderate { background: #fbf0e0; color: var(--moderate); }
-
-.status-chip.status-degraded { background: #fbeae7; color: var(--degraded); }
-
-.status-chip.status-pending  { background: var(--surface-sunken); color: var(--ink-400); }
-
-.survey-detail-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px 20px;
-  padding: 18px 0;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-}
-
-.survey-detail-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.survey-detail-label {
+.export-daterange-label {
+  display: block;
   font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--ink-400);
+  margin-bottom: 8px;
 }
 
-.survey-detail-value {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--ink-900);
-}
-
-.survey-detail-notes {
-  padding: 16px 0 4px;
-}
-
-.survey-detail-notes p {
-  margin-top: 6px;
-  font-size: 0.85rem;
-  line-height: 1.6;
+.export-daterange-select,
+.export-date-input {
+  padding: 10px 12px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   color: var(--ink-700);
+  font-size: 0.83rem;
+  font-family: var(--font-body);
 }
 
-.survey-detail-source {
+.export-daterange-select {
+  width: 100%;
+  cursor: pointer;
+}
+
+.export-daterange-custom {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-  font-size: 0.74rem;
-  font-weight: 600;
-  color: var(--ink-400);
+  margin-top: 10px;
 }
 
-.survey-detail-source svg { width: 15px; height: 15px; flex-shrink: 0; }
+.export-date-input { flex: 1; min-width: 0; font-size: 0.8rem; }
 
-@media (max-width: 560px) {
-  .survey-detail-grid { grid-template-columns: 1fr; }
+.export-daterange-sep {
+  font-size: 0.76rem;
+  color: var(--ink-400);
+  font-weight: 500;
 }
 
 .dashboard-view {
@@ -311,7 +270,9 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: #edf2ef;
+  background:
+    radial-gradient(rgba(28, 125, 97, 0.06) 1px, transparent 1px) 0 0/28px 28px,
+    #edf2ef;
   overflow-y: auto;
   z-index: 5;
 }
@@ -327,10 +288,26 @@
 .dashboard-header {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
-  padding-bottom: 22px;
-  border-bottom: 1px solid var(--border);
+  gap: 18px;
+  margin-bottom: 28px;
+  padding: 24px 28px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--brand-700), var(--brand-900));
+  box-shadow: var(--shadow-md);
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard-header::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  right: -6%;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.10), transparent 70%);
+  pointer-events: none;
 }
 
 .dashboard-header-badge {
@@ -341,7 +318,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-md), inset 0 0 0 1px rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.12);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.18);
+  position: relative;
+  z-index: 1;
 }
 
 .dashboard-header-badge img {
@@ -355,9 +335,11 @@
   font-family: var(--font-display);
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--brand-900);
+  color: #fff;
   margin-bottom: 6px;
   letter-spacing: -0.01em;
+  position: relative;
+  z-index: 1;
 }
 
 .dashboard-meta-row {
@@ -365,11 +347,13 @@
   align-items: center;
   gap: 8px;
   font-size: 0.76rem;
-  color: var(--ink-400);
+  color: var(--brand-150);
   font-weight: 500;
+  position: relative;
+  z-index: 1;
 }
 
-.dashboard-meta-dot { color: var(--border-strong); }
+.dashboard-meta-dot { color: rgba(255,255,255,0.35); }
 
 .dashboard-section-title {
   display: flex;
@@ -422,11 +406,13 @@
   border-color: var(--brand-150);
 }
 
-.dashboard-stat-card.accent-healthy  { border-left-color: var(--healthy); }
+.dashboard-stat-card.accent-brand    { border-left-color: var(--brand-500); background: linear-gradient(135deg, var(--brand-50), var(--surface) 65%); }
 
-.dashboard-stat-card.accent-moderate { border-left-color: var(--moderate); }
+.dashboard-stat-card.accent-healthy  { border-left-color: var(--healthy); background: linear-gradient(135deg, #eaf6f0, var(--surface) 65%); }
 
-.dashboard-stat-card.accent-degraded { border-left-color: var(--degraded); }
+.dashboard-stat-card.accent-moderate { border-left-color: var(--moderate); background: linear-gradient(135deg, #fdf3e4, var(--surface) 65%); }
+
+.dashboard-stat-card.accent-degraded { border-left-color: var(--degraded); background: linear-gradient(135deg, #fdece9, var(--surface) 65%); }
 
 .dashboard-stat-icon {
   position: absolute;

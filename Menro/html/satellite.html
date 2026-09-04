@@ -446,6 +446,22 @@ Lng: ---
 
     </div>
 
+    <div class="export-daterange-group">
+      <label for="exportDateRange" class="export-daterange-label">Date range</label>
+      <select id="exportDateRange" class="export-daterange-select">
+        <option value="all" selected>All time</option>
+        <option value="month">This month</option>
+        <option value="7days">Last 7 days</option>
+        <option value="30days">Last 30 days</option>
+        <option value="custom">Custom range</option>
+      </select>
+      <div class="export-daterange-custom" id="exportDateCustom" hidden>
+        <input type="date" id="exportDateFrom" class="export-date-input">
+        <span class="export-daterange-sep">to</span>
+        <input type="date" id="exportDateTo" class="export-date-input">
+      </div>
+    </div>
+
     <div class="confirm-modal-actions">
       <button type="button" class="btn-confirm-cancel" id="btnCancelExportReport">Cancel</button>
       <button type="button" class="btn-confirm-primary" id="btnConfirmExportReport">Export</button>

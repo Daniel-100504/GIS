@@ -1,3 +1,17 @@
+const AUTH_API = "../../Login/Database/api.php";
+
+(async function enforceMenroSession() {
+    try {
+        const res = await fetch(`${AUTH_API}?action=checkSession`);
+        const data = await res.json();
+        if (!data.success || data.user.role !== "menro") {
+            window.location.href = "../../Login/Login.html";
+        }
+    } catch (err) {
+        window.location.href = "../../Login/Login.html";
+    }
+})();
+
 function handleLogout() {
     openSignOutConfirm();
 }
@@ -16,6 +30,7 @@ function closeSignOutConfirm() {
 }
 
 function confirmSignOut() {
+    fetch(`${AUTH_API}?action=logout`, { method: "POST" }).catch(() => {});
     localStorage.removeItem("aquaguard_current_user");
     window.location.href = "../../Login/Login.html";
 }

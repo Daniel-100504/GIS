@@ -1,6 +1,18 @@
 const ACCOUNTS_API = "../Login/Database/api.php";
 
-const ROLE_LABEL = { menro: "MENRO", ranger: "Ranger" };
+(async function enforceAdminSession() {
+  try {
+    const res = await fetch(`${ACCOUNTS_API}?action=checkSession`);
+    const data = await res.json();
+    if (!data.success || data.user.role !== "admin") {
+      window.location.href = "../Login/Login.html";
+    }
+  } catch (err) {
+    window.location.href = "../Login/Login.html";
+  }
+})();
+
+const ROLE_LABEL = { menro: "MENRO", ranger: "Ranger", admin: "Administrator" };
 
 function formatDate(dateStr) {
   const d = new Date(dateStr.replace(" ", "T"));
@@ -53,6 +65,63 @@ function renderAccounts(role, accounts) {
           <button class="btn-row-action danger" data-action="delete" data-role="${role}" data-id="${acc.id}" data-username="${escapeHtml(acc.username)}">Delete</button>
         </div>
       </td>
+    </tr>
+  `).join("");
+}
+
+const VIEW_TITLE = {
+  accountsView: "Accounts",
+  timeLogView: "Time Log",
+};
+
+document.querySelectorAll(".nav-item[data-view]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".nav-item[data-view]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+
+    const viewId = btn.dataset.view;
+    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+    document.getElementById(viewId).classList.add("active");
+    document.getElementById("topbarTitle").textContent = VIEW_TITLE[viewId] || "Accounts";
+
+    if (viewId === "timeLogView") loadTimeLog();
+  });
+});
+
+function formatTimeOnly(dateStr) {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr.replace(" ", "T"));
+  if (isNaN(d)) return "—";
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+async function loadTimeLog() {
+  const body = document.getElementById("timeLogBody");
+  try {
+    const res = await fetch(`${ACCOUNTS_API}?action=listTimeLog`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || "Failed to load time log.");
+    renderTimeLog(data.entries || []);
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="6" class="account-empty">Couldn't load the time log.</td></tr>`;
+  }
+}
+
+function renderTimeLog(entries) {
+  const body = document.getElementById("timeLogBody");
+  if (entries.length === 0) {
+    body.innerHTML = `<tr><td colspan="6" class="account-empty">No check-ins recorded yet.</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = entries.map(entry => `
+    <tr>
+      <td>${escapeHtml(entry.actor_username)}</td>
+      <td>${escapeHtml(entry.email || "—")}</td>
+      <td>${escapeHtml(ROLE_LABEL[entry.actor_role] || entry.actor_role)}</td>
+      <td>${escapeHtml(formatDate(entry.log_date))}</td>
+      <td>${escapeHtml(formatTimeOnly(entry.time_in))}</td>
+      <td>${escapeHtml(formatTimeOnly(entry.time_out))}</td>
     </tr>
   `).join("");
 }
@@ -357,7 +426,11 @@ function closeSignoutConfirm() { signoutOverlay.classList.remove("open"); }
 btnSignOut.addEventListener("click", openSignoutConfirm);
 bindOverlayDismiss(signoutOverlay, closeSignoutConfirm, "btnCloseSignout", "btnCancelSignout");
 
-document.getElementById("btnConfirmSignout").addEventListener("click", () => {
+document.getElementById("btnConfirmSignout").addEventListener("click", async () => {
+  try {
+    await fetch(`${ACCOUNTS_API}?action=logout`, { method: "POST" });
+  } catch (err) {
+  }
   localStorage.removeItem("aquaguard_current_user");
   window.location.href = "../Login/Login.html";
 });

@@ -3,6 +3,20 @@ const AQUAGUARD_CONFIG = {
   TOTAL_PROTECTED_AREAS: 6,
 };
 
+const AUTH_API = '../Login/Database/api.php';
+
+(async function enforceRangerSession() {
+  try {
+    const res = await fetch(`${AUTH_API}?action=checkSession`);
+    const data = await res.json();
+    if (!data.success || data.user.role !== 'ranger') {
+      window.location.href = '../Login/Login.html';
+    }
+  } catch (err) {
+    window.location.href = '../Login/Login.html';
+  }
+})();
+
 (function () {
   const canvas = document.getElementById('gisCanvas');
   const ctx = canvas.getContext('2d');
@@ -71,6 +85,7 @@ const AQUAGUARD_CONFIG = {
     if (e.target === overlay) closeSignoutConfirm();
   });
   function signOutRanger() {
+    fetch(`${AUTH_API}?action=logout`, { method: 'POST' }).catch(() => {});
     localStorage.removeItem('aquaguard_current_user');
     window.location.href = '../Login/Login.html';
   }
@@ -661,92 +676,6 @@ function switchView(viewName, btn) {
       });
     });
   }
-
-  // --- Photo lightbox ---------------------------------------------------
-  const lightboxState = { photos: [], index: 0, caption: '' };
-
-  function findPhotoTarget(e) {
-    return e.target.closest('[data-photo-owner]');
-  }
-
-  function bindPhotoDelegation() {
-    const recentContainer = document.getElementById('recent-submission-list');
-    const historyBody = document.getElementById('history-table-body');
-    [recentContainer, historyBody].forEach(el => {
-      if (!el) return;
-      el.addEventListener('click', (e) => {
-        const target = findPhotoTarget(e);
-        if (!target) return;
-        const ownerId = target.getAttribute('data-photo-owner');
-        const submission = currentSubmissions.find(s => String(s.id) === ownerId);
-        if (!submission || !submission.photos || submission.photos.length === 0) return;
-        openLightbox(submission, 0);
-      });
-    });
-  }
-
-  function renderLightboxFrame() {
-    const img = document.getElementById('lightboxImage');
-    const caption = document.getElementById('lightboxCaption');
-    const counter = document.getElementById('lightboxCounter');
-    const prevBtn = document.getElementById('btnLightboxPrev');
-    const nextBtn = document.getElementById('btnLightboxNext');
-    const photo = lightboxState.photos[lightboxState.index];
-    if (img && photo) img.src = photo.full;
-    if (caption) caption.textContent = lightboxState.caption;
-    if (counter) {
-      counter.textContent = lightboxState.photos.length > 1
-        ? `${lightboxState.index + 1} of ${lightboxState.photos.length}`
-        : '';
-    }
-    const multi = lightboxState.photos.length > 1;
-    if (prevBtn) prevBtn.style.display = multi ? 'flex' : 'none';
-    if (nextBtn) nextBtn.style.display = multi ? 'flex' : 'none';
-  }
-
-  function openLightbox(submission, index) {
-    lightboxState.photos = submission.photos;
-    lightboxState.index = index || 0;
-    lightboxState.caption = `${submission.barangay} · ${formatDate(submission.date)}`;
-    renderLightboxFrame();
-    const overlay = document.getElementById('photoLightbox');
-    if (overlay) overlay.classList.add('open');
-  }
-
-  function closeLightbox() {
-    const overlay = document.getElementById('photoLightbox');
-    if (overlay) overlay.classList.remove('open');
-    lightboxState.photos = [];
-  }
-
-  function lightboxNav(delta) {
-    if (lightboxState.photos.length === 0) return;
-    const len = lightboxState.photos.length;
-    lightboxState.index = (lightboxState.index + delta + len) % len;
-    renderLightboxFrame();
-  }
-
-  function bindLightbox() {
-    const overlay = document.getElementById('photoLightbox');
-    const closeBtn = document.getElementById('btnCloseLightbox');
-    const prevBtn = document.getElementById('btnLightboxPrev');
-    const nextBtn = document.getElementById('btnLightboxNext');
-    if (!overlay) return;
-
-    if (closeBtn) closeBtn.addEventListener('click', closeLightbox);
-    if (prevBtn) prevBtn.addEventListener('click', () => lightboxNav(-1));
-    if (nextBtn) nextBtn.addEventListener('click', () => lightboxNav(1));
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) closeLightbox();
-    });
-    document.addEventListener('keydown', (e) => {
-      if (!overlay.classList.contains('open')) return;
-      if (e.key === 'Escape') closeLightbox();
-      if (e.key === 'ArrowLeft') lightboxNav(-1);
-      if (e.key === 'ArrowRight') lightboxNav(1);
-    });
-  }
-  // ------------------------------------------------------------------------
 
   function openDeleteConfirm() {
     const overlay = document.getElementById('deleteOverlay');

@@ -60,10 +60,64 @@
 
   [usernameInput, passwordInput].forEach(input => {
     input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') handleSignIn();
+      if (e.key === 'Enter' && !btnSignIn.disabled) handleSignIn();
     });
     input.addEventListener('input', clearError);
   });
+
+  const LOCKOUT_KEY = 'aquaguard_login_lockout';
+  let lockoutInterval = null;
+
+  function startLockoutCountdown(lockedUntil, username) {
+    clearInterval(lockoutInterval);
+    btnSignIn.disabled = true;
+    usernameInput.disabled = true;
+    passwordInput.disabled = true;
+
+    localStorage.setItem(LOCKOUT_KEY, JSON.stringify({ username, lockedUntil }));
+
+    function tick() {
+      const remaining = Math.ceil((lockedUntil - Date.now()) / 1000);
+
+      if (remaining <= 0) {
+        clearInterval(lockoutInterval);
+        lockoutInterval = null;
+        btnSignIn.disabled = false;
+        usernameInput.disabled = false;
+        passwordInput.disabled = false;
+        localStorage.removeItem(LOCKOUT_KEY);
+        clearError();
+        return;
+      }
+
+      const mins = Math.floor(remaining / 60);
+      const secs = remaining % 60;
+      const timeStr = mins > 0 ? `${mins}:${String(secs).padStart(2, '0')}` : `${secs}s`;
+      showError(`Too many failed attempts. Try again in ${timeStr}.`);
+    }
+
+    tick();
+    lockoutInterval = setInterval(tick, 1000);
+  }
+
+  function resumeLockoutIfAny() {
+    const stored = localStorage.getItem(LOCKOUT_KEY);
+    if (!stored) return;
+
+    try {
+      const { username, lockedUntil } = JSON.parse(stored);
+      if (lockedUntil > Date.now()) {
+        usernameInput.value = username;
+        startLockoutCountdown(lockedUntil, username);
+      } else {
+        localStorage.removeItem(LOCKOUT_KEY);
+      }
+    } catch (err) {
+      localStorage.removeItem(LOCKOUT_KEY);
+    }
+  }
+
+  resumeLockoutIfAny();
 
   async function handleSignIn() {
     clearError();
@@ -92,7 +146,15 @@
         return;
       }
 
-      showError(data.error || 'Invalid username or password. Please try again.');
+      if (data.lockedSeconds) {
+        startLockoutCountdown(Date.now() + data.lockedSeconds * 1000, user);
+        return;
+      }
+
+      const attemptsNote = data.attemptsLeft !== undefined
+        ? ` (${data.attemptsLeft} attempt${data.attemptsLeft === 1 ? '' : 's'} left)`
+        : '';
+      showError((data.error || 'Invalid username or password. Please try again.') + attemptsNote);
       btnSignIn.disabled = false;
     } catch (err) {
       showError('Could not reach the server. Please try again.');

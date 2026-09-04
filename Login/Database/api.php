@@ -1,6 +1,9 @@
 <?php
 
+session_start();
+
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/audit.php';
 require_once __DIR__ . '/mailer/mailer.php';
 
 header('Content-Type: application/json');
@@ -16,6 +19,12 @@ function respond($data, $code = 200) {
     http_response_code($code);
     echo json_encode($data);
     exit;
+}
+
+function requireRole($allowedRoles) {
+    if (!isset($_SESSION['user']) || !in_array($_SESSION['user']['role'], $allowedRoles, true)) {
+        respond(['success' => false, 'error' => 'Not authorized.'], 401);
+    }
 }
 
 function requireValidRoleAndId($tableByRole, $role, $id) {
@@ -56,12 +65,41 @@ try {
             respond(['success' => false, 'error' => 'Missing username or password.'], 400);
         }
 
+        $maxAttempts = 5;
+        $baseLockoutSeconds = 25;
+
+        $stmt = $pdo->prepare(
+            "SELECT TIMESTAMPDIFF(SECOND, NOW(), locked_until) AS secondsLeft
+             FROM login_lockouts WHERE username = :username AND locked_until > NOW()"
+        );
+        $stmt->execute(['username' => $username]);
+        $lockout = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($lockout) {
+            respond([
+                'success'      => false,
+                'error'        => 'Too many failed attempts. Please try again later.',
+                'lockedSeconds' => (int) $lockout['secondsLeft'],
+            ]);
+        }
+
         foreach ($allRoleTables as $role => $table) {
             $stmt = $pdo->prepare("SELECT id, username, password_hash, full_name FROM {$table} WHERE username = :username");
             $stmt->execute(['username' => $username]);
             $account = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($account && password_verify($password, $account['password_hash'])) {
+                $pdo->prepare("DELETE FROM login_lockouts WHERE username = :username")->execute(['username' => $username]);
+
+                session_regenerate_id(true);
+                $_SESSION['user'] = [
+                    'username' => $account['username'],
+                    'role'     => $role,
+                    'fullName' => $account['full_name'],
+                ];
+
+                logAudit($pdo, 'login');
+
                 respond([
                     'success'  => true,
                     'role'     => $role,
@@ -71,10 +109,68 @@ try {
             }
         }
 
-        respond(['success' => false, 'error' => 'Invalid username or password.']);
+        $stmt = $pdo->prepare(
+            "INSERT INTO login_lockouts (username, failed_attempts, last_attempt_at)
+             VALUES (:username, 1, NOW())
+             ON DUPLICATE KEY UPDATE
+               failed_attempts = failed_attempts + 1,
+               last_attempt_at = NOW()"
+        );
+        $stmt->execute(['username' => $username]);
+
+        $stmt = $pdo->prepare("SELECT failed_attempts FROM login_lockouts WHERE username = :username");
+        $stmt->execute(['username' => $username]);
+        $attempts = (int) $stmt->fetchColumn();
+
+        if ($attempts >= $maxAttempts) {
+            $stmt = $pdo->prepare(
+                "UPDATE login_lockouts SET failed_attempts = 0, lockout_count = lockout_count + 1 WHERE username = :username"
+            );
+            $stmt->execute(['username' => $username]);
+
+            $stmt = $pdo->prepare("SELECT lockout_count FROM login_lockouts WHERE username = :username");
+            $stmt->execute(['username' => $username]);
+            $lockoutCount = (int) $stmt->fetchColumn();
+
+            $lockoutSeconds = $baseLockoutSeconds * $lockoutCount;
+
+            $stmt = $pdo->prepare(
+                "UPDATE login_lockouts SET locked_until = DATE_ADD(NOW(), INTERVAL {$lockoutSeconds} SECOND)
+                 WHERE username = :username"
+            );
+            $stmt->execute(['username' => $username]);
+            respond([
+                'success'      => false,
+                'error'        => 'Too many failed attempts. Please try again later.',
+                'lockedSeconds' => $lockoutSeconds,
+            ]);
+        }
+
+        respond([
+            'success'      => false,
+            'error'        => 'Invalid username or password.',
+            'attemptsLeft' => $maxAttempts - $attempts,
+        ]);
+    }
+
+    if ($action === 'checkSession') {
+        if (isset($_SESSION['user'])) {
+            respond(['success' => true, 'user' => $_SESSION['user']]);
+        }
+        respond(['success' => false]);
+    }
+
+    if ($action === 'logout') {
+        if (isset($_SESSION['user'])) {
+            logAudit($pdo, 'logout');
+        }
+        $_SESSION = [];
+        session_destroy();
+        respond(['success' => true]);
     }
 
     if ($action === 'list') {
+        requireRole(['admin']);
         $result = [];
         foreach ($tableByRole as $role => $table) {
             $stmt = $pdo->query("SELECT id, username, full_name, email, created_at FROM {$table} ORDER BY created_at DESC");
@@ -84,6 +180,7 @@ try {
     }
 
     if ($action === 'create') {
+        requireRole(['admin']);
         $role     = $_POST['role'] ?? '';
         $username = trim($_POST['username'] ?? '');
         $password = $_POST['password'] ?? '';
@@ -113,6 +210,7 @@ try {
     }
 
     if ($action === 'update') {
+        requireRole(['admin']);
         $role     = $_POST['role'] ?? '';
         $id       = $_POST['id'] ?? '';
         $username = trim($_POST['username'] ?? '');
@@ -147,6 +245,7 @@ try {
     }
 
     if ($action === 'resetPassword') {
+        requireRole(['admin']);
         $role      = $_POST['role'] ?? '';
         $id        = $_POST['id'] ?? '';
         $password  = $_POST['password'] ?? '';
@@ -171,6 +270,7 @@ try {
     }
 
     if ($action === 'delete') {
+        requireRole(['admin']);
         $role = $_POST['role'] ?? '';
         $id   = $_POST['id'] ?? '';
 
@@ -181,6 +281,7 @@ try {
     }
 
     if ($action === 'listResetRequests') {
+        requireRole(['admin']);
         $stmt = $pdo->query(
             "SELECT id, username, role, account_id, requested_at FROM password_reset_requests
              WHERE status = 'pending' ORDER BY requested_at ASC"
@@ -207,6 +308,7 @@ try {
     }
 
     if ($action === 'approveResetRequest') {
+        requireRole(['admin']);
         $requestId = $_POST['requestId'] ?? '';
 
         if (!ctype_digit((string) $requestId)) {
@@ -249,6 +351,7 @@ try {
     }
 
     if ($action === 'dismissResetRequest') {
+        requireRole(['admin']);
         $id = $_POST['id'] ?? '';
 
         if (!ctype_digit((string) $id)) {
@@ -258,6 +361,37 @@ try {
         $stmt = $pdo->prepare("UPDATE password_reset_requests SET status = 'resolved', resolved_at = NOW() WHERE id = :id");
         $stmt->execute(['id' => $id]);
         respond(['success' => true]);
+    }
+
+    if ($action === 'listTimeLog') {
+        requireRole(['admin']);
+        $stmt = $pdo->query(
+            "SELECT
+                actor_username,
+                actor_role,
+                DATE(created_at) AS log_date,
+                MIN(CASE WHEN action = 'login' THEN created_at END) AS time_in,
+                MAX(CASE WHEN action = 'logout' THEN created_at END) AS time_out
+             FROM audit_log
+             WHERE action IN ('login', 'logout')
+             GROUP BY actor_username, actor_role, DATE(created_at)
+             ORDER BY log_date DESC, actor_username ASC
+             LIMIT 200"
+        );
+        $entries = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($entries as &$entry) {
+            $entry['email'] = null;
+            if (isset($allRoleTables[$entry['actor_role']])) {
+                $table = $allRoleTables[$entry['actor_role']];
+                $emailStmt = $pdo->prepare("SELECT email FROM {$table} WHERE username = :username");
+                $emailStmt->execute(['username' => $entry['actor_username']]);
+                $entry['email'] = $emailStmt->fetchColumn() ?: null;
+            }
+        }
+        unset($entry);
+
+        respond(['success' => true, 'entries' => $entries]);
     }
 
     if ($action === 'submitRequest') {
