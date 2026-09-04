@@ -121,6 +121,7 @@ async function approveResetRequest(btn, requestId, username) {
     const data = await res.json();
 
     if (data.success) {
+      showDataWarning(`Reset link sent to ${username}.`);
       loadResetRequests();
     } else {
       showDataWarning(data.error || `Couldn't send the reset link to ${username}.`);
