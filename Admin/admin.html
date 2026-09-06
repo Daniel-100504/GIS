@@ -93,37 +93,88 @@
         </div>
       </div>
 
-      <div class="account-section">
+      <div class="account-tabs">
+        <button class="account-tab active" type="button" data-tab="menro">MENRO Officers</button>
+        <button class="account-tab" type="button" data-tab="ranger">Forest Rangers</button>
+      </div>
+
+      <div class="account-section" id="menroSection">
         <div class="account-section-head">
-          <h2>MENRO Officers</h2>
-          <button class="btn-add" data-role="menro">+ Add MENRO Account</button>
+          <h2>MENRO Officers <span class="account-count" id="menroCount"></span></h2>
+          <div class="account-section-actions">
+            <input type="search" class="account-search" id="menroSearch" placeholder="Search officers…">
+            <select class="account-status-filter" id="menroStatusFilter">
+              <option value="all">All</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <button class="btn-add" data-role="menro">+ Add MENRO Account</button>
+          </div>
         </div>
         <div class="account-table-wrap">
           <table class="account-table">
             <thead>
-              <tr><th>Username</th><th>Full Name</th><th>Email</th><th>Created</th><th></th></tr>
+              <tr>
+                <th class="sortable" data-sort="full_name">Full Name</th>
+                <th class="sortable" data-sort="username">Username</th>
+                <th>Email</th>
+                <th class="sortable" data-sort="created_at">Created</th>
+                <th class="sortable" data-sort="last_login">Last Login</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
             </thead>
             <tbody id="menroAccountsBody">
-              <tr><td colspan="5" class="account-empty">Loading…</td></tr>
+              <tr><td colspan="7" class="account-empty">Loading…</td></tr>
             </tbody>
           </table>
+        </div>
+        <div class="account-pagination" id="menroPagination" hidden>
+          <span class="account-pagination-text" id="menroPaginationText"></span>
+          <div class="account-pagination-controls">
+            <button type="button" class="btn-row-action" id="menroPrevPage">Prev</button>
+            <button type="button" class="btn-row-action" id="menroNextPage">Next</button>
+          </div>
         </div>
       </div>
 
-      <div class="account-section">
+      <div class="account-section" id="rangerSection" hidden>
         <div class="account-section-head">
-          <h2>Forest Rangers</h2>
-          <button class="btn-add" data-role="ranger">+ Add Ranger Account</button>
+          <h2>Forest Rangers <span class="account-count" id="rangerCount"></span></h2>
+          <div class="account-section-actions">
+            <input type="search" class="account-search" id="rangerSearch" placeholder="Search rangers…">
+            <select class="account-status-filter" id="rangerStatusFilter">
+              <option value="all">All</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <button class="btn-add" data-role="ranger">+ Add Ranger Account</button>
+          </div>
         </div>
         <div class="account-table-wrap">
           <table class="account-table">
             <thead>
-              <tr><th>Username</th><th>Full Name</th><th>Email</th><th>Created</th><th></th></tr>
+              <tr>
+                <th class="sortable" data-sort="full_name">Full Name</th>
+                <th class="sortable" data-sort="username">Username</th>
+                <th>Email</th>
+                <th class="sortable" data-sort="created_at">Created</th>
+                <th class="sortable" data-sort="last_login">Last Login</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
             </thead>
             <tbody id="rangerAccountsBody">
-              <tr><td colspan="5" class="account-empty">Loading…</td></tr>
+              <tr><td colspan="7" class="account-empty">Loading…</td></tr>
             </tbody>
           </table>
+        </div>
+        <div class="account-pagination" id="rangerPagination" hidden>
+          <span class="account-pagination-text" id="rangerPaginationText"></span>
+          <div class="account-pagination-controls">
+            <button type="button" class="btn-row-action" id="rangerPrevPage">Prev</button>
+            <button type="button" class="btn-row-action" id="rangerNextPage">Next</button>
+          </div>
         </div>
       </div>
 
@@ -177,11 +228,11 @@
     <button class="confirm-modal-close" id="btnCloseEdit" aria-label="Close">&times;</button>
     <h2 class="confirm-modal-title">Edit Account</h2>
     <form id="editForm" class="account-form">
+      <label>Full Name
+        <input type="text" id="editFullName" required autocomplete="off">
+      </label>
       <label>Username
         <input type="text" id="editUsername" required autocomplete="off">
-      </label>
-      <label>Full Name <span class="optional">(optional)</span>
-        <input type="text" id="editFullName" autocomplete="off">
       </label>
       <label>Email <span class="optional">(optional, used for password reset)</span>
         <input type="email" id="editEmail" autocomplete="off">
@@ -199,17 +250,22 @@
     <button class="confirm-modal-close" id="btnCloseCreate" aria-label="Close">&times;</button>
     <h2 class="confirm-modal-title" id="createModalTitle">Add Account</h2>
     <form id="createForm" class="account-form">
+      <label>Full Name
+        <input type="text" id="createFullName" required autocomplete="off">
+      </label>
       <label>Username
         <input type="text" id="createUsername" required autocomplete="off">
-      </label>
-      <label>Full Name <span class="optional">(optional)</span>
-        <input type="text" id="createFullName" autocomplete="off">
       </label>
       <label>Email <span class="optional">(optional, used for password reset)</span>
         <input type="email" id="createEmail" autocomplete="off">
       </label>
-      <label>Password
-        <input type="password" id="createPassword" required autocomplete="new-password">
+      <label>Password <span class="optional">(min. 8 characters)</span>
+        <div class="password-field">
+          <input type="password" id="createPassword" required minlength="8" autocomplete="new-password">
+          <button type="button" class="btn-password-toggle" data-action="togglePassword" data-target="createPassword" aria-label="Show password">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
       </label>
       <div class="confirm-modal-actions">
         <button type="button" class="btn-confirm-cancel" id="btnCancelCreate">Cancel</button>
@@ -225,8 +281,13 @@
     <h2 class="confirm-modal-title">Reset Password</h2>
     <p class="confirm-modal-text" id="resetTargetLabel"></p>
     <form id="resetForm" class="account-form">
-      <label>New Password
-        <input type="password" id="resetPassword" required autocomplete="new-password">
+      <label>New Password <span class="optional">(min. 8 characters)</span>
+        <div class="password-field">
+          <input type="password" id="resetPassword" required minlength="8" autocomplete="new-password">
+          <button type="button" class="btn-password-toggle" data-action="togglePassword" data-target="resetPassword" aria-label="Show password">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
       </label>
       <div class="confirm-modal-actions">
         <button type="button" class="btn-confirm-cancel" id="btnCancelReset">Cancel</button>
@@ -254,7 +315,25 @@
   </div>
 </div>
 
+<div class="dashboard-overlay" id="deactivateOverlay">
+  <div class="confirm-modal">
+    <button class="confirm-modal-close" id="btnCloseDeactivate" aria-label="Close">&times;</button>
+    <div class="confirm-modal-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="4.9" y1="4.9" x2="19.1" y2="19.1"/>
+      </svg>
+    </div>
+    <h2 class="confirm-modal-title">Deactivate this account?</h2>
+    <p class="confirm-modal-text" id="deactivateTargetLabel"></p>
+    <div class="confirm-modal-actions">
+      <button type="button" class="btn-confirm-cancel" id="btnCancelDeactivate">Cancel</button>
+      <button type="button" class="btn-confirm-danger" id="btnConfirmDeactivate">Deactivate</button>
+    </div>
+  </div>
+</div>
+
 <script src="../assets/utils.js"></script>
-<script src="admin.js?v=5"></script>
+<script src="admin.js?v=24"></script>
 </body>
 </html>

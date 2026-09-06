@@ -20,6 +20,13 @@ function formatDate(dateStr) {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
+function formatLastLogin(dateStr) {
+  if (!dateStr) return "Never";
+  return formatDate(dateStr);
+}
+
+const overlayCloseHandlers = new Map();
+
 function bindOverlayDismiss(overlay, close, closeBtnId, cancelBtnId) {
   const closeBtn = document.getElementById(closeBtnId);
   if (closeBtn) closeBtn.addEventListener("click", close);
@@ -29,35 +36,195 @@ function bindOverlayDismiss(overlay, close, closeBtnId, cancelBtnId) {
     if (cancelBtn) cancelBtn.addEventListener("click", close);
   }
 
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlayCloseHandlers.set(overlay, close);
 }
+
+const accountsCache = { menro: [], ranger: [] };
 
 async function loadAccounts() {
   try {
     const res = await fetch(`${ACCOUNTS_API}?action=list`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error || "Failed to load accounts.");
-    renderAccounts("menro", data.accounts.menro || []);
-    renderAccounts("ranger", data.accounts.ranger || []);
+    accountsCache.menro = data.accounts.menro || [];
+    accountsCache.ranger = data.accounts.ranger || [];
+    applyAccountFilter("menro");
+    applyAccountFilter("ranger");
   } catch (err) {
     showDataWarning("Couldn't load accounts. Check that the server is reachable.");
   }
 }
 
-function renderAccounts(role, accounts) {
+const sortState = {
+  menro:  { field: "created_at", dir: "desc" },
+  ranger: { field: "created_at", dir: "desc" },
+};
+
+function sortAccounts(accounts, field, dir) {
+  const sorted = [...accounts].sort((a, b) => {
+    const av = (a[field] || "").toString().toLowerCase();
+    const bv = (b[field] || "").toString().toLowerCase();
+    if (av < bv) return -1;
+    if (av > bv) return 1;
+    return 0;
+  });
+  if (dir === "desc") sorted.reverse();
+  return sorted;
+}
+
+function updateSortHeaders(role) {
+  const section = role === "menro" ? menroSection : rangerSection;
+  const { field, dir } = sortState[role];
+  section.querySelectorAll("th.sortable").forEach(th => {
+    const isActive = th.dataset.sort === field;
+    th.classList.toggle("sort-active", isActive);
+    let arrow = th.querySelector(".sort-arrow");
+    if (!arrow) {
+      arrow = document.createElement("span");
+      arrow.className = "sort-arrow";
+      th.appendChild(arrow);
+    }
+    arrow.textContent = isActive ? (dir === "asc" ? "▲" : "▼") : "▲";
+  });
+}
+
+document.querySelectorAll("th.sortable").forEach(th => {
+  th.addEventListener("click", () => {
+    const role = th.closest("#menroSection") ? "menro" : "ranger";
+    const field = th.dataset.sort;
+    const state = sortState[role];
+
+    if (state.field === field) {
+      state.dir = state.dir === "asc" ? "desc" : "asc";
+    } else {
+      state.field = field;
+      state.dir = "asc";
+    }
+
+    updateSortHeaders(role);
+    applyAccountFilter(role, true);
+  });
+});
+
+const PAGE_SIZE = 10;
+const currentPage = { menro: 1, ranger: 1 };
+
+function applyAccountFilter(role, resetPage = false) {
+  if (resetPage) currentPage[role] = 1;
+
+  const searchEl = document.getElementById(role === "menro" ? "menroSearch" : "rangerSearch");
+  const query = (searchEl?.value || "").trim().toLowerCase();
+  const statusEl = document.getElementById(role === "menro" ? "menroStatusFilter" : "rangerStatusFilter");
+  const statusValue = statusEl?.value || "all";
+  const accounts = accountsCache[role] || [];
+
+  let filtered = query
+    ? accounts.filter(acc =>
+        (acc.username || "").toLowerCase().includes(query) ||
+        (acc.full_name || "").toLowerCase().includes(query) ||
+        (acc.email || "").toLowerCase().includes(query)
+      )
+    : accounts;
+
+  if (statusValue !== "all") {
+    const wantActive = statusValue === "active";
+    filtered = filtered.filter(acc => Boolean(Number(acc.is_active)) === wantActive);
+  }
+
+  const { field, dir } = sortState[role];
+  const sorted = sortAccounts(filtered, field, dir);
+
+  const countEl = document.getElementById(role === "menro" ? "menroCount" : "rangerCount");
+  if (countEl) countEl.textContent = `(${sorted.length})`;
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  currentPage[role] = Math.min(currentPage[role], totalPages);
+  const start = (currentPage[role] - 1) * PAGE_SIZE;
+  const pageItems = sorted.slice(start, start + PAGE_SIZE);
+
+  const isFiltered = query.length > 0 || statusValue !== "all";
+  renderAccounts(role, pageItems, isFiltered);
+  renderPagination(role, sorted.length, totalPages);
+}
+
+function renderPagination(role, totalCount, totalPages) {
+  const pagination = document.getElementById(role === "menro" ? "menroPagination" : "rangerPagination");
+  const text = document.getElementById(role === "menro" ? "menroPaginationText" : "rangerPaginationText");
+
+  if (totalCount <= PAGE_SIZE) {
+    pagination.hidden = true;
+    return;
+  }
+
+  pagination.hidden = false;
+  const page = currentPage[role];
+  text.textContent = `Page ${page} of ${totalPages}`;
+
+  const prev = document.getElementById(role === "menro" ? "menroPrevPage" : "rangerPrevPage");
+  const next = document.getElementById(role === "menro" ? "menroNextPage" : "rangerNextPage");
+  prev.disabled = page <= 1;
+  next.disabled = page >= totalPages;
+}
+
+document.getElementById("menroPrevPage").addEventListener("click", () => {
+  currentPage.menro = Math.max(1, currentPage.menro - 1);
+  applyAccountFilter("menro");
+});
+document.getElementById("menroNextPage").addEventListener("click", () => {
+  currentPage.menro += 1;
+  applyAccountFilter("menro");
+});
+document.getElementById("rangerPrevPage").addEventListener("click", () => {
+  currentPage.ranger = Math.max(1, currentPage.ranger - 1);
+  applyAccountFilter("ranger");
+});
+document.getElementById("rangerNextPage").addEventListener("click", () => {
+  currentPage.ranger += 1;
+  applyAccountFilter("ranger");
+});
+
+document.getElementById("menroSearch").addEventListener("input", () => applyAccountFilter("menro", true));
+document.getElementById("rangerSearch").addEventListener("input", () => applyAccountFilter("ranger", true));
+document.getElementById("menroStatusFilter").addEventListener("change", () => applyAccountFilter("menro", true));
+document.getElementById("rangerStatusFilter").addEventListener("change", () => applyAccountFilter("ranger", true));
+
+const menroSection  = document.getElementById("menroSection");
+const rangerSection = document.getElementById("rangerSection");
+
+document.querySelectorAll(".account-tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".account-tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+
+    const isMenro = tab.dataset.tab === "menro";
+    menroSection.hidden = !isMenro;
+    rangerSection.hidden = isMenro;
+  });
+});
+
+function renderAccounts(role, accounts, isFiltered = false) {
   const body = document.getElementById(role === "menro" ? "menroAccountsBody" : "rangerAccountsBody");
 
   if (accounts.length === 0) {
-    body.innerHTML = `<tr><td colspan="5" class="account-empty">No ${ROLE_LABEL[role]} accounts yet.</td></tr>`;
+    const message = isFiltered ? "No matching accounts." : `No ${ROLE_LABEL[role]} accounts yet.`;
+    body.innerHTML = `<tr><td colspan="7" class="account-empty">${message}</td></tr>`;
     return;
   }
 
   body.innerHTML = accounts.map(acc => `
-    <tr>
-      <td>${escapeHtml(acc.username)}</td>
+    <tr class="${Number(acc.is_active) ? "" : "row-inactive"}">
       <td>${escapeHtml(acc.full_name || "—")}</td>
+      <td>${escapeHtml(acc.username)}</td>
       <td>${escapeHtml(acc.email || "—")}</td>
       <td>${escapeHtml(formatDate(acc.created_at))}</td>
+      <td>${escapeHtml(formatLastLogin(acc.last_login))}</td>
+      <td>
+        <label class="status-toggle">
+          <input type="checkbox" data-action="toggleActive" data-role="${role}" data-id="${acc.id}" data-username="${escapeHtml(acc.username)}" ${Number(acc.is_active) ? "checked" : ""}>
+          <span class="status-toggle-track"></span>
+          <span class="status-toggle-label">${Number(acc.is_active) ? "Active" : "Inactive"}</span>
+        </label>
+      </td>
       <td>
         <div class="account-row-actions">
           <button class="btn-row-action" data-action="edit" data-role="${role}" data-id="${acc.id}" data-username="${escapeHtml(acc.username)}" data-full-name="${escapeHtml(acc.full_name || "")}" data-email="${escapeHtml(acc.email || "")}">Edit</button>
@@ -67,6 +234,36 @@ function renderAccounts(role, accounts) {
       </td>
     </tr>
   `).join("");
+}
+
+async function setAccountActive(checkbox) {
+  const { role, id, username } = checkbox.dataset;
+  const active = checkbox.checked ? "1" : "0";
+  checkbox.disabled = true;
+
+  try {
+    const res = await fetch(ACCOUNTS_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ action: "setActive", role, id, active }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      const cached = (accountsCache[role] || []).find(acc => String(acc.id) === String(id));
+      if (cached) cached.is_active = checkbox.checked ? 1 : 0;
+      const label = checkbox.closest(".status-toggle").querySelector(".status-toggle-label");
+      label.textContent = checkbox.checked ? "Active" : "Inactive";
+    } else {
+      checkbox.checked = !checkbox.checked;
+      showDataWarning(data.error || `Couldn't update the status for ${username}.`);
+    }
+  } catch (err) {
+    checkbox.checked = !checkbox.checked;
+    showDataWarning("Couldn't reach the server. Please try again.");
+  } finally {
+    checkbox.disabled = false;
+  }
 }
 
 const VIEW_TITLE = {
@@ -235,6 +432,42 @@ document.querySelectorAll(".account-table-wrap").forEach(wrap => {
     if (action === "dismiss") dismissResetRequest(requestId);
     if (action === "approve") approveResetRequest(btn, requestId, username);
   });
+
+  wrap.addEventListener("change", (e) => {
+    const checkbox = e.target.closest('input[data-action="toggleActive"]');
+    if (checkbox) handleToggleChange(checkbox);
+  });
+});
+
+const deactivateOverlay = document.getElementById("deactivateOverlay");
+const deactivateTargetLabel = document.getElementById("deactivateTargetLabel");
+let deactivateTarget = null;
+
+function handleToggleChange(checkbox) {
+  if (checkbox.checked) {
+    setAccountActive(checkbox);
+    return;
+  }
+
+  checkbox.checked = true;
+  deactivateTarget = checkbox;
+  deactivateTargetLabel.textContent = `"${checkbox.dataset.username}" won't be able to sign in until reactivated.`;
+  deactivateOverlay.classList.add("open");
+}
+
+function closeDeactivateModal() {
+  deactivateOverlay.classList.remove("open");
+  deactivateTarget = null;
+}
+
+bindOverlayDismiss(deactivateOverlay, closeDeactivateModal, "btnCloseDeactivate", "btnCancelDeactivate");
+
+document.getElementById("btnConfirmDeactivate").addEventListener("click", () => {
+  if (!deactivateTarget) return;
+  const checkbox = deactivateTarget;
+  closeDeactivateModal();
+  checkbox.checked = false;
+  setAccountActive(checkbox);
 });
 
 const createOverlay    = document.getElementById("createOverlay");
@@ -276,6 +509,7 @@ createForm.addEventListener("submit", async (e) => {
     if (data.success) {
       closeCreateModal();
       loadAccounts();
+      showDataWarning(`Account "${username}" created.`);
     } else {
       showDataWarning(data.error || "Couldn't create the account.");
     }
@@ -322,6 +556,7 @@ editForm.addEventListener("submit", async (e) => {
     if (data.success) {
       closeEditModal();
       loadAccounts();
+      showDataWarning(`Account "${username}" updated.`);
     } else {
       showDataWarning(data.error || "Couldn't save the changes.");
     }
@@ -382,7 +617,7 @@ const deleteTargetLabel = document.getElementById("deleteTargetLabel");
 let deleteTarget = null;
 
 function openDeleteModal(role, id, username) {
-  deleteTarget = { role, id };
+  deleteTarget = { role, id, username };
   deleteTargetLabel.textContent = `This will permanently delete the account "${username}".`;
   deleteOverlay.classList.add("open");
 }
@@ -396,18 +631,20 @@ bindOverlayDismiss(deleteOverlay, closeDeleteModal, "btnCloseDelete", "btnCancel
 
 document.getElementById("btnConfirmDelete").addEventListener("click", async () => {
   if (!deleteTarget) return;
+  const { role, id, username } = deleteTarget;
 
   try {
     const res = await fetch(ACCOUNTS_API, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ action: "delete", role: deleteTarget.role, id: deleteTarget.id }),
+      body: new URLSearchParams({ action: "delete", role, id }),
     });
     const data = await res.json();
 
     closeDeleteModal();
     if (data.success) {
       loadAccounts();
+      showDataWarning(`Account "${username}" deleted.`);
     } else {
       showDataWarning(data.error || "Couldn't delete the account.");
     }
@@ -433,6 +670,24 @@ document.getElementById("btnConfirmSignout").addEventListener("click", async () 
   }
   localStorage.removeItem("aquaguard_current_user");
   window.location.href = "../Login/Login.html";
+});
+
+document.querySelectorAll('button[data-action="togglePassword"]').forEach(btn => {
+  btn.addEventListener("click", () => {
+    const input = document.getElementById(btn.dataset.target);
+    if (!input) return;
+    const showing = input.type === "text";
+    input.type = showing ? "password" : "text";
+    btn.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+  });
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const openOverlay = document.querySelector(".dashboard-overlay.open");
+  if (!openOverlay) return;
+  const close = overlayCloseHandlers.get(openOverlay);
+  if (close) close();
 });
 
 (function displayLoggedInUser() {
@@ -507,5 +762,7 @@ document.getElementById("btnConfirmSignout").addEventListener("click", async () 
   resize();
 })();
 
+updateSortHeaders("menro");
+updateSortHeaders("ranger");
 loadAccounts();
 loadResetRequests();

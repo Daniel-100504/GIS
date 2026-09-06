@@ -84,11 +84,17 @@ try {
         }
 
         foreach ($allRoleTables as $role => $table) {
-            $stmt = $pdo->prepare("SELECT id, username, password_hash, full_name FROM {$table} WHERE username = :username");
+            $hasActiveColumn = $role !== 'admin';
+            $columns = $hasActiveColumn ? 'id, username, password_hash, full_name, is_active' : 'id, username, password_hash, full_name';
+            $stmt = $pdo->prepare("SELECT {$columns} FROM {$table} WHERE username = :username");
             $stmt->execute(['username' => $username]);
             $account = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($account && password_verify($password, $account['password_hash'])) {
+                if ($hasActiveColumn && (int) $account['is_active'] === 0) {
+                    respond(['success' => false, 'error' => 'This account has been deactivated. Contact an administrator.'], 403);
+                }
+
                 $pdo->prepare("DELETE FROM login_lockouts WHERE username = :username")->execute(['username' => $username]);
 
                 session_regenerate_id(true);
@@ -173,7 +179,15 @@ try {
         requireRole(['admin']);
         $result = [];
         foreach ($tableByRole as $role => $table) {
-            $stmt = $pdo->query("SELECT id, username, full_name, email, created_at FROM {$table} ORDER BY created_at DESC");
+            $stmt = $pdo->prepare(
+                "SELECT a.id, a.username, a.full_name, a.email, a.is_active, a.created_at,
+                        MAX(l.created_at) AS last_login
+                 FROM {$table} a
+                 LEFT JOIN audit_log l ON l.actor_username = a.username AND l.actor_role = :role AND l.action = 'login'
+                 GROUP BY a.id
+                 ORDER BY a.created_at DESC"
+            );
+            $stmt->execute(['role' => $role]);
             $result[$role] = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
         respond(['success' => true, 'accounts' => $result]);
@@ -192,6 +206,9 @@ try {
         }
         if ($username === '' || $password === '') {
             respond(['success' => false, 'error' => 'Username and password are required.'], 400);
+        }
+        if (strlen($password) < 8) {
+            respond(['success' => false, 'error' => 'Password must be at least 8 characters.'], 400);
         }
         if (usernameTakenElsewhere($pdo, $allRoleTables, $username)) {
             respond(['success' => false, 'error' => 'That username is already taken.'], 409);
@@ -255,6 +272,9 @@ try {
         if ($password === '') {
             respond(['success' => false, 'error' => 'Password is required.'], 400);
         }
+        if (strlen($password) < 8) {
+            respond(['success' => false, 'error' => 'Password must be at least 8 characters.'], 400);
+        }
 
         $hash = password_hash($password, PASSWORD_DEFAULT);
 
@@ -277,6 +297,22 @@ try {
         $table = requireValidRoleAndId($tableByRole, $role, $id);
         $stmt = $pdo->prepare("DELETE FROM {$table} WHERE id = :id");
         $stmt->execute(['id' => $id]);
+        respond(['success' => true]);
+    }
+
+    if ($action === 'setActive') {
+        requireRole(['admin']);
+        $role   = $_POST['role'] ?? '';
+        $id     = $_POST['id'] ?? '';
+        $active = $_POST['active'] ?? '';
+
+        $table = requireValidRoleAndId($tableByRole, $role, $id);
+        if ($active !== '0' && $active !== '1') {
+            respond(['success' => false, 'error' => 'Invalid status value.'], 400);
+        }
+
+        $stmt = $pdo->prepare("UPDATE {$table} SET is_active = :active WHERE id = :id");
+        $stmt->execute(['active' => $active, 'id' => $id]);
         respond(['success' => true]);
     }
 

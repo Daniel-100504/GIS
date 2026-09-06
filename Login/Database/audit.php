@@ -1,17 +1,14 @@
 <?php
 
-function logAudit($pdo, $action, $targetRole = null, $targetUsername = null, $details = null) {
+function logAudit($pdo, $action) {
     $actor = $_SESSION['user'] ?? null;
     $stmt = $pdo->prepare(
-        "INSERT INTO audit_log (actor_username, actor_role, action, target_username, target_role, details)
-         VALUES (:actorUsername, :actorRole, :action, :targetUsername, :targetRole, :details)"
+        "INSERT INTO audit_log (actor_username, actor_role, action)
+         VALUES (:actorUsername, :actorRole, :action)"
     );
     $stmt->execute([
-        'actorUsername'  => $actor['username'] ?? 'unknown',
-        'actorRole'      => $actor['role'] ?? 'unknown',
-        'action'         => $action,
-        'targetUsername' => $targetUsername,
-        'targetRole'     => $targetRole,
-        'details'        => $details,
+        'actorUsername' => $actor['username'] ?? 'unknown',
+        'actorRole'     => $actor['role'] ?? 'unknown',
+        'action'        => $action,
     ]);
 }
