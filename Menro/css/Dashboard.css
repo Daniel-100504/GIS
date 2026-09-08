@@ -255,6 +255,10 @@
   margin-top: 10px;
 }
 
+.export-daterange-custom[hidden] {
+  display: none;
+}
+
 .export-date-input { flex: 1; min-width: 0; font-size: 0.8rem; }
 
 .export-daterange-sep {
