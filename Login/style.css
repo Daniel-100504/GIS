@@ -61,7 +61,10 @@ body {
   min-width: 420px;
   overflow: hidden;
   background:
-    radial-gradient(120% 100% at 15% 0%, var(--bg-panel-2) 0%, var(--bg-panel-1) 45%, var(--bg-deep) 100%);
+    linear-gradient(180deg, rgba(5, 16, 10, 0.88) 0%, rgba(5, 16, 10, 0.18) 24%, rgba(5, 16, 10, 0.14) 58%, rgba(5, 16, 10, 0.48) 80%, rgba(5, 16, 10, 0.94) 100%),
+    linear-gradient(100deg, rgba(5, 16, 10, 0.8) 0%, rgba(5, 16, 10, 0.6) 32%, rgba(5, 16, 10, 0.2) 60%, rgba(5, 16, 10, 0) 80%),
+    url('../assets/mangrove bg.jpg') 68% center / cover no-repeat;
+  background-blend-mode: normal, multiply, normal;
   display: flex;
   flex-direction: column;
 }
@@ -124,13 +127,15 @@ body {
   line-height: 1.22;
   letter-spacing: -0.015em;
   margin-bottom: 16px;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
 }
 
 .brand-copy {
   font-size: 0.92rem;
   line-height: 1.6;
-  color: rgba(255,255,255,0.62);
+  color: rgba(255,255,255,0.72);
   margin-bottom: 32px;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.35);
 }
 
 .brand-coords {
@@ -138,8 +143,10 @@ body {
   align-items: center;
   gap: 20px;
   padding: 16px 20px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(5, 16, 10, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.14);
   border-radius: 12px;
   width: fit-content;
 }
@@ -185,7 +192,11 @@ body {
   align-items: center;
   justify-content: center;
   padding: 32px 24px;
-  background: var(--surface-alt);
+  background:
+    radial-gradient(560px 460px at 50% 42%, rgba(61, 220, 132, 0.14) 0%, rgba(61, 220, 132, 0) 70%),
+    repeating-linear-gradient(0deg, rgba(27, 107, 58, 0.05) 0px, rgba(27, 107, 58, 0.05) 1px, transparent 1px, transparent 44px),
+    repeating-linear-gradient(90deg, rgba(27, 107, 58, 0.05) 0px, rgba(27, 107, 58, 0.05) 1px, transparent 1px, transparent 44px),
+    var(--surface-alt);
 }
 
 .form-card {
