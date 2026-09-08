@@ -490,6 +490,21 @@ button, input {
 
 .resizer:hover { background: var(--brand-150); }
 
+.guide-section {
+  margin-bottom: 28px;
+}
+
+.guide-section:last-child { margin-bottom: 4px; }
+
+.guide-section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--brand-600);
+  margin-bottom: 4px;
+}
+
 .guide-item {
   display: flex;
   gap: 15px;
@@ -499,19 +514,21 @@ button, input {
 
 .guide-item:last-child { border-bottom: none; padding-bottom: 4px; }
 
-.guide-number {
+.guide-icon {
   flex-shrink: 0;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: var(--brand-100);
   color: var(--brand-700);
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 0.86rem;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.guide-icon svg {
+  width: 17px;
+  height: 17px;
 }
 
 .guide-text h3 {
