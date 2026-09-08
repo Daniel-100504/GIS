@@ -22,14 +22,15 @@ const BARANGAY_TO_ZONE = {
 };
 
 function deriveStatus(sub) {
-  const cover   = parseFloat(sub["Estimated_Canopy_Cover_"]) || 0;
-  const threats = sub["Observed_Threats"] || "none_observed";
+  const rawCover = parseFloat(sub["Estimated_Canopy_Cover_"]);
+  const threats  = sub["Observed_Threats"] || "none_observed";
 
   const hasBadThreat = ["illegal_cutting", "debris___waste_dumping"].includes(threats);
 
   if (hasBadThreat) return "degraded";
-  if (cover >= 60)  return "healthy";
-  if (cover >= 30)  return "moderate";
+  if (isNaN(rawCover)) return "pending";
+  if (rawCover >= 60)  return "healthy";
+  if (rawCover >= 30)  return "moderate";
   return "degraded";
 }
 
@@ -104,7 +105,12 @@ window.addEventListener("online", () => {
   setConnectionStatus(true);
   if (wasOffline) refreshAfterReconnect();
 });
-window.addEventListener("offline", () => setConnectionStatus(false));
+window.addEventListener("offline", () => {
+  setConnectionStatus(false);
+  if (typeof showDataWarning === "function") {
+    showDataWarning("You're offline — showing last available data.");
+  }
+});
 
 async function pingBackend() {
   const wasOffline = isOnline === false;
@@ -157,7 +163,10 @@ function latestSubmissionByZone(submissions) {
   submissions.forEach(sub => {
     const barangay = sub["Barangay"] || "";
     const zoneId   = BARANGAY_TO_ZONE[barangay];
-    if (!zoneId) return;
+    if (!zoneId) {
+      console.warn(`KoboToolbox: submission has unrecognized Barangay "${barangay}" — no matching zone, submission skipped.`);
+      return;
+    }
 
     const existing = byZone[zoneId];
     const subDate  = sub["Inspection_Date"] || "";
@@ -186,7 +195,9 @@ function mergeKoboIntoZones(submissions) {
       }
     }
 
-    if (sub["Estimated_Canopy_Cover_"]) {
+    const hasCanopyCover = sub["Estimated_Canopy_Cover_"] !== undefined && sub["Estimated_Canopy_Cover_"] !== "";
+
+    if (hasCanopyCover) {
       zone.ndvi = coverToNDVI(sub["Estimated_Canopy_Cover_"]);
     }
 
@@ -195,7 +206,7 @@ function mergeKoboIntoZones(submissions) {
     zone.lastRanger    = sub["Ranger_Name"]      || zone.lastRanger    || "—";
     zone.lastDate      = sub["Inspection_Date"]  || zone.lastDate      || "—";
     zone.transect      = sub["Transect_Number"]  || zone.transect      || "—";
-    zone.canopyCover   = sub["Estimated_Canopy_Cover_"] ? sub["Estimated_Canopy_Cover_"] + "%" : "—";
+    zone.canopyCover   = hasCanopyCover ? sub["Estimated_Canopy_Cover_"] + "%" : "—";
     zone.speciesName   = sub["Species_Name"]     || zone.speciesName   || "—";
     zone.treeCount     = sub["Tree_Count"]       || zone.treeCount     || "—";
     zone.threats       = sub["Observed_Threats"] ? sub["Observed_Threats"].replace(/_/g," ") : "—";

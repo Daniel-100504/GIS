@@ -3,6 +3,20 @@ const AQUAGUARD_CONFIG = {
   TOTAL_PROTECTED_AREAS: 6,
 };
 
+const AUTH_API = '../Login/Database/api.php';
+
+(async function enforceRangerSession() {
+  try {
+    const res = await fetch(`${AUTH_API}?action=checkSession`);
+    const data = await res.json();
+    if (!data.success || data.user.role !== 'ranger') {
+      window.location.href = '../Login/Login.html';
+    }
+  } catch (err) {
+    window.location.href = '../Login/Login.html';
+  }
+})();
+
 (function () {
   const canvas = document.getElementById('gisCanvas');
   const ctx = canvas.getContext('2d');
@@ -71,12 +85,34 @@ const AQUAGUARD_CONFIG = {
     if (e.target === overlay) closeSignoutConfirm();
   });
   function signOutRanger() {
+    fetch(`${AUTH_API}?action=logout`, { method: 'POST' }).catch(() => {});
+    localStorage.removeItem('aquaguard_current_user');
     window.location.href = '../Login/Login.html';
   }
 
   confirmBtn.addEventListener('click', signOutRanger);
 
   initIdleLogout(15, signOutRanger, { overlayClass: "confirm-overlay" });
+})();
+
+(function displayLoggedInUser() {
+  const rangerName = document.getElementById('rangerName');
+  const rangerAvatar = document.getElementById('rangerAvatar');
+  if (!rangerName || !rangerAvatar) return;
+
+  try {
+    const stored = localStorage.getItem('aquaguard_current_user');
+    if (!stored) return;
+
+    const user = JSON.parse(stored);
+    const displayName = user.fullName || user.username;
+    if (!displayName) return;
+
+    rangerName.textContent = displayName;
+    rangerAvatar.textContent = displayName.charAt(0).toUpperCase();
+  } catch (err) {
+    // Malformed or missing stored user info — leave the default placeholder as-is.
+  }
 })();
 
 function switchView(viewName, btn) {
@@ -261,7 +297,7 @@ function switchView(viewName, btn) {
       canopy: canopyNum,
       water: waterQualityInfo(waterRaw),
       status: deriveStatus(canopyNum, waterRaw),
-      photos: photos,
+      photos: collectPhotos(flat, record),
     };
   }
 
@@ -344,29 +380,14 @@ function switchView(viewName, btn) {
 
   function renderHistoryTable(submissions, totalCount) {
     const tbody = document.getElementById('history-table-body');
-    const footerText = document.getElementById('history-footer-text');
-    const paginationEl = document.getElementById('history-pagination');
-    const pageIndicator = document.getElementById('page-indicator');
-    const prevBtn = document.getElementById('page-prev');
-    const nextBtn = document.getElementById('page-next');
+    const note = document.getElementById('history-note');
     if (!tbody) return;
 
     const total = typeof totalCount === 'number' ? totalCount : submissions.length;
 
     if (total === 0) {
       tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--ink-400); padding:20px;">No submissions yet.</td></tr>`;
-      if (footerText) footerText.textContent = 'Showing 0 of 0 submissions. Records will appear here after each field inspection.';
-      if (paginationEl) paginationEl.style.display = 'none';
-      return;
-    }
-
-    if (submissions.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" class="filter-empty-state">No submissions match your filters.
-        <button class="inline-link" id="filter-empty-clear">Clear filters</button></td></tr>`;
-      if (footerText) footerText.textContent = `Showing 0 of ${total} submissions.`;
-      if (paginationEl) paginationEl.style.display = 'none';
-      const clearLink = document.getElementById('filter-empty-clear');
-      if (clearLink) clearLink.addEventListener('click', clearFilters);
+      if (note) note.textContent = 'Showing 0 of 0 submissions. Records will appear here after each field inspection.';
       return;
     }
 
@@ -385,12 +406,7 @@ function switchView(viewName, btn) {
       return bt - at;
     });
 
-    const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-    currentPage = clampPage(currentPage, totalPages);
-    const start = (currentPage - 1) * PAGE_SIZE;
-    const pageItems = sorted.slice(start, start + PAGE_SIZE);
-
-    tbody.innerHTML = pageItems.map(s => {
+    tbody.innerHTML = sorted.map(s => {
       const badge = statusBadge(s.status);
       const canopyText = s.canopy !== null ? `${s.canopy}%` : '—';
       const deleteBtn = s.koboId
@@ -454,10 +470,8 @@ function switchView(viewName, btn) {
     if (tbody) {
       tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--degraded); padding:20px;">Couldn't load submissions: ${escapeHtml(message)}</td></tr>`;
     }
-    const footerText = document.getElementById('history-footer-text');
-    if (footerText) footerText.textContent = 'Check that kobo-proxy.php is reachable and correctly configured.';
-    const paginationEl = document.getElementById('history-pagination');
-    if (paginationEl) paginationEl.style.display = 'none';
+    const note = document.getElementById('history-note');
+    if (note) note.textContent = 'Check that kobo-proxy.php is reachable and correctly configured.';
   }
 
   let currentSubmissions = [];
@@ -662,92 +676,6 @@ function switchView(viewName, btn) {
       });
     });
   }
-
-  // --- Photo lightbox ---------------------------------------------------
-  const lightboxState = { photos: [], index: 0, caption: '' };
-
-  function findPhotoTarget(e) {
-    return e.target.closest('[data-photo-owner]');
-  }
-
-  function bindPhotoDelegation() {
-    const recentContainer = document.getElementById('recent-submission-list');
-    const historyBody = document.getElementById('history-table-body');
-    [recentContainer, historyBody].forEach(el => {
-      if (!el) return;
-      el.addEventListener('click', (e) => {
-        const target = findPhotoTarget(e);
-        if (!target) return;
-        const ownerId = target.getAttribute('data-photo-owner');
-        const submission = currentSubmissions.find(s => String(s.id) === ownerId);
-        if (!submission || !submission.photos || submission.photos.length === 0) return;
-        openLightbox(submission, 0);
-      });
-    });
-  }
-
-  function renderLightboxFrame() {
-    const img = document.getElementById('lightboxImage');
-    const caption = document.getElementById('lightboxCaption');
-    const counter = document.getElementById('lightboxCounter');
-    const prevBtn = document.getElementById('btnLightboxPrev');
-    const nextBtn = document.getElementById('btnLightboxNext');
-    const photo = lightboxState.photos[lightboxState.index];
-    if (img && photo) img.src = photo.full;
-    if (caption) caption.textContent = lightboxState.caption;
-    if (counter) {
-      counter.textContent = lightboxState.photos.length > 1
-        ? `${lightboxState.index + 1} of ${lightboxState.photos.length}`
-        : '';
-    }
-    const multi = lightboxState.photos.length > 1;
-    if (prevBtn) prevBtn.style.display = multi ? 'flex' : 'none';
-    if (nextBtn) nextBtn.style.display = multi ? 'flex' : 'none';
-  }
-
-  function openLightbox(submission, index) {
-    lightboxState.photos = submission.photos;
-    lightboxState.index = index || 0;
-    lightboxState.caption = `${submission.barangay} · ${formatDate(submission.date)}`;
-    renderLightboxFrame();
-    const overlay = document.getElementById('photoLightbox');
-    if (overlay) overlay.classList.add('open');
-  }
-
-  function closeLightbox() {
-    const overlay = document.getElementById('photoLightbox');
-    if (overlay) overlay.classList.remove('open');
-    lightboxState.photos = [];
-  }
-
-  function lightboxNav(delta) {
-    if (lightboxState.photos.length === 0) return;
-    const len = lightboxState.photos.length;
-    lightboxState.index = (lightboxState.index + delta + len) % len;
-    renderLightboxFrame();
-  }
-
-  function bindLightbox() {
-    const overlay = document.getElementById('photoLightbox');
-    const closeBtn = document.getElementById('btnCloseLightbox');
-    const prevBtn = document.getElementById('btnLightboxPrev');
-    const nextBtn = document.getElementById('btnLightboxNext');
-    if (!overlay) return;
-
-    if (closeBtn) closeBtn.addEventListener('click', closeLightbox);
-    if (prevBtn) prevBtn.addEventListener('click', () => lightboxNav(-1));
-    if (nextBtn) nextBtn.addEventListener('click', () => lightboxNav(1));
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) closeLightbox();
-    });
-    document.addEventListener('keydown', (e) => {
-      if (!overlay.classList.contains('open')) return;
-      if (e.key === 'Escape') closeLightbox();
-      if (e.key === 'ArrowLeft') lightboxNav(-1);
-      if (e.key === 'ArrowRight') lightboxNav(1);
-    });
-  }
-  // ------------------------------------------------------------------------
 
   function openDeleteConfirm() {
     const overlay = document.getElementById('deleteOverlay');

@@ -97,7 +97,7 @@ function setMapType(satellite) {
     if (layersToggleLabelEl) layersToggleLabelEl.textContent = satellite ? "Map" : "Satellite";
 }
 
-setMapType(false);
+setMapType(true);
 
 const SENTINEL_PROXY_URL = "../API/sentinel-proxy.php";
 
@@ -229,10 +229,11 @@ async function syncAllZonesFromSatellite(dateStr) {
     const date = dateStr || sceneDateInputValueOrToday();
     console.log(`Syncing satellite NDVI for ${ZONES.length} zones (cached dates are reused, no extra API calls)...`);
 
-    for (const zone of ZONES) {
-        await fetchZoneNdviFromCopernicus(zone, date);
-        renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");
-    }
+    await Promise.all(ZONES.map(zone =>
+        fetchZoneNdviFromCopernicus(zone, date).then(() => {
+            renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");
+        })
+    ));
 
     satelliteSyncInProgress = false;
     console.log("Satellite NDVI sync complete.");

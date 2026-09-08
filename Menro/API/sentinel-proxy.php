@@ -1,13 +1,22 @@
 <?php
 
+session_start();
+
+$allowedRoles = ['menro', 'admin'];
+if (!isset($_SESSION['user']) || !in_array($_SESSION['user']['role'], $allowedRoles, true)) {
+    http_response_code(401);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Not authorized.']);
+    exit;
+}
+session_write_close();
+
 require_once __DIR__ . '/config.php';
 
 define('CDSE_TOKEN_URL', 'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token');
 define('CDSE_WMS_BASE',  'https://sh.dataspace.copernicus.eu/ogc/wms/' . CDSE_INSTANCE_ID);
 define('CDSE_STATS_URL', 'https://sh.dataspace.copernicus.eu/api/v1/statistics');
 define('TOKEN_CACHE_FILE', __DIR__ . '/.cdse_token_cache.json');
-
-header('Access-Control-Allow-Origin: ' . ($_SERVER['HTTP_ORIGIN'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost'));
 
 function circlePolygon($lat, $lng, $radiusMeters, $sides = 24) {
     $coords = [];
