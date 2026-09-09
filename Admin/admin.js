@@ -50,9 +50,30 @@ async function loadAccounts() {
     accountsCache.ranger = data.accounts.ranger || [];
     applyAccountFilter("menro");
     applyAccountFilter("ranger");
+    updateAccountStats();
   } catch (err) {
     showDataWarning("Couldn't load accounts. Check that the server is reachable.");
   }
+}
+
+let pendingResetCount = 0;
+
+function updateAccountStats() {
+  const menro = accountsCache.menro || [];
+  const ranger = accountsCache.ranger || [];
+  const activeCount = list => list.filter(acc => Number(acc.is_active)).length;
+  const inactiveCount = list => list.length - activeCount(list);
+
+  document.getElementById("statMenroTotal").textContent = menro.length;
+  document.getElementById("statMenroMeta").textContent = `${activeCount(menro)} active`;
+
+  document.getElementById("statRangerTotal").textContent = ranger.length;
+  document.getElementById("statRangerMeta").textContent = `${activeCount(ranger)} active`;
+
+  document.getElementById("statPendingTotal").textContent = pendingResetCount;
+  document.getElementById("statPendingMeta").textContent = pendingResetCount > 0 ? "Awaiting action" : "All clear";
+
+  document.getElementById("statInactiveTotal").textContent = inactiveCount(menro) + inactiveCount(ranger);
 }
 
 const sortState = {
@@ -211,6 +232,8 @@ function renderAccounts(role, accounts, isFiltered = false) {
     return;
   }
 
+  const otherRole = role === "menro" ? "ranger" : "menro";
+
   body.innerHTML = accounts.map(acc => `
     <tr class="${Number(acc.is_active) ? "" : "row-inactive"}">
       <td>${escapeHtml(acc.full_name || "—")}</td>
@@ -228,7 +251,7 @@ function renderAccounts(role, accounts, isFiltered = false) {
       <td>
         <div class="account-row-actions">
           <button class="btn-row-action" data-action="edit" data-role="${role}" data-id="${acc.id}" data-username="${escapeHtml(acc.username)}" data-full-name="${escapeHtml(acc.full_name || "")}" data-email="${escapeHtml(acc.email || "")}">Edit</button>
-          <button class="btn-row-action" data-action="reset" data-role="${role}" data-id="${acc.id}" data-username="${escapeHtml(acc.username)}">Reset Password</button>
+          <button class="btn-row-action" data-action="changeRole" data-role="${role}" data-id="${acc.id}" data-username="${escapeHtml(acc.username)}" data-new-role="${otherRole}">Make ${ROLE_LABEL[otherRole]}</button>
           <button class="btn-row-action danger" data-action="delete" data-role="${role}" data-id="${acc.id}" data-username="${escapeHtml(acc.username)}">Delete</button>
         </div>
       </td>
@@ -254,6 +277,8 @@ async function setAccountActive(checkbox) {
       if (cached) cached.is_active = checkbox.checked ? 1 : 0;
       const label = checkbox.closest(".status-toggle").querySelector(".status-toggle-label");
       label.textContent = checkbox.checked ? "Active" : "Inactive";
+      checkbox.closest("tr").classList.toggle("row-inactive", !checkbox.checked);
+      showDataSuccess(`"${username}" is now ${checkbox.checked ? "active" : "inactive"}.`);
     } else {
       checkbox.checked = !checkbox.checked;
       showDataWarning(data.error || `Couldn't update the status for ${username}.`);
@@ -269,6 +294,7 @@ async function setAccountActive(checkbox) {
 const VIEW_TITLE = {
   accountsView: "Accounts",
   timeLogView: "Time Log",
+  activityLogView: "Activity Log",
 };
 
 document.querySelectorAll(".nav-item[data-view]").forEach(btn => {
@@ -282,6 +308,7 @@ document.querySelectorAll(".nav-item[data-view]").forEach(btn => {
     document.getElementById("topbarTitle").textContent = VIEW_TITLE[viewId] || "Accounts";
 
     if (viewId === "timeLogView") loadTimeLog();
+    if (viewId === "activityLogView") loadActivityLog();
   });
 });
 
@@ -323,6 +350,42 @@ function renderTimeLog(entries) {
   `).join("");
 }
 
+function formatDateTime(dateStr) {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr.replace(" ", "T"));
+  if (isNaN(d)) return dateStr;
+  return `${d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}, ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+}
+
+async function loadActivityLog() {
+  const body = document.getElementById("activityLogBody");
+  try {
+    const res = await fetch(`${ACCOUNTS_API}?action=listAuditLog`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || "Failed to load activity log.");
+    renderActivityLog(data.entries || []);
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="4" class="account-empty">Couldn't load the activity log.</td></tr>`;
+  }
+}
+
+function renderActivityLog(entries) {
+  const body = document.getElementById("activityLogBody");
+  if (entries.length === 0) {
+    body.innerHTML = `<tr><td colspan="4" class="account-empty">No activity recorded yet.</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = entries.map(entry => `
+    <tr>
+      <td>${escapeHtml(formatDateTime(entry.created_at))}</td>
+      <td>${escapeHtml(entry.actor_username)}</td>
+      <td>${escapeHtml(ROLE_LABEL[entry.actor_role] || entry.actor_role)}</td>
+      <td>${escapeHtml(entry.action)}</td>
+    </tr>
+  `).join("");
+}
+
 const resetRequestsSection = document.getElementById("resetRequestsSection");
 const resetRequestsHeading = document.getElementById("resetRequestsHeading");
 const resetRequestsBody = document.getElementById("resetRequestsBody");
@@ -339,6 +402,10 @@ async function loadResetRequests() {
 }
 
 function renderResetRequests(requests) {
+  pendingResetCount = requests.length;
+  updateAccountStats();
+  updateNotifBell(requests);
+
   if (requests.length === 0) {
     resetRequestsSection.hidden = true;
     return;
@@ -374,6 +441,133 @@ function renderResetRequests(requests) {
   }).join("");
 }
 
+const notifBell = document.getElementById("notifBell");
+const notifBadge = document.getElementById("notifBadge");
+const notifDropdown = document.getElementById("notifDropdown");
+const notifDropdownBody = document.getElementById("notifDropdownBody");
+
+const NOTIF_SEEN_KEY = "aquaguard_notif_seen_ids";
+
+function getSeenNotifIds() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(NOTIF_SEEN_KEY) || "[]"));
+  } catch (err) {
+    return new Set();
+  }
+}
+
+function saveSeenNotifIds(idsSet) {
+  try {
+    localStorage.setItem(NOTIF_SEEN_KEY, JSON.stringify([...idsSet]));
+  } catch (err) {}
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr.replace(" ", "T"));
+  if (isNaN(d)) return "";
+  const seconds = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return formatDate(dateStr);
+}
+
+let latestResetRequests = [];
+let lastUnseenCount = null;
+
+function updateNotifBell(requests) {
+  latestResetRequests = requests;
+  const seen = getSeenNotifIds();
+  const unseenCount = requests.filter(r => !seen.has(r.id)).length;
+
+  notifBadge.textContent = unseenCount > 9 ? "9+" : String(unseenCount);
+  notifBadge.hidden = unseenCount === 0;
+
+  if (lastUnseenCount !== null && unseenCount > lastUnseenCount) {
+    notifBell.classList.add("notif-bell-ring");
+    setTimeout(() => notifBell.classList.remove("notif-bell-ring"), 600);
+  }
+  lastUnseenCount = unseenCount;
+
+  if (requests.length === 0) {
+    notifDropdownBody.innerHTML = `<div class="notif-empty">You're all caught up.</div>`;
+    return;
+  }
+
+  notifDropdownBody.innerHTML = requests.map(req => {
+    const displayName = req.fullName || req.username;
+    const isNew = !seen.has(req.id);
+    const initial = displayName.charAt(0).toUpperCase();
+    return `
+      <button class="notif-item${isNew ? " notif-item-unread" : ""}" type="button" data-action="goToRequests" data-request-id="${req.id}">
+        <div class="notif-item-avatar">
+          <span>${escapeHtml(initial)}</span>
+          <span class="notif-item-avatar-badge">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.5 12.5 19 4M16 6l2 2M19 4l2 2-3 3"/></svg>
+          </span>
+        </div>
+        <div class="notif-item-body">
+          <div class="notif-item-title${isNew ? " notif-item-title-unread" : ""}"><strong>${escapeHtml(displayName)}</strong> requested a password reset</div>
+          <div class="notif-item-sub${isNew ? " notif-item-sub-unread" : ""}">${escapeHtml(timeAgo(req.requested_at))}</div>
+        </div>
+        ${isNew ? '<span class="notif-dot" aria-label="Unread"></span>' : ""}
+      </button>
+    `;
+  }).join("");
+}
+
+function markNotifSeen(id) {
+  const seen = getSeenNotifIds();
+  seen.add(id);
+  saveSeenNotifIds(seen);
+  updateNotifBell(latestResetRequests);
+}
+
+function markAllNotifsSeen() {
+  const seen = getSeenNotifIds();
+  latestResetRequests.forEach(r => seen.add(r.id));
+  saveSeenNotifIds(seen);
+  updateNotifBell(latestResetRequests);
+}
+
+function closeNotifDropdown() {
+  notifDropdown.hidden = true;
+}
+
+notifBell.addEventListener("click", (e) => {
+  e.stopPropagation();
+  notifDropdown.hidden = !notifDropdown.hidden;
+});
+
+document.getElementById("notifMarkAll").addEventListener("click", (e) => {
+  e.stopPropagation();
+  markAllNotifsSeen();
+});
+
+notifDropdown.addEventListener("click", (e) => {
+  const item = e.target.closest('[data-action="goToRequests"]');
+  if (item) {
+    markNotifSeen(Number(item.dataset.requestId));
+    closeNotifDropdown();
+    document.querySelector('.nav-item[data-view="accountsView"]').click();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (!notifDropdown.hidden && !e.target.closest(".notif-wrap")) closeNotifDropdown();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !notifDropdown.hidden) closeNotifDropdown();
+});
+
+setInterval(loadResetRequests, 45000);
+
 async function approveResetRequest(btn, requestId, username) {
   btn.disabled = true;
   btn.textContent = "Sending…";
@@ -387,7 +581,7 @@ async function approveResetRequest(btn, requestId, username) {
     const data = await res.json();
 
     if (data.success) {
-      showDataWarning(`Reset link sent to ${username}.`);
+      showDataSuccess(`Reset link sent to ${username}.`);
       loadResetRequests();
     } else {
       showDataWarning(data.error || `Couldn't send the reset link to ${username}.`);
@@ -411,6 +605,7 @@ async function dismissResetRequest(requestId) {
     const data = await res.json();
 
     if (data.success) {
+      showDataSuccess("Request dismissed.");
       loadResetRequests();
     } else {
       showDataWarning(data.error || "Couldn't dismiss the request.");
@@ -425,12 +620,13 @@ document.querySelectorAll(".account-table-wrap").forEach(wrap => {
     const btn = e.target.closest("button[data-action]");
     if (!btn) return;
 
-    const { action, role, id, username, requestId, fullName, email } = btn.dataset;
+    const { action, role, id, username, requestId, fullName, email, newRole } = btn.dataset;
     if (action === "edit") openEditModal(role, id, username, fullName, email);
     if (action === "reset") openResetModal(role, id, username, requestId || null);
     if (action === "delete") openDeleteModal(role, id, username);
     if (action === "dismiss") dismissResetRequest(requestId);
     if (action === "approve") approveResetRequest(btn, requestId, username);
+    if (action === "changeRole") openChangeRoleModal(role, id, username, newRole);
   });
 
   wrap.addEventListener("change", (e) => {
@@ -443,9 +639,16 @@ const deactivateOverlay = document.getElementById("deactivateOverlay");
 const deactivateTargetLabel = document.getElementById("deactivateTargetLabel");
 let deactivateTarget = null;
 
+const activateOverlay = document.getElementById("activateOverlay");
+const activateTargetLabel = document.getElementById("activateTargetLabel");
+let activateTarget = null;
+
 function handleToggleChange(checkbox) {
   if (checkbox.checked) {
-    setAccountActive(checkbox);
+    checkbox.checked = false;
+    activateTarget = checkbox;
+    activateTargetLabel.textContent = `"${checkbox.dataset.username}" will be able to sign in again.`;
+    activateOverlay.classList.add("open");
     return;
   }
 
@@ -460,13 +663,27 @@ function closeDeactivateModal() {
   deactivateTarget = null;
 }
 
+function closeActivateModal() {
+  activateOverlay.classList.remove("open");
+  activateTarget = null;
+}
+
 bindOverlayDismiss(deactivateOverlay, closeDeactivateModal, "btnCloseDeactivate", "btnCancelDeactivate");
+bindOverlayDismiss(activateOverlay, closeActivateModal, "btnCloseActivate", "btnCancelActivate");
 
 document.getElementById("btnConfirmDeactivate").addEventListener("click", () => {
   if (!deactivateTarget) return;
   const checkbox = deactivateTarget;
   closeDeactivateModal();
   checkbox.checked = false;
+  setAccountActive(checkbox);
+});
+
+document.getElementById("btnConfirmActivate").addEventListener("click", () => {
+  if (!activateTarget) return;
+  const checkbox = activateTarget;
+  closeActivateModal();
+  checkbox.checked = true;
   setAccountActive(checkbox);
 });
 
@@ -509,7 +726,7 @@ createForm.addEventListener("submit", async (e) => {
     if (data.success) {
       closeCreateModal();
       loadAccounts();
-      showDataWarning(`Account "${username}" created.`);
+      showDataSuccess(`Account "${username}" created.`);
     } else {
       showDataWarning(data.error || "Couldn't create the account.");
     }
@@ -556,7 +773,7 @@ editForm.addEventListener("submit", async (e) => {
     if (data.success) {
       closeEditModal();
       loadAccounts();
-      showDataWarning(`Account "${username}" updated.`);
+      showDataSuccess(`Account "${username}" updated.`);
     } else {
       showDataWarning(data.error || "Couldn't save the changes.");
     }
@@ -604,6 +821,7 @@ resetForm.addEventListener("submit", async (e) => {
     if (data.success) {
       closeResetModal();
       loadResetRequests();
+      showDataSuccess("Password reset.");
     } else {
       showDataWarning(data.error || "Couldn't reset the password.");
     }
@@ -644,12 +862,54 @@ document.getElementById("btnConfirmDelete").addEventListener("click", async () =
     closeDeleteModal();
     if (data.success) {
       loadAccounts();
-      showDataWarning(`Account "${username}" deleted.`);
+      showDataSuccess(`Account "${username}" deleted.`);
     } else {
       showDataWarning(data.error || "Couldn't delete the account.");
     }
   } catch (err) {
     closeDeleteModal();
+    showDataWarning("Couldn't reach the server. Please try again.");
+  }
+});
+
+const changeRoleOverlay = document.getElementById("changeRoleOverlay");
+const changeRoleTargetLabel = document.getElementById("changeRoleTargetLabel");
+let changeRoleTarget = null;
+
+function openChangeRoleModal(role, id, username, newRole) {
+  changeRoleTarget = { role, id, username, newRole };
+  changeRoleTargetLabel.textContent = `"${username}" will become a ${ROLE_LABEL[newRole]} account.`;
+  changeRoleOverlay.classList.add("open");
+}
+
+function closeChangeRoleModal() {
+  changeRoleOverlay.classList.remove("open");
+  changeRoleTarget = null;
+}
+
+bindOverlayDismiss(changeRoleOverlay, closeChangeRoleModal, "btnCloseChangeRole", "btnCancelChangeRole");
+
+document.getElementById("btnConfirmChangeRole").addEventListener("click", async () => {
+  if (!changeRoleTarget) return;
+  const { role, id, username, newRole } = changeRoleTarget;
+
+  try {
+    const res = await fetch(ACCOUNTS_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ action: "changeRole", role, id, newRole }),
+    });
+    const data = await res.json();
+
+    closeChangeRoleModal();
+    if (data.success) {
+      loadAccounts();
+      showDataSuccess(`"${username}" is now a ${ROLE_LABEL[newRole]} account.`);
+    } else {
+      showDataWarning(data.error || "Couldn't change the account's role.");
+    }
+  } catch (err) {
+    closeChangeRoleModal();
     showDataWarning("Couldn't reach the server. Please try again.");
   }
 });

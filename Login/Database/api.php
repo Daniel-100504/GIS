@@ -15,6 +15,8 @@ $tableByRole = [
 
 $allRoleTables = $tableByRole + ['admin' => 'admin_accounts'];
 
+$roleLabel = ['menro' => 'MENRO', 'ranger' => 'Ranger', 'admin' => 'Administrator'];
+
 function respond($data, $code = 200) {
     http_response_code($code);
     echo json_encode($data);
@@ -220,6 +222,7 @@ try {
         try {
             $stmt = $pdo->prepare("INSERT INTO {$table} (username, password_hash, full_name, email) VALUES (:username, :hash, :fullName, :email)");
             $stmt->execute(['username' => $username, 'hash' => $hash, 'fullName' => $fullName, 'email' => $email]);
+            logAudit($pdo, "Created {$roleLabel[$role]} account \"{$username}\".");
             respond(['success' => true, 'id' => $pdo->lastInsertId()]);
         } catch (PDOException $e) {
             respond(['success' => false, 'error' => 'That username is already taken.'], 409);
@@ -255,6 +258,7 @@ try {
                 "UPDATE {$table} SET username = :username, full_name = :fullName, email = :email WHERE id = :id"
             );
             $stmt->execute(['username' => $username, 'fullName' => $fullName, 'email' => $email, 'id' => $id]);
+            logAudit($pdo, "Updated {$roleLabel[$role]} account \"{$username}\".");
             respond(['success' => true]);
         } catch (PDOException $e) {
             respond(['success' => false, 'error' => 'That username is already taken.'], 409);
@@ -278,6 +282,10 @@ try {
 
         $hash = password_hash($password, PASSWORD_DEFAULT);
 
+        $stmt = $pdo->prepare("SELECT username FROM {$table} WHERE id = :id");
+        $stmt->execute(['id' => $id]);
+        $targetUsername = $stmt->fetchColumn() ?: "#{$id}";
+
         $stmt = $pdo->prepare("UPDATE {$table} SET password_hash = :hash WHERE id = :id");
         $stmt->execute(['hash' => $hash, 'id' => $id]);
 
@@ -286,6 +294,7 @@ try {
             $stmt->execute(['id' => $requestId]);
         }
 
+        logAudit($pdo, "Reset password for {$roleLabel[$role]} account \"{$targetUsername}\".");
         respond(['success' => true]);
     }
 
@@ -295,9 +304,72 @@ try {
         $id   = $_POST['id'] ?? '';
 
         $table = requireValidRoleAndId($tableByRole, $role, $id);
+
+        $stmt = $pdo->prepare("SELECT username FROM {$table} WHERE id = :id");
+        $stmt->execute(['id' => $id]);
+        $targetUsername = $stmt->fetchColumn() ?: "#{$id}";
+
         $stmt = $pdo->prepare("DELETE FROM {$table} WHERE id = :id");
         $stmt->execute(['id' => $id]);
+        logAudit($pdo, "Deleted {$roleLabel[$role]} account \"{$targetUsername}\".");
         respond(['success' => true]);
+    }
+
+    if ($action === 'changeRole') {
+        requireRole(['admin']);
+        $role    = $_POST['role'] ?? '';
+        $id      = $_POST['id'] ?? '';
+        $newRole = $_POST['newRole'] ?? '';
+
+        if (!isset($tableByRole[$role]) || !isset($tableByRole[$newRole]) || $role === $newRole) {
+            respond(['success' => false, 'error' => 'Invalid role.'], 400);
+        }
+        if (!ctype_digit((string) $id)) {
+            respond(['success' => false, 'error' => 'Invalid account id.'], 400);
+        }
+
+        $sourceTable = $tableByRole[$role];
+        $destTable   = $tableByRole[$newRole];
+
+        $stmt = $pdo->prepare("SELECT username, password_hash, full_name, email, is_active, created_at FROM {$sourceTable} WHERE id = :id");
+        $stmt->execute(['id' => $id]);
+        $account = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$account) {
+            respond(['success' => false, 'error' => 'Account not found.'], 404);
+        }
+
+        $checkTables = array_diff_key($allRoleTables, [$role => true]);
+        if (usernameTakenElsewhere($pdo, $checkTables, $account['username'])) {
+            respond(['success' => false, 'error' => 'That username is already taken.'], 409);
+        }
+
+        try {
+            $pdo->beginTransaction();
+
+            $stmt = $pdo->prepare(
+                "INSERT INTO {$destTable} (username, password_hash, full_name, email, is_active, created_at)
+                 VALUES (:username, :hash, :fullName, :email, :isActive, :createdAt)"
+            );
+            $stmt->execute([
+                'username'  => $account['username'],
+                'hash'      => $account['password_hash'],
+                'fullName'  => $account['full_name'],
+                'email'     => $account['email'],
+                'isActive'  => $account['is_active'],
+                'createdAt' => $account['created_at'],
+            ]);
+            $newId = $pdo->lastInsertId();
+
+            $pdo->prepare("DELETE FROM {$sourceTable} WHERE id = :id")->execute(['id' => $id]);
+
+            $pdo->commit();
+        } catch (PDOException $e) {
+            $pdo->rollBack();
+            respond(['success' => false, 'error' => "Couldn't change the account's role."], 500);
+        }
+
+        logAudit($pdo, "Changed {$roleLabel[$role]} account \"{$account['username']}\" to {$roleLabel[$newRole]}.");
+        respond(['success' => true, 'id' => $newId]);
     }
 
     if ($action === 'setActive') {
@@ -311,8 +383,13 @@ try {
             respond(['success' => false, 'error' => 'Invalid status value.'], 400);
         }
 
+        $stmt = $pdo->prepare("SELECT username FROM {$table} WHERE id = :id");
+        $stmt->execute(['id' => $id]);
+        $targetUsername = $stmt->fetchColumn() ?: "#{$id}";
+
         $stmt = $pdo->prepare("UPDATE {$table} SET is_active = :active WHERE id = :id");
         $stmt->execute(['active' => $active, 'id' => $id]);
+        logAudit($pdo, ($active === '1' ? 'Activated' : 'Deactivated') . " {$roleLabel[$role]} account \"{$targetUsername}\".");
         respond(['success' => true]);
     }
 
@@ -383,6 +460,7 @@ try {
             respond(['success' => false, 'error' => 'Couldn\'t send the email. Please try again.'], 500);
         }
 
+        logAudit($pdo, "Sent password reset link to {$roleLabel[$request['role']]} account \"{$request['username']}\".");
         respond(['success' => true]);
     }
 
@@ -394,8 +472,13 @@ try {
             respond(['success' => false, 'error' => 'Invalid request id.'], 400);
         }
 
+        $stmt = $pdo->prepare("SELECT username FROM password_reset_requests WHERE id = :id");
+        $stmt->execute(['id' => $id]);
+        $targetUsername = $stmt->fetchColumn() ?: "#{$id}";
+
         $stmt = $pdo->prepare("UPDATE password_reset_requests SET status = 'resolved', resolved_at = NOW() WHERE id = :id");
         $stmt->execute(['id' => $id]);
+        logAudit($pdo, "Dismissed password reset request from \"{$targetUsername}\".");
         respond(['success' => true]);
     }
 
@@ -428,6 +511,18 @@ try {
         unset($entry);
 
         respond(['success' => true, 'entries' => $entries]);
+    }
+
+    if ($action === 'listAuditLog') {
+        requireRole(['admin']);
+        $stmt = $pdo->query(
+            "SELECT actor_username, actor_role, action, created_at
+             FROM audit_log
+             WHERE action NOT IN ('login', 'logout')
+             ORDER BY created_at DESC
+             LIMIT 200"
+        );
+        respond(['success' => true, 'entries' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     }
 
     if ($action === 'submitRequest') {
