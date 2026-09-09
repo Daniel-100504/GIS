@@ -1,17 +1,25 @@
 let dataWarningHideTimer = null;
 
-function showDataWarning(message) {
+function showToast(message, variant = "warning") {
   let toastEl = document.getElementById("dataWarningToast");
   if (!toastEl) {
     toastEl = document.createElement("div");
     toastEl.id = "dataWarningToast";
-    toastEl.className = "data-warning-toast";
     document.body.appendChild(toastEl);
   }
+  toastEl.className = "data-warning-toast" + (variant === "success" ? " success" : "");
   toastEl.textContent = message;
   toastEl.classList.add("show");
   clearTimeout(dataWarningHideTimer);
   dataWarningHideTimer = setTimeout(() => toastEl.classList.remove("show"), 5000);
+}
+
+function showDataWarning(message) {
+  showToast(message, "warning");
+}
+
+function showDataSuccess(message) {
+  showToast(message, "success");
 }
 
 function escapeHtml(value) {
