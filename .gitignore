@@ -1,3 +1,5 @@
 Menro/API/config.php
 Menro/API/.cdse_token_cache.json
 Menro/API/tile-cache/
+Login/Database/db.php
+Login/Database/mailer/mail-config.php

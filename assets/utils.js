@@ -1,3 +1,19 @@
+let dataWarningHideTimer = null;
+
+function showDataWarning(message) {
+  let toastEl = document.getElementById("dataWarningToast");
+  if (!toastEl) {
+    toastEl = document.createElement("div");
+    toastEl.id = "dataWarningToast";
+    toastEl.className = "data-warning-toast";
+    document.body.appendChild(toastEl);
+  }
+  toastEl.textContent = message;
+  toastEl.classList.add("show");
+  clearTimeout(dataWarningHideTimer);
+  dataWarningHideTimer = setTimeout(() => toastEl.classList.remove("show"), 5000);
+}
+
 function escapeHtml(value) {
   if (value === null || value === undefined) return "—";
   return String(value)

@@ -1,10 +1,18 @@
 <?php
 
-require_once __DIR__ . '/config.php';
+session_start();
 
 header('Content-Type: application/json');
 
-header('Access-Control-Allow-Origin: ' . ($_SERVER['HTTP_ORIGIN'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost'));
+$allowedRoles = ['ranger', 'menro', 'admin'];
+if (!isset($_SESSION['user']) || !in_array($_SESSION['user']['role'], $allowedRoles, true)) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Not authorized.']);
+    exit;
+}
+session_write_close();
+
+require_once __DIR__ . '/config.php';
 
 $action = $_GET['action'] ?? ($_POST['action'] ?? 'list');
 
