@@ -7,6 +7,13 @@ const refreshSentinelLayers = debounce((dateStr) => {
     ndviHeatmapLayer.setParams({ time: sentinelTimeRangeFor(dateStr) });
 }, 450);
 
+function enableSentinel2Layer() {
+    if (layerSentinel2El && !layerSentinel2El.checked) {
+        layerSentinel2El.checked = true;
+        layerSentinel2El.dispatchEvent(new Event("change"));
+    }
+}
+
 function syncSceneDateToToday() {
     const today = todayISO();
     sceneDate.max = today;
@@ -39,6 +46,8 @@ const calMonthNextEl  = document.getElementById("calMonthNext");
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 const availableDatesCache = {};
+
+const AVAILABILITY_MAXCC = 100;
 
 function initialCalendarDate() {
     const val = sceneDate.value || todayISO();
@@ -144,7 +153,7 @@ async function renderSceneCalendar() {
     calGridEl.innerHTML = cells;
     bindCalendarCellClicks();
 
-    const available = await fetchAvailableDatesForMonth(year, month, currentMaxCC);
+    const available = await fetchAvailableDatesForMonth(year, month, AVAILABILITY_MAXCC);
 
     if (calendarView.year !== year || calendarView.month !== month) return;
 
@@ -155,6 +164,9 @@ async function renderSceneCalendar() {
             const cc = available[dateStr];
             if (cc !== null && cc !== undefined) {
                 cell.title = `Cloud cover: ${Math.round(cc)}%`;
+                if (cc <= currentMaxCC) cell.classList.add("cc-ok");
+            } else {
+                cell.classList.add("cc-ok");
             }
         }
     });
@@ -168,6 +180,10 @@ function bindCalendarCellClicks() {
             if (!dateStr) return;
             sceneDate.value = dateStr;
             sceneDate.dispatchEvent(new Event("change"));
+
+            if (cell.classList.contains("available")) {
+                enableSentinel2Layer();
+            }
         });
     });
 }
