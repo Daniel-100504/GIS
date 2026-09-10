@@ -83,7 +83,7 @@ document.addEventListener("mousemove",(e)=>{
 
     const width=window.innerWidth-e.clientX;
 
-    if(width>180 && width<420){
+    if(width>180 && width<480){
 
         rightPanel.style.width=width+"px";
 
