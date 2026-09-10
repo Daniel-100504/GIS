@@ -39,7 +39,7 @@ button, input {
   justify-content: space-between;
   padding: 0 18px 0 12px;
   z-index: 1000;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 2px 10px rgba(10, 49, 40, 0.05);
 }
 
 .topbar-left {
@@ -238,10 +238,12 @@ button, input {
   position: absolute;
   bottom: 40px;
   right: 60px;
-  background: rgba(10, 33, 27, 0.82);
+  background: rgba(13, 43, 35, 0.86);
+  backdrop-filter: blur(6px);
   color: #eaf5ef;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(10, 49, 40, 0.2);
   font-size: 0.74rem;
   font-family: var(--font-mono);
   z-index: 600;
@@ -264,10 +266,10 @@ button, input {
   z-index: 700;
   background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(6px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  padding: 10px 14px;
+  border: none;
+  border-radius: 16px;
+  box-shadow: 0 6px 20px rgba(10, 49, 40, 0.1);
+  padding: 12px 16px;
 }
 
 .map-legend-title {
@@ -308,20 +310,20 @@ button, input {
   width: 76px;
   padding: 4px;
   border: 1px solid rgba(255,255,255,0.5);
-  border-radius: var(--radius-md);
+  border-radius: 14px;
   background: #fff;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 4px 16px rgba(10, 49, 40, 0.1);
   cursor: pointer;
   font-family: var(--font-body);
   transition: box-shadow 0.16s ease;
 }
 
-.layers-toggle-btn:hover { box-shadow: var(--shadow-lg); }
+.layers-toggle-btn:hover { box-shadow: 0 10px 26px rgba(10, 49, 40, 0.18); }
 
 .layers-toggle-thumb {
   width: 100%;
   height: 50px;
-  border-radius: 7px;
+  border-radius: 10px;
   background-size: cover;
   background-position: center;
 }
@@ -342,7 +344,7 @@ button, input {
 }
 
 .map-layers-control.open .layers-toggle-btn {
-  box-shadow: var(--shadow-lg), 0 0 0 2px var(--brand-500);
+  box-shadow: 0 10px 26px rgba(10, 49, 40, 0.18), 0 0 0 2px var(--brand-500);
 }
 
 .layers-popup {
@@ -350,10 +352,10 @@ button, input {
   bottom: 0;
   left: calc(100% + 8px);
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  padding: 10px 14px;
+  border: none;
+  border-radius: 18px;
+  box-shadow: 0 14px 36px rgba(10, 49, 40, 0.16);
+  padding: 12px 16px;
   display: none;
 }
 
@@ -508,11 +510,12 @@ button, input {
 .guide-item {
   display: flex;
   gap: 15px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 14px 12px;
+  border-radius: 14px;
+  transition: background 0.15s ease;
 }
 
-.guide-item:last-child { border-bottom: none; padding-bottom: 4px; }
+.guide-item:hover { background: var(--surface-alt); }
 
 .guide-icon {
   flex-shrink: 0;

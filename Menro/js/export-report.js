@@ -11,6 +11,27 @@ function closeExportReport() {
     if (exportReportOverlay) exportReportOverlay.classList.remove("open");
 }
 
+function loadImageAsDataURL(src) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            canvas.getContext("2d").drawImage(img, 0, 0);
+            try {
+                resolve(canvas.toDataURL("image/png"));
+            } catch (err) {
+                reject(err);
+            }
+        };
+        img.onerror = reject;
+        img.src = src;
+    });
+}
+
+const sealImagePromise = loadImageAsDataURL("../../assets/calatagan-seal.png").catch(() => null);
+
 function zoneNameForBarangay(barangay) {
     const zoneId = BARANGAY_TO_ZONE[barangay || ""];
     const zone = zoneId ? ZONES.find(z => z.id === zoneId) : null;
@@ -69,71 +90,155 @@ function sortedSubmissions() {
         .sort((a, b) => (a["Inspection_Date"] || "").localeCompare(b["Inspection_Date"] || ""));
 }
 
-function exportFieldSurveyExcel() {
-    if (!window.XLSX) {
+const EXCEL_BRAND      = "FF0D4335";
+const EXCEL_BRAND_SOFT = "FF5A8274";
+const EXCEL_GRAY       = "FF78827D";
+const EXCEL_LINE       = "FFE0E8E3";
+const EXCEL_ZEBRA      = "FFF2F7F4";
+
+function styleExcelTitleCell(cell, size, color, bold = true) {
+    cell.font = { name: "Calibri", size, bold, color: { argb: color } };
+}
+
+function styleExcelHeaderRow(row) {
+    row.eachCell(cell => {
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: EXCEL_BRAND } };
+        cell.alignment = { vertical: "middle" };
+        cell.border = {
+            top:    { style: "thin", color: { argb: EXCEL_BRAND } },
+            bottom: { style: "thin", color: { argb: EXCEL_BRAND } },
+        };
+    });
+}
+
+function buildSummarySheet(wb, rows) {
+    const zoneSet = new Set(rows.map(sub => zoneNameForBarangay(sub["Barangay"])));
+
+    const threatCounts = {};
+    rows.forEach(sub => {
+        const t = sub["Observed_Threats"];
+        if (t && t !== "none") {
+            const label = capitalise(t.replace(/_/g, " "));
+            threatCounts[label] = (threatCounts[label] || 0) + 1;
+        }
+    });
+    const threatRows = Object.entries(threatCounts).sort((a, b) => b[1] - a[1]);
+
+    const ws = wb.addWorksheet("Summary");
+    ws.columns = [{ width: 32 }, { width: 16 }];
+
+    ws.mergeCells(1, 1, 1, 2);
+    ws.getCell(1, 1).value = "AquaGuard — Field Survey Report Summary";
+    styleExcelTitleCell(ws.getCell(1, 1), 14, EXCEL_BRAND);
+
+    ws.mergeCells(2, 1, 2, 2);
+    ws.getCell(2, 1).value = "DENR-MENRO Batangas · Calatagan Mangrove Reserve";
+    styleExcelTitleCell(ws.getCell(2, 1), 10, EXCEL_BRAND_SOFT, false);
+
+    ws.mergeCells(3, 1, 3, 2);
+    ws.getCell(3, 1).value = exportRangeLabel();
+    styleExcelTitleCell(ws.getCell(3, 1), 9, EXCEL_GRAY, false);
+
+    ws.addRow([]);
+    styleExcelHeaderRow(ws.addRow(["Metric", "Value"]));
+    ws.addRow(["Total Surveys Recorded", rows.length]);
+    ws.addRow(["Zones Covered", zoneSet.size]);
+
+    ws.addRow([]);
+    styleExcelHeaderRow(ws.addRow(["Observed Threats", "Count"]));
+    (threatRows.length ? threatRows : [["No threats observed", 0]]).forEach(r => ws.addRow(r));
+
+    return ws;
+}
+
+async function exportFieldSurveyExcel() {
+    if (!window.ExcelJS) {
         alert("Excel export is unavailable right now — the Excel library failed to load. Check your connection and try again.");
         return;
     }
 
     const rows = sortedSubmissions();
 
-    const header = [
-        "Zone", "Ranger", "Inspection Date", "Transect / Quadrat", "Canopy Cover (%)",
-        "Species Observed", "Tree Count", "Observed Threats", "Water Color",
-        "Nearby Aquafarm Activity", "Additional Notes", "GPS Latitude", "GPS Longitude",
+    const header = ["Zone", "Ranger", "Date", "Canopy Cover", "Threats", "Water Color", "Aquafarm Activity"];
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "AquaGuard";
+    wb.created = new Date();
+    wb.views = [{ activeTab: 0 }];
+
+    const ws = wb.addWorksheet("Field Surveys", {
+        views: [{ state: "frozen", ySplit: 5 }],
+    });
+    ws.columns = [
+        { width: 18 }, { width: 16 }, { width: 14 }, { width: 15 },
+        { width: 20 }, { width: 16 }, { width: 20 },
     ];
 
-    const body = rows.map(sub => {
-        const gpsParts = (sub["GPS"] || "").split(" ").map(Number);
-        const hasGps = gpsParts.length >= 2 && !isNaN(gpsParts[0]) && !isNaN(gpsParts[1]);
-        return [
+    ws.mergeCells(1, 1, 1, header.length);
+    ws.getCell(1, 1).value = "AquaGuard — Field Survey Report";
+    styleExcelTitleCell(ws.getCell(1, 1), 14, EXCEL_BRAND);
+
+    ws.mergeCells(2, 1, 2, header.length);
+    ws.getCell(2, 1).value = "DENR-MENRO Batangas · Calatagan Mangrove Reserve";
+    styleExcelTitleCell(ws.getCell(2, 1), 10, EXCEL_BRAND_SOFT, false);
+
+    ws.mergeCells(3, 1, 3, header.length);
+    ws.getCell(3, 1).value = `${exportRangeLabel()}  ·  ${rows.length} survey${rows.length !== 1 ? "s" : ""} recorded`;
+    styleExcelTitleCell(ws.getCell(3, 1), 9, EXCEL_GRAY, false);
+
+    ws.addRow([]);
+    styleExcelHeaderRow(ws.addRow(header));
+
+    rows.forEach((sub, i) => {
+        const row = ws.addRow([
             zoneNameForBarangay(sub["Barangay"]),
-            sub["Ranger_Name"] || "",
-            sub["Inspection_Date"] || "",
-            sub["Transect_Number"] || "",
-            sub["Estimated_Canopy_Cover_"] ? Number(sub["Estimated_Canopy_Cover_"]) : "",
-            sub["Species_Name"] || "",
-            sub["Tree_Count"] ? Number(sub["Tree_Count"]) : "",
+            sub["Ranger_Name"] || "—",
+            sub["Inspection_Date"] || "—",
+            sub["Estimated_Canopy_Cover_"] ? Number(sub["Estimated_Canopy_Cover_"]) : "—",
             sub["Observed_Threats"] ? capitalise(sub["Observed_Threats"].replace(/_/g, " ")) : "None observed",
-            sub["Water_Color"] ? capitalise(sub["Water_Color"].replace(/_/g, " ")) : "",
-            sub["Nearby_Aquafarm_Activity"] ? capitalise(sub["Nearby_Aquafarm_Activity"].replace(/_/g, " ")) : "",
-            sub["Additional_Notes"] || "",
-            hasGps ? gpsParts[0] : "",
-            hasGps ? gpsParts[1] : "",
-        ];
+            sub["Water_Color"] ? capitalise(sub["Water_Color"].replace(/_/g, " ")) : "—",
+            sub["Nearby_Aquafarm_Activity"] ? capitalise(sub["Nearby_Aquafarm_Activity"].replace(/_/g, " ")) : "—",
+        ]);
+
+        if (sub["Estimated_Canopy_Cover_"]) row.getCell(4).numFmt = '0"%"';
+
+        row.eachCell(cell => {
+            cell.border = {
+                top:    { style: "thin", color: { argb: EXCEL_LINE } },
+                bottom: { style: "thin", color: { argb: EXCEL_LINE } },
+            };
+            if (i % 2 === 1) {
+                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: EXCEL_ZEBRA } };
+            }
+        });
     });
 
-    const sheetData = [
-        ["AquaGuard — Field Survey Report"],
-        ["DENR-MENRO Batangas · Calatagan Mangrove Reserve"],
-        [`${exportRangeLabel()}  ·  ${rows.length} survey${rows.length !== 1 ? "s" : ""} recorded`],
-        [],
-        header,
-        ...body,
-    ];
+    if (rows.length > 0) {
+        ws.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5 + rows.length, column: header.length } };
+    }
 
-    const ws = XLSX.utils.aoa_to_sheet(sheetData);
-    ws["!cols"] = [
-        { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 16 }, { wch: 15 },
-        { wch: 18 }, { wch: 10 }, { wch: 18 }, { wch: 14 },
-        { wch: 22 }, { wch: 32 }, { wch: 13 }, { wch: 13 },
-    ];
-    ws["!merges"] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: header.length - 1 } },
-        { s: { r: 1, c: 0 }, e: { r: 1, c: header.length - 1 } },
-        { s: { r: 2, c: 0 }, e: { r: 2, c: header.length - 1 } },
-    ];
+    buildSummarySheet(wb, rows);
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Field Surveys");
-    XLSX.writeFile(wb, `aquaguard-field-survey-report-${todayISO()}.xlsx`);
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `aquaguard-field-survey-report-${todayISO()}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
 }
 
-function exportFieldSurveyPdf() {
+async function exportFieldSurveyPdf() {
     if (!window.jspdf || !window.jspdf.jsPDF) {
         alert("PDF export is unavailable right now — the PDF library failed to load. Check your connection and try again.");
         return;
     }
+
+    const sealDataUrl = await sealImagePromise;
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
@@ -141,29 +246,47 @@ function exportFieldSurveyPdf() {
     const pageHeight = doc.internal.pageSize.getHeight();
     const marginX = 32;
     const rows = sortedSubmissions();
+    const generatedAt = new Date().toLocaleString("en-US");
 
-    const BRAND = [13, 67, 53];
-    const GRAY  = [120, 130, 125];
-    const LINE  = [210, 219, 214];
+    const BRAND      = [13, 67, 53];
+    const BRAND_SOFT = [90, 130, 116];
+    const GRAY       = [120, 130, 125];
+    const LINE       = [210, 219, 214];
+    const ZEBRA      = [242, 247, 244];
+
+    const logoSize = 30;
+    const textX = sealDataUrl ? marginX + logoSize + 10 : marginX;
 
     function drawHeader() {
+        if (sealDataUrl) {
+            doc.addImage(sealDataUrl, "PNG", marginX, 10, logoSize, logoSize);
+        }
+
         doc.setTextColor(...BRAND);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(15);
-        doc.text("AquaGuard — Field Survey Report", marginX, 32);
+        doc.text("AquaGuard — Field Survey Report", textX, 24);
 
         doc.setTextColor(...GRAY);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
-        doc.text("DENR-MENRO Batangas · Calatagan Mangrove Reserve", marginX, 46);
+        doc.text("DENR-MENRO Batangas · Calatagan Mangrove Reserve", textX, 37);
+
+        doc.setFontSize(7.5);
+        doc.setTextColor(...BRAND_SOFT);
+        doc.text(`Generated ${generatedAt}`, textX, 48);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(...BRAND);
         doc.text(
             `${exportRangeLabel()}  ·  ${rows.length} survey${rows.length !== 1 ? "s" : ""} recorded`,
-            pageWidth - marginX, 46, { align: "right" }
+            pageWidth - marginX, 37, { align: "right" }
         );
 
         doc.setDrawColor(...BRAND);
         doc.setLineWidth(1);
-        doc.line(marginX, 56, pageWidth - marginX, 56);
+        doc.line(marginX, 58, pageWidth - marginX, 58);
     }
 
     function drawFooter(pageNumber) {
@@ -175,12 +298,12 @@ function exportFieldSurveyPdf() {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
         doc.text("DENR-MENRO Batangas · Calatagan Mangrove Reserve", marginX, footerY);
-        doc.text(`Page ${pageNumber}`, pageWidth - marginX, footerY, { align: "right" });
+        doc.text(`Page ${pageNumber} of {totalPages}`, pageWidth - marginX, footerY, { align: "right" });
     }
 
     doc.autoTable({
-        startY: 72,
-        margin: { top: 72, left: marginX, right: marginX, bottom: 40 },
+        startY: 74,
+        margin: { top: 74, left: marginX, right: marginX, bottom: 40 },
         theme: "grid",
         styles: {
             font: "helvetica",
@@ -192,13 +315,13 @@ function exportFieldSurveyPdf() {
             lineWidth: 0.5,
         },
         headStyles: {
-            fillColor: [255, 255, 255],
-            textColor: BRAND,
+            fillColor: BRAND,
+            textColor: [255, 255, 255],
             fontStyle: "bold",
             lineColor: BRAND,
             lineWidth: 0.75,
         },
-        alternateRowStyles: { fillColor: [255, 255, 255] },
+        alternateRowStyles: { fillColor: ZEBRA },
         head: [["Zone", "Ranger", "Date", "Canopy Cover", "Threats", "Water Color", "Aquafarm Activity"]],
         body: rows.map(sub => [
             zoneNameForBarangay(sub["Barangay"]),
@@ -214,6 +337,10 @@ function exportFieldSurveyPdf() {
             drawFooter(data.pageNumber);
         },
     });
+
+    if (typeof doc.putTotalPages === "function") {
+        doc.putTotalPages("{totalPages}");
+    }
 
     doc.save(`aquaguard-field-survey-report-${todayISO()}.pdf`);
 }

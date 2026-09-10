@@ -254,7 +254,7 @@ function renderHealthDonut(healthy, moderate, degraded, pending = 0) {
       <svg viewBox="0 0 128 128" width="128" height="128" class="donut-svg">
         <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#eef4f0" stroke-width="${sw}"/>
         ${arcs}
-        <text x="${cx}" y="${cy - 3}" text-anchor="middle" font-size="27" font-weight="700" fill="#0a3128" font-family="'Space Grotesk', sans-serif">${surveyed}</text>
+        <text x="${cx}" y="${cy - 3}" text-anchor="middle" font-size="30" font-weight="800" fill="#0a3128" font-family="'Space Grotesk', sans-serif">${surveyed}</text>
         <text x="${cx}" y="${cy + 15}" text-anchor="middle" font-size="9" letter-spacing="1.5" fill="#869790" font-weight="600">ZONES</text>
       </svg>
       <div class="donut-legend">${legend}</div>
@@ -308,7 +308,7 @@ function renderNDVIBarChart(zones) {
   return `${legend}<div class="hbar-chart">${dataRows}${noDataRows}</div>${footnote}`;
 }
 
-function renderBreakdownBarChart(breakdown, emptyText) {
+function renderBreakdownBarChart(breakdown, emptyText, fillClass = "threat-fill") {
   if (!breakdown || breakdown.length === 0) {
     return `<div class="dashboard-empty">${emptyText}</div>`;
   }
@@ -320,7 +320,7 @@ function renderBreakdownBarChart(breakdown, emptyText) {
       <div class="hbar-row">
         <span class="hbar-label" title="${escapeHtml(capitalise(t.threat))}">${escapeHtml(capitalise(t.threat))}</span>
         <div class="hbar-track">
-          <div class="hbar-fill threat-fill" style="--pct:${pct.toFixed(1)}%"></div>
+          <div class="hbar-fill ${fillClass}" style="--pct:${pct.toFixed(1)}%"></div>
         </div>
         <span class="hbar-value">${t.count}</span>
       </div>
@@ -331,7 +331,7 @@ function renderBreakdownBarChart(breakdown, emptyText) {
 }
 
 function renderThreatBarChart(threatBreakdown) {
-  return renderBreakdownBarChart(threatBreakdown, "No threats reported in field surveys.");
+  return renderBreakdownBarChart(threatBreakdown, "No threats reported in field surveys.", "threat-fill");
 }
 
 function renderNDVITrendChart(ndviTrend) {
@@ -373,7 +373,7 @@ function renderNDVITrendChart(ndviTrend) {
     const cx = xCenter(i);
     const barTop = y(p.avg);
     const barH = Math.max(baseline - barTop, 2);
-    return `<rect x="${(cx - barWidth / 2).toFixed(1)}" y="${barTop.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" rx="3" fill="url(#ndviBarFill)"/>`;
+    return `<rect x="${(cx - barWidth / 2).toFixed(1)}" y="${barTop.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" rx="6" fill="url(#ndviBarFill)"/>`;
   }).join("");
 
   const showEveryValue = barWidth >= 26;
@@ -630,9 +630,9 @@ function renderDashboard() {
   renderWeekSubmissions(weekRangeObj);
   document.getElementById("ndviTrendChart").innerHTML  = renderNDVITrendChart(s.ndviTrend);
   document.getElementById("threatBarChart").innerHTML  = renderThreatBarChart(s.threatBreakdown);
-  document.getElementById("canopyBucketsChart").innerHTML = renderBreakdownBarChart(s.canopyBuckets, "No canopy cover data recorded yet.");
-  document.getElementById("waterColorChart").innerHTML    = renderBreakdownBarChart(s.waterColorBreakdown, "No water color data recorded yet.");
-  document.getElementById("aquafarmChart").innerHTML      = renderBreakdownBarChart(s.aquafarmBreakdown, "No aquafarm activity data recorded yet.");
+  document.getElementById("canopyBucketsChart").innerHTML = renderBreakdownBarChart(s.canopyBuckets, "No canopy cover data recorded yet.", "canopy-fill");
+  document.getElementById("waterColorChart").innerHTML    = renderBreakdownBarChart(s.waterColorBreakdown, "No water color data recorded yet.", "water-fill");
+  document.getElementById("aquafarmChart").innerHTML      = renderBreakdownBarChart(s.aquafarmBreakdown, "No aquafarm activity data recorded yet.", "aquafarm-fill");
 
   bindDashboardControls();
 }
