@@ -118,9 +118,7 @@ function sentinelTimeRangeFor(dateStr) {
     return `${from}/${to}`;
 }
 
-const cloudCoverageSliderEl = document.getElementById("cloudCoverageSlider");
-const cloudCoverageValueEl  = document.getElementById("cloudCoverageValue");
-let currentMaxCC = cloudCoverageSliderEl ? parseInt(cloudCoverageSliderEl.value, 10) : 50;
+const currentMaxCC = 100;
 
 const sentinelLayer = L.tileLayer.wms(`${SENTINEL_PROXY_URL}?mode=wms`, {
     layers: "TRUE_COLOR",
@@ -167,20 +165,6 @@ if (layerNdviEl) {
 }
 
 const satelliteNdviCache = {};
-
-const refreshCloudCoverage = debounce((value) => {
-    sentinelLayer.setParams({ maxcc: value });
-    ndviHeatmapLayer.setParams({ maxcc: value });
-    if (typeof onCloudCoverageChanged === "function") onCloudCoverageChanged(value);
-}, 350);
-
-if (cloudCoverageSliderEl) {
-    cloudCoverageSliderEl.addEventListener("input", (e) => {
-        currentMaxCC = parseInt(e.target.value, 10);
-        if (cloudCoverageValueEl) cloudCoverageValueEl.textContent = `${currentMaxCC}%`;
-        refreshCloudCoverage(currentMaxCC);
-    });
-}
 
 async function fetchZoneNdviFromCopernicus(zone, dateStr) {
     if (zone.lat == null || zone.lng == null) {
