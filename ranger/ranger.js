@@ -115,6 +115,26 @@ const AUTH_API = '../Login/Database/api.php';
   }
 })();
 
+(function prefillKoboRangerName() {
+  const frame = document.getElementById('kobo-form-frame');
+  if (!frame) return;
+
+  try {
+    const stored = localStorage.getItem('aquaguard_current_user');
+    if (!stored) return;
+
+    const user = JSON.parse(stored);
+    const displayName = user.fullName || user.username;
+    if (!displayName) return;
+
+    const baseSrc = frame.getAttribute('src');
+    const separator = baseSrc.includes('?') ? '&' : '?';
+    frame.setAttribute('src', `${baseSrc}${separator}d[Ranger_Name]=${encodeURIComponent(displayName)}`);
+  } catch (err) {
+    // Malformed or missing stored user info — leave the form's default (blank) field as-is.
+  }
+})();
+
 function switchView(viewName, btn) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -127,6 +147,10 @@ function switchView(viewName, btn) {
   const titles = { dashboard: 'Dashboard', submit: 'Submit Field Data', history: 'Submission History' };
   const titleEl = document.getElementById('topbar-title');
   if (titleEl) titleEl.textContent = titles[viewName] || 'Dashboard';
+
+  if ((viewName === 'history' || viewName === 'dashboard') && typeof window.refreshAquaGuardSubmissions === 'function') {
+    window.refreshAquaGuardSubmissions();
+  }
 }
 
 (function AquaGuardData() {
@@ -138,6 +162,7 @@ function switchView(viewName, btn) {
     transect:  ['transect', 'transect_quadrat', 'quadrat', 'plot', 'plot_id', 'transect_id'],
     canopy:    ['canopy_cover', 'canopy', 'canopy_percent', 'canopy_cover_percent', 'percent_canopy_cover'],
     water:     ['water_quality', 'water_quality_status', 'wq', 'water_condition', 'water_quality_observed'],
+    rangerName: ['ranger_name', 'submitted_by', 'submitter', 'ranger'],
   };
 
   const PHOTO_FIELD_PATTERN = /photo|image|picture|snapshot/i;
@@ -297,6 +322,7 @@ function switchView(viewName, btn) {
       canopy: canopyNum,
       water: waterQualityInfo(waterRaw),
       status: deriveStatus(canopyNum, waterRaw),
+      submittedBy: findField(flat, FIELD_CANDIDATES.rangerName) || '—',
       photos: collectPhotos(flat, record),
     };
   }
@@ -386,13 +412,13 @@ function switchView(viewName, btn) {
     const total = typeof totalCount === 'number' ? totalCount : submissions.length;
 
     if (total === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--ink-400); padding:20px;">No submissions yet.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--ink-400); padding:20px;">No submissions yet.</td></tr>`;
       if (note) note.textContent = 'Showing 0 of 0 submissions. Records will appear here after each field inspection.';
       return;
     }
 
     if (submissions.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" class="filter-empty-state">No submissions match your filters.
+      tbody.innerHTML = `<tr><td colspan="7" class="filter-empty-state">No submissions match your filters.
         <button class="inline-link" id="filter-empty-clear">Clear filters</button></td></tr>`;
       if (note) note.textContent = `Showing 0 of ${total} submissions.`;
       const clearLink = document.getElementById('filter-empty-clear');
@@ -409,6 +435,14 @@ function switchView(viewName, btn) {
     tbody.innerHTML = sorted.map(s => {
       const badge = statusBadge(s.status);
       const canopyText = s.canopy !== null ? `${s.canopy}%` : '—';
+      const editBtn = s.koboId
+        ? `<button class="row-edit-btn" data-edit-id="${escapeHtml(String(s.koboId))}" aria-label="Edit submission">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+             </svg>
+           </button>`
+        : '';
       const deleteBtn = s.koboId
         ? `<button class="row-delete-btn" data-delete-id="${escapeHtml(String(s.koboId))}" aria-label="Delete submission">
              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -422,11 +456,10 @@ function switchView(viewName, btn) {
           <td class="cell-nowrap">${formatDate(s.date)}</td>
           <td>${escapeHtml(s.barangay)}</td>
           <td class="cell-truncate" title="${escapeHtml(s.areaRaw || s.area)}">${escapeHtml(s.area)}</td>
-          <td class="cell-center cell-nowrap">${escapeHtml(s.transect)}</td>
           <td class="cell-right cell-nowrap">${canopyText}</td>
           <td class="cell-center"><span class="wq ${s.water.cls}">${escapeHtml(String(s.water.label))}</span></td>
           <td class="cell-center"><span class="badge ${badge.badgeCls}">${badge.label}</span></td>
-          <td class="cell-center">${deleteBtn}</td>
+          <td class="cell-center">${editBtn}${deleteBtn}</td>
         </tr>`;
     }).join('');
 
@@ -468,7 +501,7 @@ function switchView(viewName, btn) {
 
     const tbody = document.getElementById('history-table-body');
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--degraded); padding:20px;">Couldn't load submissions: ${escapeHtml(message)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--degraded); padding:20px;">Couldn't load submissions: ${escapeHtml(message)}</td></tr>`;
     }
     const note = document.getElementById('history-note');
     if (note) note.textContent = 'Check that kobo-proxy.php is reachable and correctly configured.';
@@ -663,6 +696,37 @@ function switchView(viewName, btn) {
     return e.target.closest('[data-delete-id]');
   }
 
+  function findEditTarget(e) {
+    return e.target.closest('[data-edit-id]');
+  }
+
+  function bindEditDelegation() {
+    const recentContainer = document.getElementById('recent-submission-list');
+    const historyBody = document.getElementById('history-table-body');
+    [recentContainer, historyBody].forEach(el => {
+      if (!el) return;
+      el.addEventListener('click', async (e) => {
+        const target = findEditTarget(e);
+        if (!target) return;
+        const submissionId = target.getAttribute('data-edit-id');
+        target.disabled = true;
+        try {
+          const res = await fetch(`${AQUAGUARD_CONFIG.KOBO_PROXY_URL}?action=edit&id=${encodeURIComponent(submissionId)}`, {
+            credentials: 'include',
+          });
+          const data = await res.json();
+          if (!res.ok || !data.url) throw new Error(data.error || 'No edit link returned');
+          window.open(data.url, '_blank', 'noopener');
+        } catch (err) {
+          console.error('AquaGuard: failed to get edit link', err);
+          alert(`Couldn't open this submission for editing: ${err.message || 'Unknown error'}`);
+        } finally {
+          target.disabled = false;
+        }
+      });
+    });
+  }
+
   function bindDeleteDelegation() {
     const recentContainer = document.getElementById('recent-submission-list');
     const historyBody = document.getElementById('history-table-body');
@@ -743,7 +807,11 @@ function switchView(viewName, btn) {
   }
 
   bindDeleteDelegation();
+  bindEditDelegation();
   bindDeleteModal();
   bindFilterBar();
   loadSubmissions();
+
+  window.refreshAquaGuardSubmissions = loadSubmissions;
+  setInterval(loadSubmissions, 20000);
 })();
