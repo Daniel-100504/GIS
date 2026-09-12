@@ -212,10 +212,6 @@ sceneDate.addEventListener("change", () => {
     renderSceneCalendar();
 });
 
-function onCloudCoverageChanged() {
-    renderSceneCalendar();
-}
-
 renderSceneCalendar();
 
 syncSceneDateToToday();
