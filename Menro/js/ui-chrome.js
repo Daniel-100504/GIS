@@ -1,17 +1,5 @@
 const AUTH_API = "../../Login/Database/api.php";
 
-(async function enforceMenroSession() {
-    try {
-        const res = await fetch(`${AUTH_API}?action=checkSession`);
-        const data = await res.json();
-        if (!data.success || data.user.role !== "menro") {
-            window.location.href = "../../Login/Login.html";
-        }
-    } catch (err) {
-        window.location.href = "../../Login/Login.html";
-    }
-})();
-
 function handleLogout() {
     openSignOutConfirm();
 }
@@ -32,7 +20,7 @@ function closeSignOutConfirm() {
 function confirmSignOut() {
     fetch(`${AUTH_API}?action=logout`, { method: "POST" }).catch(() => {});
     localStorage.removeItem("aquaguard_current_user");
-    window.location.href = "../../Login/Login.html";
+    window.location.href = "../../Login/Login.php";
 }
 
 (function displayLoggedInUser() {
@@ -156,7 +144,6 @@ if (sideMenuBackdrop) sideMenuBackdrop.addEventListener("click", closeSideMenu);
 
 const menuMap        = document.getElementById("menuMap");
 const menuDashboard = document.getElementById("menuDashboard");
-const menuGuide     = document.getElementById("menuGuide");
 const menuExport    = document.getElementById("menuExport");
 const menuSignOut   = document.getElementById("menuSignOut");
 
@@ -174,9 +161,9 @@ if (menuDashboard) {
   });
 }
 
-if (menuGuide) {
-  menuGuide.addEventListener("click", () => {
-    closeSideMenu();
+const btnHelpGuide = document.getElementById("btnHelpGuide");
+if (btnHelpGuide) {
+  btnHelpGuide.addEventListener("click", () => {
     openGuide();
   });
 }

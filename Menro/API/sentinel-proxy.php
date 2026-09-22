@@ -77,6 +77,56 @@ $mode = $_GET['mode'] ?? 'wms';
 if ($mode === 'wms') {
     $params = $_GET;
     unset($params['mode']);
+
+    // The stock Sentinel Hub "NDVI" preset layer uses a red/yellow/green
+    // ramp. Swapping in this custom evalscript instead — Sentinel Hub's own
+    // official public NDVI color script — matches the dark-green-for-dense-
+    // vegetation look their own Copernicus Browser shows by default.
+    if (($params['layers'] ?? '') === 'NDVI_CUSTOM') {
+        // WMS still requires a LAYERS param even with a custom evalscript
+        // (it just gets overridden) — any existing configured layer works here.
+        $params['layers'] = 'TRUE_COLOR';
+        $ndviEvalscript = <<<'EVAL'
+//VERSION=3
+const ramp = [
+  [-0.5, 0x0c0c0c],
+  [-0.2, 0xbfbfbf],
+  [-0.1, 0xdbdbdb],
+  [0, 0xeaeaea],
+  [0.025, 0xfff9cc],
+  [0.05, 0xede8b5],
+  [0.075, 0xddd89b],
+  [0.1, 0xccc682],
+  [0.125, 0xbcb76b],
+  [0.15, 0xafc160],
+  [0.175, 0xa3cc59],
+  [0.2, 0x91bf51],
+  [0.25, 0x7fb247],
+  [0.3, 0x70a33f],
+  [0.35, 0x609635],
+  [0.4, 0x4f892d],
+  [0.45, 0x3f7c23],
+  [0.5, 0x306d1c],
+  [0.55, 0x216011],
+  [0.6, 0x0f540a],
+  [1, 0x004400],
+];
+const visualizer = new ColorRampVisualizer(ramp);
+function setup() {
+  return {
+    input: ["B04", "B08", "dataMask"],
+    output: { bands: 4 }
+  };
+}
+function evaluatePixel(samples) {
+  let ndvi = index(samples.B08, samples.B04);
+  let imgVals = visualizer.process(ndvi);
+  return imgVals.concat(samples.dataMask);
+}
+EVAL;
+        $params['evalscript'] = base64_encode($ndviEvalscript);
+    }
+
     ksort($params);
 
     $tileCacheDir = __DIR__ . '/tile-cache';
@@ -132,7 +182,7 @@ if ($mode === 'ndvi') {
     $lng    = floatval($_GET['lng'] ?? 0);
     $radius = floatval($_GET['radius'] ?? 300); 
     $to     = $_GET['date'] ?? date('Y-m-d');
-    $windowDays = 10; 
+    $windowDays = 30;
     $from   = date('Y-m-d', strtotime($to . " -{$windowDays} days"));
     $maxcc  = isset($_GET['maxcc']) ? floatval($_GET['maxcc']) : 50;
 
@@ -142,27 +192,62 @@ if ($mode === 'ndvi') {
         exit;
     }
 
+    // A drawn field-mapped area's exact boundary, when given, is sampled
+    // directly instead of an approximate circle — a circle around a coastal
+    // area's center can include nearby water or mud, which swings the
+    // reading in ways that have nothing to do with the mangrove itself.
+    $geometry = null;
+    $geometryJson = $_GET['geometry'] ?? null;
+    if ($geometryJson) {
+        $decoded = json_decode($geometryJson, true);
+        if (is_array($decoded) && isset($decoded['type'], $decoded['coordinates'])) {
+            $geometry = $decoded;
+        }
+    }
+    if ($geometry === null) {
+        $geometry = circlePolygon($lat, $lng, $radius);
+    }
+
+    // The area below is described in plain lat/lng degrees (CRS84), so a pixel
+    // size given as a bare number is read in DEGREES, not meters — passing "10"
+    // here previously meant "10 degrees" (about 1,100km), turning the whole
+    // sampling area into a single oversized, meaningless pixel. Converting the
+    // real 10m target size into degrees at this latitude fixes that.
+    $targetMeters = 10;
+    $resy = $targetMeters / 111320;
+    $resx = $targetMeters / (111320 * cos(deg2rad($lat)));
+
     $evalscript = <<<'EVAL'
 //VERSION=3
 function setup() {
   return {
-    input: [{ bands: ["B04", "B08", "dataMask"] }],
+    input: [{ bands: ["B04", "B08", "SCL", "dataMask"] }],
     output: [
       { id: "ndvi", bands: 1, sampleType: "FLOAT32" },
       { id: "dataMask", bands: 1 }
     ]
   };
 }
+// Sentinel-2's own per-pixel scene classification (SCL) — used to drop
+// cloud, cloud-shadow, thin-cirrus, snow, and no-data pixels from the
+// average, not just whole scenes. A scene's overall cloud percentage can't
+// tell us whether THIS specific small area was actually clear, since the
+// clouds counted in that percentage might be somewhere else in the scene.
+// 0=no data, 1=saturated/defective, 3=cloud shadow, 8/9=cloud, 10=thin cirrus, 11=snow
+function isClearPixel(scl) {
+  return scl !== 0 && scl !== 1 && scl !== 3 && scl !== 8 && scl !== 9 && scl !== 10 && scl !== 11;
+}
 function evaluatePixel(s) {
+  const clear = s.dataMask === 1 && isClearPixel(s.SCL);
   let ndvi = (s.B08 - s.B04) / (s.B08 + s.B04 + 0.0001);
-  return { ndvi: [ndvi], dataMask: [s.dataMask] };
+  return { ndvi: [ndvi], dataMask: [clear ? 1 : 0] };
 }
 EVAL;
 
     $payload = [
         'input' => [
             'bounds' => [
-                'geometry'   => circlePolygon($lat, $lng, $radius),
+                'geometry'   => $geometry,
                 'properties' => ['crs' => 'http://www.opengis.net/def/crs/OGC/1.3/CRS84'],
             ],
             'data' => [[
@@ -175,10 +260,10 @@ EVAL;
         ],
         'aggregation' => [
             'timeRange'           => ['from' => "{$from}T00:00:00Z", 'to' => "{$to}T23:59:59Z"],
-            'aggregationInterval' => ['of' => 'P15D'],
+            'aggregationInterval' => ['of' => "P{$windowDays}D"],
             'evalscript'          => $evalscript,
-            'resx'                => 10,
-            'resy'                => 10,
+            'resx'                => $resx,
+            'resy'                => $resy,
         ],
     ];
 

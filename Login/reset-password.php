@@ -1,3 +1,9 @@
+<?php
+if (empty($_GET['token'])) {
+    header('Location: Login.php');
+    exit;
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -44,7 +50,7 @@
             <h2 class="form-title">Link expired or invalid</h2>
             <p class="form-subtitle" id="invalidMsg">This password reset link is no longer valid. Please request a new one from the login page.</p>
           </div>
-          <a class="btn-signin" href="Login.html" style="text-decoration:none; box-sizing:border-box;">
+          <a class="btn-signin" href="Login.php" style="text-decoration:none; box-sizing:border-box;">
             <span class="btn-text">Back to Login</span>
           </a>
         </div>
@@ -92,7 +98,7 @@
             <h2 class="form-title">Password updated</h2>
             <p class="form-subtitle">You can now sign in with your new password.</p>
           </div>
-          <a class="btn-signin" href="Login.html" style="text-decoration:none; box-sizing:border-box;">
+          <a class="btn-signin" href="Login.php" style="text-decoration:none; box-sizing:border-box;">
             <span class="btn-text">Go to Login</span>
           </a>
         </div>
