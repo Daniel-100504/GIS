@@ -452,7 +452,7 @@ try {
         );
         $stmt->execute(['token' => $token, 'id' => $requestId]);
 
-        $resetLink = 'http://' . $_SERVER['HTTP_HOST'] . '/GIS/Login/reset-password.html?token=' . $token;
+        $resetLink = 'http://' . $_SERVER['HTTP_HOST'] . '/GIS/Login/reset-password.php?token=' . $token;
 
         try {
             sendResetPasswordEmail($account['email'], $account['full_name'], $resetLink);

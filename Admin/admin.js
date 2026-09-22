@@ -1,17 +1,5 @@
 const ACCOUNTS_API = "../Login/Database/api.php";
 
-(async function enforceAdminSession() {
-  try {
-    const res = await fetch(`${ACCOUNTS_API}?action=checkSession`);
-    const data = await res.json();
-    if (!data.success || data.user.role !== "admin") {
-      window.location.href = "../Login/Login.html";
-    }
-  } catch (err) {
-    window.location.href = "../Login/Login.html";
-  }
-})();
-
 const ROLE_LABEL = { menro: "MENRO", ranger: "Ranger", admin: "Administrator" };
 
 function formatDate(dateStr) {
@@ -929,7 +917,7 @@ document.getElementById("btnConfirmSignout").addEventListener("click", async () 
   } catch (err) {
   }
   localStorage.removeItem("aquaguard_current_user");
-  window.location.href = "../Login/Login.html";
+  window.location.href = "../Login/Login.php";
 });
 
 document.querySelectorAll('button[data-action="togglePassword"]').forEach(btn => {
