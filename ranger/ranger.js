@@ -1,21 +1,9 @@
 const AQUAGUARD_CONFIG = {
-  KOBO_PROXY_URL: '../Menro/API/kobo-proxy.php',
+  SUBMISSIONS_API_URL: '../Menro/API/ranger-submissions.php',
   TOTAL_PROTECTED_AREAS: 6,
 };
 
 const AUTH_API = '../Login/Database/api.php';
-
-(async function enforceRangerSession() {
-  try {
-    const res = await fetch(`${AUTH_API}?action=checkSession`);
-    const data = await res.json();
-    if (!data.success || data.user.role !== 'ranger') {
-      window.location.href = '../Login/Login.html';
-    }
-  } catch (err) {
-    window.location.href = '../Login/Login.html';
-  }
-})();
 
 (function () {
   const canvas = document.getElementById('gisCanvas');
@@ -87,12 +75,38 @@ const AUTH_API = '../Login/Database/api.php';
   function signOutRanger() {
     fetch(`${AUTH_API}?action=logout`, { method: 'POST' }).catch(() => {});
     localStorage.removeItem('aquaguard_current_user');
-    window.location.href = '../Login/Login.html';
+    window.location.href = '../Login/Login.php';
   }
 
   confirmBtn.addEventListener('click', signOutRanger);
 
   initIdleLogout(15, signOutRanger, { overlayClass: "confirm-overlay" });
+})();
+
+function openGuide() {
+  const overlay = document.getElementById('guideOverlay');
+  if (overlay) overlay.classList.add('open');
+}
+
+function closeGuide() {
+  const overlay = document.getElementById('guideOverlay');
+  if (overlay) overlay.classList.remove('open');
+}
+
+(function bindGuideOverlay() {
+  const overlay  = document.getElementById('guideOverlay');
+  const closeBtn = document.getElementById('btnCloseGuide');
+  const helpBtn  = document.getElementById('btnHelpGuide');
+  if (!overlay) return;
+
+  if (helpBtn) helpBtn.addEventListener('click', openGuide);
+  if (closeBtn) closeBtn.addEventListener('click', closeGuide);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeGuide();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) closeGuide();
+  });
 })();
 
 (function displayLoggedInUser() {
@@ -115,24 +129,53 @@ const AUTH_API = '../Login/Database/api.php';
   }
 })();
 
-(function prefillKoboRangerName() {
-  const frame = document.getElementById('kobo-form-frame');
-  if (!frame) return;
+function closeMobileSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (sidebar) sidebar.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('open');
+}
+
+// One hamburger button, same icon and spot on every screen size — on a
+// phone it slides the sidebar open as a drawer; on a wide screen it
+// collapses the same sidebar down to just its icons instead. Which one
+// happens is decided by the same width the CSS uses to switch the sidebar
+// into a drawer in the first place.
+const SIDEBAR_COLLAPSED_KEY = 'aquaguard_ranger_sidebar_collapsed';
+const SIDEBAR_MOBILE_QUERY = '(max-width: 900px)';
+
+(function bindSidebarToggle() {
+  const sidebar = document.getElementById('sidebar');
+  const toggleBtn = document.getElementById('btnToggleSidebar');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (!sidebar || !toggleBtn) return;
 
   try {
-    const stored = localStorage.getItem('aquaguard_current_user');
-    if (!stored) return;
-
-    const user = JSON.parse(stored);
-    const displayName = user.fullName || user.username;
-    if (!displayName) return;
-
-    const baseSrc = frame.getAttribute('src');
-    const separator = baseSrc.includes('?') ? '&' : '?';
-    frame.setAttribute('src', `${baseSrc}${separator}d[Ranger_Name]=${encodeURIComponent(displayName)}`);
+    if (localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1') {
+      sidebar.classList.add('collapsed');
+    }
   } catch (err) {
-    // Malformed or missing stored user info — leave the form's default (blank) field as-is.
+    // localStorage unavailable — just start expanded.
   }
+
+  toggleBtn.addEventListener('click', () => {
+    if (window.matchMedia(SIDEBAR_MOBILE_QUERY).matches) {
+      sidebar.classList.toggle('open');
+      if (backdrop) backdrop.classList.toggle('open');
+      return;
+    }
+    const isCollapsed = sidebar.classList.toggle('collapsed');
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, isCollapsed ? '1' : '0');
+    } catch (err) {
+      // Not persisted this time, but the toggle itself still works.
+    }
+  });
+
+  if (backdrop) backdrop.addEventListener('click', closeMobileSidebar);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMobileSidebar();
+  });
 })();
 
 function switchView(viewName, btn) {
@@ -144,6 +187,10 @@ function switchView(viewName, btn) {
 
   if (btn) btn.classList.add('active');
 
+  // On a phone the sidebar is an off-canvas drawer — picking a page from it
+  // should close it, the same as any other mobile nav menu.
+  closeMobileSidebar();
+
   const titles = { dashboard: 'Dashboard', submit: 'Submit Field Data', history: 'Submission History' };
   const titleEl = document.getElementById('topbar-title');
   if (titleEl) titleEl.textContent = titles[viewName] || 'Dashboard';
@@ -151,21 +198,101 @@ function switchView(viewName, btn) {
   if ((viewName === 'history' || viewName === 'dashboard') && typeof window.refreshAquaGuardSubmissions === 'function') {
     window.refreshAquaGuardSubmissions();
   }
+
+  if (viewName === 'submit' && typeof window.initSurveyGpsMap === 'function') {
+    window.initSurveyGpsMap();
+  }
 }
 
 (function AquaGuardData() {
 
+  // The exact real Barangay choice list from the Kobo form (verified against
+  // the form schema directly). Used instead of the generic label-prettifier
+  // because that heuristic misreads "sta__ana" as a parent/sub-area pair
+  // (the double underscore there is just how Kobo encodes "Sta. Ana"'s
+  // period and space, not a real separator), producing "Sta. – Ana".
+  const BARANGAY_LABELS = {
+    bagong_silang: 'Bagong Silang',
+    baha: 'Baha',
+    balibago: 'Balibago',
+    balitoc: 'Balitoc',
+    bucal: 'Bucal',
+    carretunan: 'Carretunan',
+    encarnacion: 'Encarnacion',
+    gulod: 'Gulod',
+    quilitisan: 'Quilitisan',
+    sambungan: 'Sambungan',
+    sta__ana: 'Sta. Ana',
+    talibayog: 'Talibayog',
+    talisay: 'Talisay',
+    tanagan: 'Tanagan',
+    poblacion_1: 'Poblacion 1',
+    poblacion_2: 'Poblacion 2',
+    poblacion_3: 'Poblacion 3',
+    poblacion_4: 'Poblacion 4',
+  };
+
   const FIELD_CANDIDATES = {
-    date:      ['date', 'inspection_date', 'date_of_inspection', 'survey_date', 'today'],
-    barangay:  ['barangay', 'brgy', 'location', 'site', 'site_name'],
-    area:      ['protected_area', 'mpa', 'area', 'protected_area_name', 'ecosystem_area'],
-    transect:  ['transect', 'transect_quadrat', 'quadrat', 'plot', 'plot_id', 'transect_id'],
-    canopy:    ['canopy_cover', 'canopy', 'canopy_percent', 'canopy_cover_percent', 'percent_canopy_cover'],
-    water:     ['water_quality', 'water_quality_status', 'wq', 'water_condition', 'water_quality_observed'],
+    date:      ['date_of_visit', 'date', 'inspection_date', 'date_of_inspection', 'survey_date', 'today'],
+    barangay:  ['barangay', 'brgy'],
+    area:      ['protected_area_zone', 'protected_area', 'mpa', 'area', 'protected_area_name', 'ecosystem_area'],
+    transect:  ['plot_number', 'transect', 'transect_quadrat', 'quadrat', 'plot', 'plot_id', 'transect_id'],
     rangerName: ['ranger_name', 'submitted_by', 'submitter', 'ranger'],
   };
 
+  // The current survey doesn't ask which protected area a visit is in — the
+  // backend matches the ranger's GPS point to the nearest field-mapped area
+  // and stamps the result onto the record as _zone_name / _zone_barangay.
+  // Preferred whenever present; the keyword-based guesses below only cover
+  // older submissions from a form version that asked directly.
+
   const PHOTO_FIELD_PATTERN = /photo|image|picture|snapshot/i;
+
+  // Maps a Protected area / Zone answer back to its barangay, since the new
+  // survey only asks for the specific protected area, not the barangay.
+  // Matched by keyword instead of an exact slug, since Kobo's auto-generated
+  // field values depend on exactly how each option was typed.
+  const PROTECTED_AREA_KEYWORDS = [
+    { match: 'bagong_silang', barangay: 'Bagong Silang' },
+    { match: 'conservation', barangay: 'Quilitisan' },
+    { match: 'quilitisan', barangay: 'Quilitisan' },
+    { match: 'palobandera', barangay: 'Sta. Ana' },
+    { match: 'rehabilitation', barangay: 'Balibago' },
+    { match: 'balibago', barangay: 'Balibago' },
+    { match: 'encarnacion', barangay: 'Encarnacion' },
+  ];
+
+  function barangayFromProtectedArea(raw) {
+    const s = (raw || '').toString().toLowerCase();
+    if (!s) return null;
+    const hit = PROTECTED_AREA_KEYWORDS.find(k => s.includes(k.match));
+    if (hit) return hit.barangay;
+    if (s.includes('sta') && s.includes('ana')) return 'Sta. Ana';
+    return null;
+  }
+
+  // Kobo's auto-generated answer value for a select-one option is a
+  // slugified, 42-char-truncated version of its label (e.g. "...conservation_p"
+  // for "...Conservation Park"), so title-casing that raw value alone can
+  // never recover the full protected area name. This restores the real,
+  // full official name by keyword instead of relying on the truncated slug.
+  const PROTECTED_AREA_LABELS = [
+    { match: 'bagong_silang', label: 'Bagong Silang Mangrove Protected Area' },
+    { match: 'conservation', label: 'Calatagan Mangrove Forest Conservation Park "Ang Pulo"' },
+    { match: 'quilitisan', label: 'Calatagan Mangrove Forest Conservation Park "Ang Pulo"' },
+    { match: 'palobandera', label: 'Palobandera Mangrove Protected Area' },
+    { match: 'rehabilitation', label: 'Calatagan Mangrove Rehabilitation and Nursery Project' },
+    { match: 'balibago', label: 'Calatagan Mangrove Rehabilitation and Nursery Project' },
+    { match: 'encarnacion', label: 'Encarnacion Mangrove Protected Area' },
+  ];
+
+  function labelForProtectedArea(raw) {
+    const s = (raw || '').toString().toLowerCase();
+    if (!s) return null;
+    if (s.includes('sta') && s.includes('ana') && !s.includes('palobandera')) return 'Sta. Ana Mangrove Protected Area';
+    const hit = PROTECTED_AREA_LABELS.find(k => s.includes(k.match));
+    return hit ? hit.label : null;
+  }
 
   function flattenKeys(record) {
     const flat = {};
@@ -218,8 +345,14 @@ function switchView(viewName, btn) {
 
   function prettifyLabel(raw) {
     if (raw === null || raw === undefined) return null;
-    const str = String(raw).trim();
+    let str = String(raw).trim();
     if (str === '' || str === '—') return null;
+    // "Sta."/"Sto." names collapse their period and space into their own
+    // underscore (e.g. "Sta. Ana" -> "sta__ana"), which looks identical to
+    // the real parent/sub-area "__" separator used elsewhere (e.g.
+    // "balibago_mpa__calmada"). Neutralize that one first so a code like
+    // "sta__ana_mpa__sapsap" doesn't get mis-split into three parts.
+    str = str.replace(/\b(sta|sto)__/gi, '$1_');
     // A double underscore separates a parent area from a sub-site,
     // e.g. "balibago_mpa__calmada" -> "Balibago MPA – Calmada"
     const parts = str.split('__').map(titleCaseSegment).filter(Boolean);
@@ -275,55 +408,188 @@ function switchView(viewName, btn) {
       .filter(Boolean);
   }
 
-  function waterQualityInfo(raw) {
-    const wq = (raw || '').toString().toLowerCase();
-    if (wq.includes('discharge')) return { label: 'Discharge', cls: 'wq-discharge' };
-    if (wq.includes('turbid'))    return { label: 'Turbid',    cls: 'wq-turbid' };
-    if (wq.includes('clear'))     return { label: 'Clear',     cls: 'wq-clear' };
-    if (!wq) return { label: 'No data', cls: 'wq-pending' };
-    return { label: prettifyLabel(raw) || raw, cls: 'wq-clear' };
+  // The current survey asks about nearby aquafarm activity as a 4-option
+  // status instead of a plain Yes/No. Mapped to the same {label, cls} shape
+  // the table and view modal already expect, with 'yes'/'no' kept as a
+  // fallback for older submissions from the form version that asked it that way.
+  const AQUAFARM_STATUS = {
+    none_nearby:                      { label: 'None nearby',                 cls: 'wq-clear' },
+    inactive:                         { label: 'Inactive',                    cls: 'wq-clear' },
+    active___no_visible_discharge:    { label: 'Active — no discharge',       cls: 'wq-pending' },
+    active___discharge_observed:      { label: 'Active — discharge observed', cls: 'wq-discharge' },
+  };
+
+  function aquafarmInfo(raw) {
+    const v = (raw || '').toString().toLowerCase();
+    if (AQUAFARM_STATUS[v]) return AQUAFARM_STATUS[v];
+    if (v === 'yes') return { label: 'Yes', cls: 'wq-discharge' };
+    if (v === 'no')  return { label: 'No',  cls: 'wq-clear' };
+    if (!v) return { label: 'No data', cls: 'wq-pending' };
+    return { label: prettifyLabel(v) || v, cls: 'wq-pending' };
   }
 
-  function deriveStatus(canopyNum, waterRaw) {
-    const wq = (waterRaw || '').toString().toLowerCase();
-    if (wq.includes('discharge')) return 'degraded';
-    if (canopyNum === null) return wq.includes('turbid') ? 'moderate' : 'pending';
-    if (canopyNum >= 70) return 'healthy';
-    if (canopyNum >= 40) return 'moderate';
+  function isAquafarmActive(raw) {
+    const v = (raw || '').toString().toLowerCase();
+    return v === 'yes' || v.startsWith('active');
+  }
+
+  // Kobo repeat groups come back as an array of objects under whatever key
+  // the group was given — found generically here instead of hardcoding an
+  // exact group name, since that name depends on how the form was built.
+  function extractTrees(record) {
+    for (const key in record) {
+      if (!Object.prototype.hasOwnProperty.call(record, key)) continue;
+      const value = record[key];
+      // typeof null === "object" in JS, so a plain check would misread a
+      // no-GPS submission's "_geolocation":[null,null] as the tree list.
+      if (Array.isArray(value) && value.length > 0 && value[0] !== null && typeof value[0] === 'object') {
+        return value;
+      }
+    }
+    // No repeat-group array on this record — every native submission's
+    // vegetation/fauna fields (species, mollusk, seedling, sapling, health
+    // assessment, etc.) sit flat on the record itself instead of inside a
+    // list, so treat it as a single bucket regardless of which of those
+    // fields were actually filled in. Checking only species/tree_code here
+    // used to silently drop mollusk/seedling/sapling/health data from view
+    // and edit whenever species name was left blank, even though it was
+    // saved correctly.
+    return [record];
+  }
+
+  function normalizeTree(treeRecord) {
+    const t = flattenKeys(treeRecord);
+    return {
+      code: t['tree_code'] || '—',
+      species: t['species_name'] || t['species'] || '—',
+      height: parseCanopyValue(t['average_tree_height_m'] || t['height_m']),
+      gbh: parseCanopyValue(t['gbh_girth_at_breast_height_cm'] || t['gbh_cm']),
+      canopyLength: parseCanopyValue(t['canopy_length_m']),
+      canopyWidth: parseCanopyValue(t['canopy_width_m']),
+      canopyCoverDirect: parseCanopyValue(t['estimated_canopy_cover_']),
+      molluskSpecies: t['mollusk_species_name'] || '',
+      molluskCount: parseCanopyValue(t['mollusk_count']) || 0,
+      seedlingSpecies: t['seedling_species'] || t['seedling_species_name'] || '',
+      seedlingCount: parseCanopyValue(t['seedling_count']) || 0,
+      saplingSpecies: t['sapling_species'] || t['sapling_species_name'] || '',
+      saplingCount: parseCanopyValue(t['sapling_count']) || 0,
+    };
+  }
+
+  // Crown area from canopy length/width (ellipse approximation), shown as a
+  // % of the 10m x 10m (100 sqm) plot a tree was measured in — used only as a
+  // fallback for submissions that don't have the survey's own direct
+  // canopy-cover estimate (Estimated Canopy Cover %).
+  function canopyCoverPct(tree) {
+    if (tree.canopyCoverDirect !== null && tree.canopyCoverDirect !== undefined) {
+      return Math.min(100, tree.canopyCoverDirect);
+    }
+    if (tree.canopyLength === null || tree.canopyWidth === null) return null;
+    const crownArea = Math.PI * (tree.canopyLength / 2) * (tree.canopyWidth / 2);
+    return Math.min(100, (crownArea / 100) * 100);
+  }
+
+  function summarizeTrees(trees) {
+    const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+    const speciesList = [...new Set(trees.map(t => t.species).filter(s => s && s !== '—'))];
+    const canopyValues = trees.map(canopyCoverPct).filter(n => n !== null);
+    return {
+      count: trees.length,
+      speciesList,
+      avgHeight: avg(trees.map(t => t.height).filter(n => n !== null)),
+      avgGbh: avg(trees.map(t => t.gbh).filter(n => n !== null)),
+      avgCanopyCoverPct: avg(canopyValues),
+      totalMollusk: trees.reduce((a, t) => a + t.molluskCount, 0),
+      totalSeedling: trees.reduce((a, t) => a + t.seedlingCount, 0),
+      totalSapling: trees.reduce((a, t) => a + t.saplingCount, 0),
+    };
+  }
+
+  // The survey now asks the ranger to make this call directly (Overall
+  // Health Assessment), so that answer is trusted first. The old
+  // flag-counting heuristic (canopy cover + regeneration) is only a fallback
+  // for submissions from a form version that didn't ask this question.
+  function deriveStatus(summary, healthAssessmentRaw) {
+    const direct = (healthAssessmentRaw || '').toString().toLowerCase();
+    if (direct === 'healthy' || direct === 'moderate' || direct === 'degraded') return direct;
+
+    if (!summary || summary.count === 0) return 'pending';
+
+    let flags = 0;
+    if (summary.avgCanopyCoverPct === null || summary.avgCanopyCoverPct < 40) flags++;
+    if (summary.totalSeedling === 0 && summary.totalSapling === 0) flags++;
+
+    if (flags === 0) return 'healthy';
+    if (flags === 1) return 'moderate';
     return 'degraded';
+  }
+
+  function healthAssessmentLabel(raw) {
+    switch ((raw || '').toString().toLowerCase()) {
+      case 'healthy':  return 'Good';
+      case 'moderate': return 'Fair';
+      case 'degraded': return 'Poor';
+      default:         return prettifyLabel(raw);
+    }
   }
 
   function statusBadge(status) {
     switch (status) {
-      case 'healthy':  return { label: 'Healthy',  badgeCls: 'badge-healthy',  dotCls: 'dot-healthy' };
-      case 'moderate': return { label: 'Moderate', badgeCls: 'badge-moderate', dotCls: 'dot-moderate' };
-      case 'degraded': return { label: 'Degraded', badgeCls: 'badge-degraded', dotCls: 'dot-degraded' };
+      case 'healthy':  return { label: 'Good',  badgeCls: 'badge-healthy',  dotCls: 'dot-healthy' };
+      case 'moderate': return { label: 'Fair', badgeCls: 'badge-moderate', dotCls: 'dot-moderate' };
+      case 'degraded': return { label: 'Poor', badgeCls: 'badge-degraded', dotCls: 'dot-degraded' };
       default:         return { label: 'Pending',  badgeCls: 'badge-moderate', dotCls: 'dot-moderate' };
     }
   }
 
   function normalizeSubmission(record) {
     const flat = flattenKeys(record);
-    const canopyNum = parseCanopyValue(findField(flat, FIELD_CANDIDATES.canopy));
-    const waterRaw  = findField(flat, FIELD_CANDIDATES.water);
     const dateRaw   = findField(flat, FIELD_CANDIDATES.date) || flat['_submission_time'] || null;
 
     const areaRaw = findField(flat, FIELD_CANDIDATES.area);
     const transectRaw = findField(flat, FIELD_CANDIDATES.transect);
+    const barangayRaw = findField(flat, FIELD_CANDIDATES.barangay);
+    const zoneName = flat['_zone_name'] || null;
+    const zoneBarangay = flat['_zone_barangay'] || null;
+    const aquafarmRaw = flat['nearby_aquafarm_activity'] || null;
+    const aquafarmName = flat['aquafarm_name_if_discharge_observed'] || flat['name_of_aquafarm_if_yes'] || '';
+    const waterNotes = flat['water_quality_notes'] || '';
+    const additionalNotes = flat['additional_notes'] || '';
+    const healthAssessmentRaw = flat['overall_health_assessment'] || null;
+    const observedThreats = flat['observed_threats'] || '';
+    const waterColor = flat['water_color'] || '';
+    const odor = flat['odor'] || '';
+    const foamOrDischarge = flat['visible_foam_or_discharge'] || '';
+    const treeCount = parseCanopyValue(flat['tree_count']);
+
+    const trees = extractTrees(record).map(normalizeTree);
+    const summary = summarizeTrees(trees);
 
     return {
       id: flat['_id'] || flat['_uuid'] || Math.random().toString(36).slice(2),
       koboId: flat['_id'] || null,
       date: dateRaw ? new Date(dateRaw) : null,
-      barangay: prettifyLabel(findField(flat, FIELD_CANDIDATES.barangay)) || 'Unknown',
-      area: prettifyLabel(areaRaw) || '—',
+      barangay: zoneBarangay || barangayFromProtectedArea(areaRaw) || BARANGAY_LABELS[barangayRaw] || prettifyLabel(barangayRaw) || 'Unknown',
+      area: zoneName || labelForProtectedArea(areaRaw) || prettifyLabel(areaRaw) || '—',
       areaRaw: areaRaw || '',
       transect: (transectRaw ? String(transectRaw).toUpperCase() : null) || '—',
-      canopy: canopyNum,
-      water: waterQualityInfo(waterRaw),
-      status: deriveStatus(canopyNum, waterRaw),
+      trees,
+      summary,
+      aquafarmRaw,
+      aquafarmName,
+      waterNotes,
+      additionalNotes,
+      observedThreats,
+      waterColor,
+      odor,
+      foamOrDischarge,
+      treeCount,
+      healthAssessmentRaw,
+      water: aquafarmInfo(aquafarmRaw),
+      status: deriveStatus(summary, healthAssessmentRaw),
       submittedBy: findField(flat, FIELD_CANDIDATES.rangerName) || '—',
       photos: collectPhotos(flat, record),
+      raw: record,
     };
   }
 
@@ -382,7 +648,7 @@ function switchView(viewName, btn) {
     const top = sorted.slice(0, 5);
     container.innerHTML = top.map(s => {
       const badge = statusBadge(s.status);
-      const canopyText = s.canopy !== null ? `Canopy: ${s.canopy}%` : 'Canopy: —';
+      const canopyText = `Trees recorded: ${s.summary.count}`;
       const deleteBtn = s.koboId
         ? `<button class="submission-delete-btn" data-delete-id="${escapeHtml(String(s.koboId))}" aria-label="Delete submission">
              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -434,7 +700,7 @@ function switchView(viewName, btn) {
 
     tbody.innerHTML = sorted.map(s => {
       const badge = statusBadge(s.status);
-      const canopyText = s.canopy !== null ? `${s.canopy}%` : '—';
+      const canopyText = String(s.summary.count);
       const editBtn = s.koboId
         ? `<button class="row-edit-btn" data-edit-id="${escapeHtml(String(s.koboId))}" aria-label="Edit submission">
              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -452,42 +718,18 @@ function switchView(viewName, btn) {
            </button>`
         : '—';
       return `
-        <tr>
-          <td class="cell-nowrap">${formatDate(s.date)}</td>
-          <td>${escapeHtml(s.barangay)}</td>
-          <td class="cell-truncate" title="${escapeHtml(s.areaRaw || s.area)}">${escapeHtml(s.area)}</td>
-          <td class="cell-right cell-nowrap">${canopyText}</td>
-          <td class="cell-center"><span class="wq ${s.water.cls}">${escapeHtml(String(s.water.label))}</span></td>
-          <td class="cell-center"><span class="badge ${badge.badgeCls}">${badge.label}</span></td>
-          <td class="cell-center">${editBtn}${deleteBtn}</td>
+        <tr class="${s.koboId ? 'row-clickable' : ''}"${s.koboId ? ` data-view-id="${escapeHtml(String(s.koboId))}"` : ''}>
+          <td class="cell-nowrap" data-label="Date">${formatDate(s.date)}</td>
+          <td data-label="Barangay">${escapeHtml(s.barangay)}</td>
+          <td class="cell-truncate" data-label="Protected Area" title="${escapeHtml(s.areaRaw || s.area)}">${escapeHtml(s.area)}</td>
+          <td class="cell-center cell-nowrap" data-label="Trees Recorded">${canopyText}</td>
+          <td class="cell-center" data-label="Aquafarm Nearby"><span class="wq ${s.water.cls}">${escapeHtml(String(s.water.label))}</span></td>
+          <td class="cell-center" data-label="Status"><span class="badge ${badge.badgeCls}">${badge.label}</span></td>
+          <td class="cell-center" data-label="Actions">${editBtn}${deleteBtn}</td>
         </tr>`;
     }).join('');
 
     if (note) note.textContent = `Showing ${sorted.length} of ${total} submissions.`;
-  }
-
-  function renderAlert(submissions) {
-    const panel = document.getElementById('water-quality-alert');
-    const titleEl = document.getElementById('alert-title');
-    const subEl = document.getElementById('alert-sub');
-    if (!panel) return;
-
-    const flagged = submissions.filter(s => s.status === 'degraded' || s.water.label === 'Discharge');
-    if (flagged.length === 0) {
-      panel.style.display = 'none';
-      return;
-    }
-
-    const byBarangay = {};
-    flagged.forEach(s => {
-      byBarangay[s.barangay] = (byBarangay[s.barangay] || 0) + 1;
-    });
-    const zones = Object.keys(byBarangay);
-    const topZone = zones.sort((a, b) => byBarangay[b] - byBarangay[a])[0];
-
-    if (titleEl) titleEl.textContent = `Water quality concern detected — ${topZone}`;
-    if (subEl) subEl.textContent = `${flagged.length} submission${flagged.length === 1 ? '' : 's'} flagged degraded or discharge conditions. Prioritize water quality checks on your next inspection.`;
-    panel.style.display = 'flex';
   }
 
   function showError(message) {
@@ -504,7 +746,7 @@ function switchView(viewName, btn) {
       tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--degraded); padding:20px;">Couldn't load submissions: ${escapeHtml(message)}</td></tr>`;
     }
     const note = document.getElementById('history-note');
-    if (note) note.textContent = 'Check that kobo-proxy.php is reachable and correctly configured.';
+    if (note) note.textContent = 'Check that ranger-submissions.php is reachable and correctly configured.';
   }
 
   let currentSubmissions = [];
@@ -668,12 +910,11 @@ function switchView(viewName, btn) {
     renderRecentSubmissions(currentSubmissions);
     populateFilterOptions(currentSubmissions);
     renderHistoryTable(getFilteredSubmissions(), currentSubmissions.length);
-    renderAlert(currentSubmissions);
   }
 
   async function loadSubmissions() {
     try {
-      const res = await fetch(AQUAGUARD_CONFIG.KOBO_PROXY_URL, { credentials: 'same-origin' });
+      const res = await fetch(AQUAGUARD_CONFIG.SUBMISSIONS_API_URL, { credentials: 'same-origin' });
       if (!res.ok) {
         let detail = `HTTP ${res.status}`;
         try {
@@ -700,30 +941,376 @@ function switchView(viewName, btn) {
     return e.target.closest('[data-edit-id]');
   }
 
+  let pendingEditId = null;
+
+  function toggleAquafarmNameField() {
+    const select = document.getElementById('edit-aquafarm');
+    const field = document.getElementById('edit-aquafarm-name-field');
+    const input = document.getElementById('edit-aquafarm-name');
+    if (!select || !field || !input) return;
+    const isDischargeObserved = select.value === 'active___discharge_observed';
+    field.hidden = !isDischargeObserved;
+    if (!isDischargeObserved) input.value = '';
+  }
+
+  function setEditFieldValue(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.value = value === null || value === undefined ? '' : value;
+  }
+
+  // Species fields pair a dropdown of common mangrove species with a plain
+  // text field for anything not on the list ("Other (specify)").
+  function setupSpeciesField(selectId, inputId) {
+    const select = document.getElementById(selectId);
+    const input = document.getElementById(inputId);
+    if (!select || !input) return;
+    select.addEventListener('change', () => {
+      if (select.value === '__other__') {
+        input.hidden = false;
+        input.value = '';
+        input.focus();
+      } else {
+        input.hidden = true;
+        input.value = select.value;
+      }
+    });
+  }
+
+  function populateSpeciesField(selectId, inputId, value) {
+    const select = document.getElementById(selectId);
+    const input = document.getElementById(inputId);
+    if (!select || !input) return;
+    const val = value || '';
+    const isKnown = val && Array.from(select.options).some(o => o.value === val);
+    if (isKnown) {
+      select.value = val;
+      input.hidden = true;
+      input.value = val;
+    } else if (val) {
+      select.value = '__other__';
+      input.hidden = false;
+      input.value = val;
+    } else {
+      select.value = '';
+      input.hidden = true;
+      input.value = '';
+    }
+  }
+
+  function openEditModal(submission) {
+    pendingEditId = submission.koboId;
+
+    document.getElementById('editModalSubtitle').textContent =
+      `${submission.barangay} · ${formatDate(submission.date)}`;
+
+    const tree = (submission.trees && submission.trees[0]) || {};
+    populateSpeciesField('edit-species-name-select', 'edit-species-name', tree.species !== '—' ? tree.species : '');
+    setEditFieldValue('edit-canopy-cover', tree.canopyCoverDirect);
+    setEditFieldValue('edit-canopy-length', tree.canopyLength);
+    setEditFieldValue('edit-canopy-width', tree.canopyWidth);
+    setEditFieldValue('edit-tree-count', submission.treeCount);
+    setEditFieldValue('edit-avg-height', tree.height);
+    setEditFieldValue('edit-gbh', tree.gbh);
+    populateSpeciesField('edit-seedling-species-select', 'edit-seedling-species', tree.seedlingSpecies);
+    setEditFieldValue('edit-seedling-count', tree.seedlingCount);
+    populateSpeciesField('edit-sapling-species-select', 'edit-sapling-species', tree.saplingSpecies);
+    setEditFieldValue('edit-sapling-count', tree.saplingCount);
+    setEditFieldValue('edit-health-assessment', submission.healthAssessmentRaw);
+    populateSpeciesField('edit-mollusk-species-select', 'edit-mollusk-species', tree.molluskSpecies);
+    setEditFieldValue('edit-mollusk-count', tree.molluskCount);
+    setEditFieldValue('edit-observed-threats', submission.observedThreats);
+    setEditFieldValue('edit-additional-notes', submission.additionalNotes);
+    setEditFieldValue('edit-water-color', submission.waterColor);
+    setEditFieldValue('edit-odor', submission.odor);
+    setEditFieldValue('edit-foam-discharge', submission.foamOrDischarge);
+
+    const aquafarmSelectVal = submission.aquafarmRaw || '';
+    setEditFieldValue('edit-aquafarm', aquafarmSelectVal);
+    // A submission can have a leftover aquafarm name saved from before it was
+    // switched away from "discharge observed" — don't show/re-save that stale value once it no longer applies.
+    setEditFieldValue('edit-aquafarm-name', aquafarmSelectVal === 'active___discharge_observed' ? submission.aquafarmName : '');
+    setEditFieldValue('edit-water-notes', submission.waterNotes);
+    toggleAquafarmNameField();
+
+    const photoInput = document.getElementById('edit-photo');
+    const photoPreview = document.getElementById('editPhotoPreview');
+    const photoLabel = document.getElementById('editPhotoLabel');
+    if (photoInput) photoInput.value = '';
+    if (photoLabel) photoLabel.textContent = EDIT_PHOTO_LABEL_DEFAULT;
+    const existingPhoto = submission.photos && submission.photos[0];
+    if (photoPreview) {
+      if (existingPhoto) {
+        photoPreview.src = existingPhoto.thumb;
+        photoPreview.hidden = false;
+      } else {
+        photoPreview.hidden = true;
+        photoPreview.removeAttribute('src');
+      }
+    }
+
+    const body = document.querySelector('#editOverlay .edit-body');
+    if (body) body.scrollTop = 0;
+
+    const overlay = document.getElementById('editOverlay');
+    if (overlay) overlay.classList.add('open');
+  }
+
+  let pendingViewSubmission = null;
+
+  function viewRow(question, value) {
+    const isEmpty = value === null || value === undefined || value === '';
+    const display = isEmpty ? '—' : String(value);
+    return `<tr><td class="qa-question">${escapeHtml(question)}</td><td class="qa-response${isEmpty ? ' muted' : ''}">${escapeHtml(display)}</td></tr>`;
+  }
+
+  function viewPhotoRow(photos) {
+    if (!photos || photos.length === 0) {
+      return `<tr><td class="qa-question">Photo documentation</td><td class="qa-response muted">—</td></tr>`;
+    }
+    const thumbs = photos.map(p => `
+      <a href="${escapeHtml(p.full)}" target="_blank" rel="noopener">
+        <img class="view-photo-thumb" src="${escapeHtml(p.thumb)}" alt="Field photo" />
+      </a>`).join('');
+    return `<tr><td class="qa-question">Photo documentation</td><td class="qa-response"><div class="view-photos">${thumbs}</div></td></tr>`;
+  }
+
+  function gpsDisplayFromRaw(raw) {
+    const gpsRaw = raw['Record_your_current_location'] || raw['GPS_location'];
+    if (!gpsRaw) return null;
+    const parts = String(gpsRaw).trim().split(/\s+/);
+    return parts.length >= 2 ? `${parts[0]}, ${parts[1]}` : null;
+  }
+
+  function openViewModal(submission) {
+    pendingViewSubmission = submission;
+    const badge = statusBadge(submission.status);
+
+    document.getElementById('viewModalSubtitle').textContent =
+      `${submission.barangay} · ${formatDate(submission.date)}`;
+
+    const statusEl = document.getElementById('viewStatusBadge');
+    if (statusEl) {
+      statusEl.className = `badge ${badge.badgeCls}`;
+      statusEl.textContent = badge.label;
+    }
+
+    const rows = [
+      `<tr class="qa-part-header"><td colspan="2">Section 1: Site Information</td></tr>`,
+      viewRow('Date of visit', formatDate(submission.date)),
+      viewRow('Nearest mangrove zone (auto-matched by GPS)', submission.area !== '—' ? submission.area : null),
+      viewRow('GPS location', gpsDisplayFromRaw(submission.raw || {})),
+      `<tr class="qa-part-header"><td colspan="2">Section 2: Vegetation</td></tr>`,
+    ];
+
+    if (submission.trees && submission.trees.length > 0) {
+      submission.trees.forEach((t, i) => {
+        if (submission.trees.length > 1) rows.push(`<tr class="qa-tree-header"><td colspan="2">Tree ${i + 1}</td></tr>`);
+        rows.push(viewRow('Species name', t.species !== '—' ? t.species : null));
+        rows.push(viewRow('Average tree height (m)', t.height));
+        rows.push(viewRow('GBH (cm)', t.gbh));
+        rows.push(viewRow('Canopy length (m)', t.canopyLength));
+        rows.push(viewRow('Canopy width (m)', t.canopyWidth));
+        rows.push(viewRow('Estimated canopy cover (%)', t.canopyCoverDirect));
+        rows.push(viewRow('Seedling species', t.seedlingSpecies || null));
+        rows.push(viewRow('Seedling count', t.seedlingCount));
+        rows.push(viewRow('Sapling species', t.saplingSpecies || null));
+        rows.push(viewRow('Sapling count', t.saplingCount));
+      });
+    } else {
+      rows.push(`<tr><td colspan="2" style="text-align:center; color:var(--ink-400); padding:12px;">No trees recorded for this visit.</td></tr>`);
+    }
+    rows.push(
+      viewRow('Tree count', submission.treeCount),
+      viewRow('Overall health assessment', submission.healthAssessmentRaw ? healthAssessmentLabel(submission.healthAssessmentRaw) : null),
+    );
+
+    rows.push(
+      `<tr class="qa-part-header"><td colspan="2">Section 3: Fauna</td></tr>`,
+      viewRow('Mollusk species name', submission.trees[0] ? submission.trees[0].molluskSpecies || null : null),
+      viewRow('Mollusk count', submission.trees[0] ? submission.trees[0].molluskCount : null),
+      viewRow('Observed threats', submission.observedThreats ? prettifyLabel(submission.observedThreats) : null),
+      viewRow('Additional notes', submission.additionalNotes || null),
+      viewPhotoRow(submission.photos),
+      `<tr class="qa-part-header"><td colspan="2">Section 4: Water Quality</td></tr>`,
+      viewRow('Water color', submission.waterColor ? prettifyLabel(submission.waterColor) : null),
+      viewRow('Odor', submission.odor ? prettifyLabel(submission.odor) : null),
+      viewRow('Visible foam or discharge', submission.foamOrDischarge ? prettifyLabel(submission.foamOrDischarge) : null),
+      viewRow('Nearby aquafarm activity', submission.water.label !== 'No data' ? submission.water.label : null),
+      viewRow('Aquafarm name (if discharge observed)', isAquafarmActive(submission.aquafarmRaw) ? (submission.aquafarmName || null) : null),
+      viewRow('Water quality notes', submission.waterNotes || null),
+    );
+
+    document.getElementById('viewModalBody').innerHTML = `
+      <div class="view-table-wrap">
+        <table class="view-qa-table">
+          <tbody>${rows.join('')}</tbody>
+        </table>
+      </div>`;
+
+    const overlay = document.getElementById('viewOverlay');
+    if (overlay) overlay.classList.add('open');
+  }
+
+  function closeViewModal() {
+    const overlay = document.getElementById('viewOverlay');
+    if (overlay) overlay.classList.remove('open');
+    pendingViewSubmission = null;
+  }
+
+  function findViewTarget(e) {
+    if (findEditTarget(e) || findDeleteTarget(e)) return null;
+    return e.target.closest('tr[data-view-id]');
+  }
+
+  function bindViewDelegation() {
+    const historyBody = document.getElementById('history-table-body');
+    if (!historyBody) return;
+    historyBody.addEventListener('click', (e) => {
+      const row = findViewTarget(e);
+      if (!row) return;
+      const submissionId = row.getAttribute('data-view-id');
+      const submission = currentSubmissions.find(s => String(s.koboId) === String(submissionId));
+      if (!submission) return;
+      openViewModal(submission);
+    });
+  }
+
+  function bindViewModal() {
+    const overlay = document.getElementById('viewOverlay');
+    const closeBtn = document.getElementById('btnCloseView');
+    const closeFooterBtn = document.getElementById('btnCloseViewFooter');
+    const editFromViewBtn = document.getElementById('btnEditFromView');
+    if (!overlay) return;
+
+    if (closeBtn) closeBtn.addEventListener('click', closeViewModal);
+    if (closeFooterBtn) closeFooterBtn.addEventListener('click', closeViewModal);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && overlay.classList.contains('open')) closeViewModal();
+    });
+    if (editFromViewBtn) {
+      editFromViewBtn.addEventListener('click', () => {
+        const submission = pendingViewSubmission;
+        closeViewModal();
+        if (submission) openEditModal(submission);
+      });
+    }
+  }
+
+  function closeEditModal() {
+    const overlay = document.getElementById('editOverlay');
+    if (overlay) overlay.classList.remove('open');
+    pendingEditId = null;
+  }
+
   function bindEditDelegation() {
     const recentContainer = document.getElementById('recent-submission-list');
     const historyBody = document.getElementById('history-table-body');
     [recentContainer, historyBody].forEach(el => {
       if (!el) return;
-      el.addEventListener('click', async (e) => {
+      el.addEventListener('click', (e) => {
         const target = findEditTarget(e);
         if (!target) return;
         const submissionId = target.getAttribute('data-edit-id');
-        target.disabled = true;
-        try {
-          const res = await fetch(`${AQUAGUARD_CONFIG.KOBO_PROXY_URL}?action=edit&id=${encodeURIComponent(submissionId)}`, {
-            credentials: 'include',
-          });
-          const data = await res.json();
-          if (!res.ok || !data.url) throw new Error(data.error || 'No edit link returned');
-          window.open(data.url, '_blank', 'noopener');
-        } catch (err) {
-          console.error('AquaGuard: failed to get edit link', err);
-          alert(`Couldn't open this submission for editing: ${err.message || 'Unknown error'}`);
-        } finally {
-          target.disabled = false;
+        const submission = currentSubmissions.find(s => String(s.koboId) === String(submissionId));
+        if (!submission) return;
+        openEditModal(submission);
+      });
+    });
+  }
+
+  const EDIT_PHOTO_LABEL_DEFAULT = 'Take or choose a photo';
+
+  function bindEditModal() {
+    const overlay = document.getElementById('editOverlay');
+    const closeBtn = document.getElementById('btnCloseEdit');
+    const cancelBtn = document.getElementById('btnCancelEdit');
+    const form = document.getElementById('editForm');
+    if (!overlay || !form) return;
+
+    if (closeBtn) closeBtn.addEventListener('click', closeEditModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeEditModal);
+    const aquafarmSelect = document.getElementById('edit-aquafarm');
+    if (aquafarmSelect) aquafarmSelect.addEventListener('change', toggleAquafarmNameField);
+    setupSpeciesField('edit-species-name-select', 'edit-species-name');
+    setupSpeciesField('edit-seedling-species-select', 'edit-seedling-species');
+    setupSpeciesField('edit-sapling-species-select', 'edit-sapling-species');
+    setupSpeciesField('edit-mollusk-species-select', 'edit-mollusk-species');
+
+    const editPhotoInput = document.getElementById('edit-photo');
+    const editPhotoLabel = document.getElementById('editPhotoLabel');
+    const editPhotoPreview = document.getElementById('editPhotoPreview');
+    if (editPhotoInput) {
+      editPhotoInput.addEventListener('change', () => {
+        const file = editPhotoInput.files[0];
+        if (editPhotoLabel) editPhotoLabel.textContent = file ? file.name : EDIT_PHOTO_LABEL_DEFAULT;
+        if (editPhotoPreview && file) {
+          editPhotoPreview.src = URL.createObjectURL(file);
+          editPhotoPreview.hidden = false;
         }
       });
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && overlay.classList.contains('open')) closeEditModal();
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!pendingEditId) return;
+
+      const saveBtn = document.getElementById('btnSaveEdit');
+      if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+
+      try {
+        const treeFields = {
+          species: document.getElementById('edit-species-name').value,
+          canopyCover: document.getElementById('edit-canopy-cover').value,
+          canopyLength: document.getElementById('edit-canopy-length').value,
+          canopyWidth: document.getElementById('edit-canopy-width').value,
+          treeCount: document.getElementById('edit-tree-count').value,
+          height: document.getElementById('edit-avg-height').value,
+          gbh: document.getElementById('edit-gbh').value,
+          seedlingSpecies: document.getElementById('edit-seedling-species').value,
+          seedlingCount: document.getElementById('edit-seedling-count').value,
+          saplingSpecies: document.getElementById('edit-sapling-species').value,
+          saplingCount: document.getElementById('edit-sapling-count').value,
+          healthAssessment: document.getElementById('edit-health-assessment').value,
+          molluskSpecies: document.getElementById('edit-mollusk-species').value,
+          molluskCount: document.getElementById('edit-mollusk-count').value,
+        };
+
+        const body = new FormData();
+        body.append('action', 'updateFields');
+        body.append('id', pendingEditId);
+        body.append('aquafarm', document.getElementById('edit-aquafarm').value);
+        body.append('aquafarmName', document.getElementById('edit-aquafarm-name').value);
+        body.append('waterNotes', document.getElementById('edit-water-notes').value);
+        body.append('observedThreats', document.getElementById('edit-observed-threats').value);
+        body.append('additionalNotes', document.getElementById('edit-additional-notes').value);
+        body.append('waterColor', document.getElementById('edit-water-color').value);
+        body.append('odor', document.getElementById('edit-odor').value);
+        body.append('foamDischarge', document.getElementById('edit-foam-discharge').value);
+        body.append('trees', JSON.stringify([treeFields]));
+        const photoFile = editPhotoInput && editPhotoInput.files[0];
+        if (photoFile) body.append('photo', photoFile, photoFile.name || 'photo.jpg');
+
+        const res = await fetch(AQUAGUARD_CONFIG.SUBMISSIONS_API_URL, {
+          method: 'POST',
+          credentials: 'same-origin',
+          body,
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || `HTTP ${res.status}`);
+
+        closeEditModal();
+        await loadSubmissions();
+      } catch (err) {
+        console.error('AquaGuard: failed to save edit', err);
+        alert(`Couldn't save this submission: ${err.message || 'Unknown error'}`);
+      } finally {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save changes'; }
+      }
     });
   }
 
@@ -765,7 +1352,7 @@ function switchView(viewName, btn) {
     }
 
     try {
-      const res = await fetch(`${AQUAGUARD_CONFIG.KOBO_PROXY_URL}?action=delete&id=${encodeURIComponent(idToDelete)}`, {
+      const res = await fetch(`${AQUAGUARD_CONFIG.SUBMISSIONS_API_URL}?action=delete&id=${encodeURIComponent(idToDelete)}`, {
         method: 'POST',
         credentials: 'same-origin'
       });
@@ -808,7 +1395,10 @@ function switchView(viewName, btn) {
 
   bindDeleteDelegation();
   bindEditDelegation();
+  bindViewDelegation();
   bindDeleteModal();
+  bindEditModal();
+  bindViewModal();
   bindFilterBar();
   loadSubmissions();
 

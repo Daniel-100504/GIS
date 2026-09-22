@@ -1,5 +1,9 @@
-const markers={};
 const zoneShapes={};
+
+// Display-only labels — internal status values (healthy/moderate/degraded/pending)
+// stay the same everywhere else (CSS classes, filters, comparisons); only what's
+// shown to the user changes.
+const STATUS_DISPLAY_LABELS = { healthy: "Good", moderate: "Fair", degraded: "Poor", pending: "Pending" };
 
 const zoneListEl = document.getElementById("zoneList");
 const zoneSearchEl = document.getElementById("zoneSearch");
@@ -13,7 +17,7 @@ function updateZoneSearchHint(query, matchCount) {
     if (!zoneSearchHintEl) return;
 
     if (!query) {
-        zoneSearchHintEl.textContent = `Type a barangay name to filter (${ZONES.length} zones)`;
+        zoneSearchHintEl.textContent = `Type a zone name to filter`;
     } else if (matchCount === 0) {
         zoneSearchHintEl.textContent = `No zones match "${query}"`;
     } else {
@@ -31,10 +35,10 @@ function sortZones(zones, sortKey) {
             sorted.sort((a, b) => b.name.localeCompare(a.name));
             break;
         case "ndvi-desc":
-            sorted.sort((a, b) => (b.ndvi ?? -1) - (a.ndvi ?? -1));
+            sorted.sort((a, b) => (b.satNdvi ?? -1) - (a.satNdvi ?? -1));
             break;
         case "ndvi-asc":
-            sorted.sort((a, b) => (a.ndvi ?? Infinity) - (b.ndvi ?? Infinity));
+            sorted.sort((a, b) => (a.satNdvi ?? Infinity) - (b.satNdvi ?? Infinity));
             break;
         case "area-desc":
             sorted.sort((a, b) => (b.area ?? -1) - (a.area ?? -1));
@@ -52,6 +56,8 @@ function sortZones(zones, sortKey) {
 }
 
 function renderZoneList(filterText = "") {
+
+    if (!zoneListEl) return;
 
     const query = filterText.trim().toLowerCase();
     const statusFilter = zoneStatusFilterEl ? zoneStatusFilterEl.value : "all";
@@ -100,13 +106,13 @@ function renderZoneList(filterText = "") {
                 </span>
 
                 <span class="zone-chip ${zone.status}">
-                    ${capitalise(zone.status)}
+                    ${STATUS_DISPLAY_LABELS[zone.status] || capitalise(zone.status)}
                 </span>
 
             </div>
 
             <div class="zone-meta">
-                ${zone.area !== null ? zone.area + " ha" : "— ha"} • NDVI ${zone.ndvi !== null ? zone.ndvi.toFixed(2) : "Pending"}
+                ${zone.area !== null ? zone.area + " ha" : "— ha"} • NDVI ${zone.satNdvi !== null && zone.satNdvi !== undefined ? formatNdvi(zone.satNdvi) : "Pending"}
             </div>
 
         `;
@@ -115,7 +121,13 @@ function renderZoneList(filterText = "") {
 
             selectZone(zone);
 
-            if (zone.lat == null || zone.lng == null || !markers[zone.id]) return;
+            if (zone._mangroveAreaLayer) {
+                map.fitBounds(zone._mangroveAreaLayer.getBounds(), {maxZoom:16});
+                zone._mangroveAreaLayer.openPopup();
+                return;
+            }
+
+            if (zone.lat == null || zone.lng == null || !zoneShapes[zone.id]) return;
 
             map.setView(
                 [zone.lat,zone.lng],
@@ -123,7 +135,7 @@ function renderZoneList(filterText = "") {
                 {animate:true}
             );
 
-            markers[zone.id].openPopup();
+            zoneShapes[zone.id].openPopup();
 
         };
 
@@ -178,10 +190,6 @@ function selectZone(zone){
 
     Object.entries(zoneShapes).forEach(([id, shape]) => {
         const isSelected = id === zone.id;
-        shape.setStyle({
-            weight: isSelected ? 3 : 2,
-            fillOpacity: isSelected ? 0.4 : 0.16,
-        });
         const el = shape.getElement && shape.getElement();
         if (el) el.classList.toggle("zone-shape-selected", isSelected);
         if (isSelected) shape.bringToFront();
@@ -194,32 +202,21 @@ function rebuildMapLayers() {
 
   ZONES.forEach(zone => {
     if (zone.lat == null || zone.lng == null) return;
+    if (zone._mangroveAreaLayer) return; // has its own real shape/popup already, drawn on the map directly
 
     const bounds = circleLatLngs(zone.lat, zone.lng, zoneRadiusMeters(zone));
     const polygon = L.polygon(bounds, {
       className: "zone-shape",
       color: STATUS_COLOR[zone.status],
-      weight: 2,
-      opacity: 0.9,
+      weight: 0,
+      opacity: 0,
       fillColor: STATUS_COLOR[zone.status],
-      fillOpacity: 0.16,
+      fillOpacity: 0,
     });
     polygon.bindPopup(() => buildPopup(zone));
     polygon.on("click", () => selectZone(zone));
     polygon.addTo(markersLayer);
     zoneShapes[zone.id] = polygon;
-
-    const point = L.marker([zone.lat, zone.lng], { icon: makeIcon(zone.status) });
-    point.bindPopup(() => buildPopup(zone));
-    point.bindTooltip(zone.name, {
-      permanent: true,
-      direction: "top",
-      offset: [0, -9],
-      className: "zone-label"
-    });
-    point.on("click", () => selectZone(zone));
-    point.addTo(markersLayer);
-    markers[zone.id] = point;
   });
 
   renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");

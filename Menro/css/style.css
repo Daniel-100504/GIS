@@ -117,6 +117,124 @@ button, input {
   50% { opacity: 0.4; }
 }
 
+.notif-wrap {
+  position: relative;
+}
+
+.notif-btn {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink-500);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.notif-btn:hover {
+  background: var(--surface-sunken);
+  color: var(--brand-700);
+  border-color: var(--brand-300);
+}
+
+.notif-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 20px;
+  background: var(--degraded);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--surface);
+  line-height: 1;
+}
+
+.notif-count[hidden] { display: none; }
+
+.notif-panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 320px;
+  max-width: 90vw;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover);
+  overflow: hidden;
+  z-index: 1500;
+}
+
+.notif-wrap.open .notif-panel { display: block; }
+
+.notif-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-strong);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--brand-900);
+  font-family: var(--font-display);
+}
+
+.notif-clear {
+  border: none;
+  background: none;
+  color: var(--brand-700);
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+
+.notif-clear:hover { text-decoration: underline; }
+
+.notif-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.notif-item {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.notif-item:last-child { border-bottom: none; }
+
+.notif-item-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-900);
+}
+
+.notif-item-sub {
+  font-size: 0.72rem;
+  color: var(--ink-400);
+  margin-top: 2px;
+}
+
+.notif-empty {
+  padding: 24px 14px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--ink-400);
+}
+
 .map-menu-btn {
   display: flex;
   align-items: center;
@@ -174,41 +292,8 @@ button, input {
 
 .leaflet-popup-tip { box-shadow: none !important; }
 
-.leaflet-tooltip.zone-label {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  color: var(--ink-900);
-  font-family: var(--font-body);
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  padding: 0;
-  text-shadow:
-    -1px -1px 2px #fff,
-     1px -1px 2px #fff,
-    -1px  1px 2px #fff,
-     1px  1px 2px #fff,
-     0    0   4px rgba(255,255,255,0.85);
-  pointer-events: none;
-  white-space: nowrap;
-}
-
-.leaflet-tooltip.zone-label::before { display: none; }
-
 .zone-shape {
-  transition: fill-opacity 0.16s ease, stroke-width 0.16s ease, stroke-opacity 0.16s ease;
-  filter: drop-shadow(0 2px 5px rgba(10, 49, 40, 0.16));
   cursor: pointer;
-}
-
-.zone-shape:hover {
-  fill-opacity: 0.34;
-  stroke-width: 2.6px;
-}
-
-.zone-shape.zone-shape-selected {
-  filter: drop-shadow(0 4px 14px rgba(10, 49, 40, 0.34));
 }
 
 .popup-title {
@@ -232,24 +317,6 @@ button, input {
 .popup-row span:last-child {
   font-weight: 600;
   color: var(--ink-900);
-}
-
-.mouse-coordinates {
-  position: absolute;
-  bottom: 40px;
-  right: 60px;
-  background: rgba(13, 43, 35, 0.86);
-  backdrop-filter: blur(6px);
-  color: #eaf5ef;
-  padding: 8px 14px;
-  border-radius: 12px;
-  box-shadow: 0 4px 14px rgba(10, 49, 40, 0.2);
-  font-size: 0.74rem;
-  font-family: var(--font-mono);
-  z-index: 600;
-  pointer-events: none;
-  line-height: 1.5;
-  letter-spacing: 0.01em;
 }
 
 .map-layers-control {
@@ -451,7 +518,7 @@ button, input {
 .layer-tile-icon-ndvi .layer-tile-art {
   background: url("../../assets/NDVI.png") center / cover no-repeat;
 }
-.layer-tile-icon-ndvi .layer-tile-badge { background: #1c7d61; }
+.layer-tile-icon-ndvi .layer-tile-badge { background: #1a5c1a; }
 
 .layer-tile-icon-zones .layer-tile-art {
   background:
@@ -460,6 +527,273 @@ button, input {
     linear-gradient(160deg, #eaf6ef 0%, #dcefe4 100%);
 }
 .layer-tile-icon-zones .layer-tile-badge { background: var(--brand-700); }
+
+.layer-tile-icon-extent .layer-tile-art {
+  background:
+    radial-gradient(circle at 30% 35%, rgba(138,43,226,0.35) 0%, transparent 45%),
+    radial-gradient(circle at 65% 65%, rgba(138,43,226,0.3) 0%, transparent 45%),
+    linear-gradient(160deg, #eaf6ef 0%, #dcefe4 100%);
+}
+.layer-tile-icon-extent .layer-tile-badge { background: #6b1fb8; }
+
+.layer-tile-icon-protected .layer-tile-art {
+  background:
+    radial-gradient(circle at 30% 35%, rgba(255,209,102,0.45) 0%, transparent 45%),
+    radial-gradient(circle at 65% 65%, rgba(184,134,11,0.3) 0%, transparent 45%),
+    linear-gradient(160deg, #eaf6ef 0%, #dcefe4 100%);
+}
+.layer-tile-icon-protected .layer-tile-badge { background: #b8860b; }
+
+.layer-tile-icon-fieldmap .layer-tile-art {
+  background:
+    radial-gradient(circle at 30% 35%, rgba(59,130,246,0.4) 0%, transparent 45%),
+    radial-gradient(circle at 65% 65%, rgba(59,130,246,0.3) 0%, transparent 45%),
+    linear-gradient(160deg, #eaf6ef 0%, #dcefe4 100%);
+}
+.layer-tile-icon-fieldmap .layer-tile-badge { background: #3b82f6; }
+
+.mangrove-form-modal {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.mangrove-field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin-top: 14px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-600);
+  text-align: left;
+}
+
+.modal-text-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 0;
+  margin-bottom: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--ink-900);
+  background: var(--surface);
+}
+
+.modal-text-input:focus {
+  outline: none;
+  border-color: var(--brand-500);
+}
+
+.modal-text-input.mangrove-field-invalid {
+  border-color: var(--degraded);
+}
+
+.mangrove-field-error {
+  margin: 0 0 14px;
+  font-size: 0.78rem;
+  color: var(--degraded);
+}
+
+.mangrove-edit-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 280px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 20px;
+  z-index: 950;
+}
+
+.mangrove-edit-panel-wide {
+  width: 420px;
+}
+
+.mangrove-edit-panel-modal {
+  position: static;
+  top: auto;
+  left: auto;
+  transform: none;
+  max-height: 90vh;
+  padding: 28px;
+}
+
+.mangrove-edit-panel-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--ink-900);
+}
+
+.mangrove-edit-panel-hint {
+  font-size: 0.78rem;
+  color: var(--ink-700);
+  margin: 6px 0 0;
+  line-height: 1.4;
+}
+
+.mangrove-edit-panel-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.mangrove-form-error {
+  margin-top: 0;
+  margin-bottom: 14px;
+  font-size: 0.8rem;
+  color: var(--degraded);
+  text-align: center;
+}
+
+.leaflet-editing-icon,
+.leaflet-div-icon.leaflet-editing-icon {
+  opacity: 0 !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+body.mangrove-editing-active .leaflet-editing-icon,
+body.mangrove-editing-active .leaflet-div-icon.leaflet-editing-icon {
+  opacity: 1 !important;
+  border-radius: 50% !important;
+  border: 2px solid #3b82f6 !important;
+  background: #3b82f6 !important;
+  width: 14px !important;
+  height: 14px !important;
+  margin-left: -7px !important;
+  margin-top: -7px !important;
+}
+
+body.mangrove-editing-active .leaflet-editing-icon.mangrove-midpoint-icon {
+  border-width: 2px !important;
+  background: #ffffff !important;
+  width: 9px !important;
+  height: 9px !important;
+  margin-left: -4.5px !important;
+  margin-top: -4.5px !important;
+}
+
+/* The three original Leaflet.Draw toolbar icons (draw/edit/delete) are
+   replaced on-screen by the single Add/Update/Delete button below — they
+   still exist and still work, just hidden, since the new button's menu
+   clicks them programmatically instead of duplicating their logic. */
+.leaflet-draw-toolbar {
+  display: none !important;
+}
+
+.mangrove-actions-control {
+  position: relative;
+}
+
+/* Extra ".mangrove-actions-control" qualifier beats Leaflet's own
+   ".leaflet-bar a" rule (fixed 26x26 box), same reasoning as the menu items below. */
+.mangrove-actions-control .mangrove-actions-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  line-height: normal;
+  color: #333;
+}
+
+.mangrove-actions-menu {
+  display: none;
+  position: absolute;
+  left: 34px;
+  top: 0;
+  min-width: 90px;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  z-index: 1000;
+}
+
+.mangrove-actions-menu:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Leaflet's own ".leaflet-bar a" rule (fixed 26x26 box, block display,
+   centered text) is more specific than a single class, so it would otherwise
+   win over the layout below and squash icon+label into a tiny square —
+   every property it sets is explicitly undone here. */
+.mangrove-actions-menu .mangrove-actions-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  height: auto;
+  line-height: normal;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  color: #333;
+  text-decoration: none;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: none;
+  background-color: transparent;
+}
+
+.mangrove-actions-menu .mangrove-actions-menu-item:hover {
+  background: #f2f2f2;
+}
+
+.mangrove-actions-menu-icon {
+  display: flex;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.mangrove-actions-menu-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.leaflet-draw-guide-dash {
+  opacity: 1 !important;
+}
+
+.mangrove-rename-btn {
+  font-size: 19px;
+}
+
+.mangrove-rename-active {
+  color: #4ade80 !important;
+}
+
+.mangrove-actions-control .mangrove-actions-btn-active {
+  color: #4ade80;
+}
+
+.mangrove-popup-actions {
+  margin-top: 6px;
+}
+
+.mangrove-popup-rename-btn {
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--brand-500);
+  background: var(--brand-50);
+  color: var(--brand-700);
+}
+
+.mangrove-popup-rename-btn:hover { background: var(--brand-100); }
 
 .layer-tile-input:checked ~ .layer-tile-icon {
   box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--brand-500);
@@ -491,6 +825,33 @@ button, input {
 }
 
 .resizer:hover { background: var(--brand-150); }
+
+.btn-help-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: var(--brand-600);
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  z-index: 950;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.btn-help-fab:hover {
+  background: var(--brand-700);
+  transform: translateY(-2px);
+}
 
 .guide-section {
   margin-bottom: 28px;

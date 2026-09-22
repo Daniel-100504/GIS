@@ -10,41 +10,46 @@ function computeFieldBreakdown(submissions, fieldKey, excludeValues = ["none_obs
     .sort((a, b) => b.count - a.count);
 }
 
-function computeCanopyCoverBuckets(submissions) {
+// Buckets every measured tree's height (from the per-tree Tree Measurements
+// data) into ranges, across all submissions — replaces the old canopy-cover
+// percentage buckets, which no longer exist in the new survey.
+function computeTreeHeightBuckets(submissions) {
   const buckets = [
-    { label: "0–20%",   min: 0,  max: 20,  count: 0 },
-    { label: "20–40%",  min: 20, max: 40,  count: 0 },
-    { label: "40–60%",  min: 40, max: 60,  count: 0 },
-    { label: "60–80%",  min: 60, max: 80,  count: 0 },
-    { label: "80–100%", min: 80, max: 101, count: 0 },
+    { label: "0–2m",  min: 0, max: 2,   count: 0 },
+    { label: "2–4m",  min: 2, max: 4,   count: 0 },
+    { label: "4–6m",  min: 4, max: 6,   count: 0 },
+    { label: "6–8m",  min: 6, max: 8,   count: 0 },
+    { label: "8m+",   min: 8, max: Infinity, count: 0 },
   ];
   submissions.forEach(sub => {
-    const cover = parseFloat(sub["Estimated_Canopy_Cover_"]);
-    if (isNaN(cover)) return;
-    const bucket = buckets.find(b => cover >= b.min && cover < b.max);
-    if (bucket) bucket.count++;
+    const trees = koboExtractTrees(sub);
+    trees.forEach(t => {
+      const h = parseFloat(koboTreeField(t, "Average_Tree_Height_m") || koboTreeField(t, "Height_m"));
+      if (isNaN(h)) return;
+      const bucket = buckets.find(b => h >= b.min && h < b.max);
+      if (bucket) bucket.count++;
+    });
   });
   return buckets
     .filter(b => b.count > 0)
     .map(b => ({ threat: b.label, count: b.count }));
 }
 
-function computeNdviTrend(submissions) {
+// Number of trees measured per visit date, across all submissions. This is
+// real survey effort/coverage, replacing the old canopy-cover-percent trend
+// which no longer has a data source in the new survey.
+function computeTreesMeasuredTrend(submissions) {
   const byDate = {};
   submissions.forEach(sub => {
-    const date = sub["Inspection_Date"];
-    const cover = sub["Estimated_Canopy_Cover_"];
-    if (!date || !cover) return;
-    const ndvi = coverToNDVI(cover);
-    if (!byDate[date]) byDate[date] = [];
-    byDate[date].push(ndvi);
+    const date = koboSubmissionDate(sub);
+    const trees = koboExtractTrees(sub);
+    if (!date || trees.length === 0) return;
+    if (!byDate[date]) byDate[date] = 0;
+    byDate[date] += trees.length;
   });
   return Object.keys(byDate)
     .sort()
-    .map(date => ({
-      date,
-      avg: byDate[date].reduce((a, b) => a + b, 0) / byDate[date].length,
-    }));
+    .map(date => ({ date, avg: byDate[date] }));
 }
 
 function computeZoneSnapshotForDate(dateStr) {
@@ -56,17 +61,22 @@ function computeZoneSnapshotForDate(dateStr) {
     if (!sub) {
       return {
         id: zone.id, name: zone.name, area: zone.area, partner: zone.partner,
-        ndvi: null, status: "pending", canopyCover: "—",
+        ndvi: zone.dashboardNdvi ?? null, status: "pending", treesMeasured: 0,
       };
     }
+    const treeCount = koboExtractTrees(sub).length;
     return {
       id: zone.id,
       name: zone.name,
       area: zone.area,
       partner: zone.partner,
-      ndvi: sub["Estimated_Canopy_Cover_"] ? coverToNDVI(sub["Estimated_Canopy_Cover_"]) : null,
+      // Real satellite NDVI (from Sentinel-2, via map-core.js's fetchZoneNdviFromCopernicus),
+      // not derived from the ranger's field measurements. Null until a satellite sync completes.
+      // Read from zone.dashboardNdvi (this view's own date), not zone.satNdvi
+      // (the map/Scene Calendar's date) — the two can legitimately differ.
+      ndvi: zone.dashboardNdvi ?? null,
       status: deriveStatus(sub),
-      canopyCover: sub["Estimated_Canopy_Cover_"] ? sub["Estimated_Canopy_Cover_"] + "%" : "—",
+      treesMeasured: treeCount,
     };
   });
 }
@@ -88,48 +98,53 @@ function computeDashboardStats(dateStr) {
       : 0;
   })();
 
-  const coverValues = zoneSnapshot
-    .map(z => parseFloat(z.canopyCover))
-    .filter(v => !isNaN(v));
-  const avgCanopy = coverValues.length > 0
-    ? coverValues.reduce((a, b) => a + b, 0) / coverValues.length
-    : null;
+  const treeCountValues = zoneSnapshot.map(z => z.treesMeasured || 0);
+  const totalTrees = treeCountValues.reduce((a, b) => a + b, 0);
 
-  const threatCounts = {};
+  const speciesCounts = {};
   subsUpToDate.forEach(sub => {
-    const threat = sub["Observed_Threats"];
-    if (!threat || threat === "none_observed") return;
-    threatCounts[threat] = (threatCounts[threat] || 0) + 1;
+    koboExtractTrees(sub).forEach(t => {
+      const sp = koboTreeField(t, "Species_Name") || koboTreeField(t, "Species");
+      if (!sp) return;
+      speciesCounts[sp] = (speciesCounts[sp] || 0) + 1;
+    });
   });
-  const threatBreakdown = Object.entries(threatCounts)
-    .map(([threat, count]) => ({ threat, count }))
+  const speciesBreakdown = Object.entries(speciesCounts)
+    .map(([species, count]) => ({ threat: species, count }))
     .sort((a, b) => b.count - a.count);
-  const topThreat      = threatBreakdown.length > 0 ? threatBreakdown[0].threat : null;
-  const topThreatCount = threatBreakdown.length > 0 ? threatBreakdown[0].count : 0;
+  const topSpecies      = speciesBreakdown.length > 0 ? speciesBreakdown[0].threat : null;
+  const topSpeciesCount = speciesBreakdown.length > 0 ? speciesBreakdown[0].count : 0;
 
   const dates = subsUpToDate
-    .map(sub => sub["Inspection_Date"])
+    .map(sub => koboSubmissionDate(sub))
     .filter(Boolean)
     .sort();
   const latestDate = dates.length > 0 ? dates[dates.length - 1] : null;
 
-  const ndviTrend           = computeNdviTrend(subsUpToDate);
-  const waterColorBreakdown = computeFieldBreakdown(subsUpToDate, "Water_Color");
-  const aquafarmBreakdown   = computeFieldBreakdown(subsUpToDate, "Nearby_Aquafarm_Activity");
-  const canopyBuckets       = computeCanopyCoverBuckets(subsUpToDate);
+  const treesTrend        = computeTreesMeasuredTrend(subsUpToDate);
+  const waterNotesBreakdown = (() => {
+    const withNotes = subsUpToDate.filter(sub => (sub["Water_Quality_Notes"] || sub["Water_quality_notes"] || "").trim()).length;
+    const withoutNotes = subsUpToDate.length - withNotes;
+    return [
+      { threat: "Notes recorded", count: withNotes },
+      { threat: "No notes", count: withoutNotes },
+    ].filter(r => r.count > 0);
+  })();
+  const aquafarmBreakdown = computeFieldBreakdown(subsUpToDate, "Nearby_Aquafarm_Activity", ["none_nearby"]);
+  const treeHeightBuckets = computeTreeHeightBuckets(subsUpToDate);
 
   return {
     total, healthy, moderate, degraded, pending,
-    avgNdvi, avgCanopy,
+    avgNdvi, totalTrees,
     totalSurveys: subsUpToDate.length,
     latestDate,
-    topThreat: topThreat ? topThreat.replace(/_/g, " ") : null,
-    topThreatCount,
-    threatBreakdown: threatBreakdown.map(t => ({ threat: t.threat.replace(/_/g, " "), count: t.count })),
-    waterColorBreakdown,
+    topSpecies,
+    topSpeciesCount,
+    speciesBreakdown,
+    waterNotesBreakdown,
     aquafarmBreakdown,
-    canopyBuckets,
-    ndviTrend,
+    treeHeightBuckets,
+    treesTrend,
     zoneSnapshot,
   };
 }
@@ -146,15 +161,10 @@ let dashboardCalendarYear  = null;
 let dashboardCalendarMonth = null;
 
 function ensureDashboardSelectedDate() {
-  const dates = availableSurveyDates();
-
-  if (dates.length === 0) {
-    dashboardSelectedDate = null;
-    return;
-  }
-
+  // Defaults to today's date rather than the latest survey date, so opening
+  // the dashboard always starts on "now" unless the user picks a different day.
   if (!dashboardSelectedDate) {
-    dashboardSelectedDate = dates[dates.length - 1];
+    dashboardSelectedDate = todayISO();
   }
 
   if (dashboardCalendarYear === null) {
@@ -165,16 +175,16 @@ function ensureDashboardSelectedDate() {
 }
 
 function availableSurveyDates() {
-  return [...new Set(ALL_SUBMISSIONS.map(s => s["Inspection_Date"]).filter(Boolean))].sort();
+  return [...new Set(ALL_SUBMISSIONS.map(s => koboSubmissionDate(s)).filter(Boolean))].sort();
 }
 
 function submissionsOnDate(dateStr) {
-  return ALL_SUBMISSIONS.filter(sub => sub["Inspection_Date"] === dateStr);
+  return ALL_SUBMISSIONS.filter(sub => koboSubmissionDate(sub) === dateStr);
 }
 
 function submissionsInRange(startIso, endIso) {
   return ALL_SUBMISSIONS.filter(sub => {
-    const d = sub["Inspection_Date"];
+    const d = koboSubmissionDate(sub);
     return d && d >= startIso && d <= endIso;
   });
 }
@@ -220,11 +230,11 @@ function renderHealthDonut(healthy, moderate, degraded, pending = 0) {
   const circumference = 2 * Math.PI * r;
 
   const segments = [
-    { value: healthy,  color: "#1c7d61", label: "Healthy" },
-    { value: moderate, color: "#c98a2c", label: "Moderate" },
-    { value: degraded, color: "#c1473a", label: "Degraded" },
+    { value: healthy,  color: "#1c7d61", key: "healthy",  label: "Good" },
+    { value: moderate, color: "#c98a2c", key: "moderate", label: "Fair" },
+    { value: degraded, color: "#c1473a", key: "degraded", label: "Poor" },
   ];
-  if (pending > 0) segments.push({ value: pending, color: "#c3cdc7", label: "Pending" });
+  if (pending > 0) segments.push({ value: pending, color: "#c3cdc7", key: "pending", label: "Pending" });
 
   const gap = segments.filter(s => s.value > 0).length > 1 ? 2.2 : 0;
   let offset = 0;
@@ -243,7 +253,7 @@ function renderHealthDonut(healthy, moderate, degraded, pending = 0) {
 
   const legend = segments.map(seg => `
     <div class="donut-legend-item">
-      <span class="donut-legend-dot ${seg.label.toLowerCase()}"></span>
+      <span class="donut-legend-dot ${seg.key}"></span>
       <span class="donut-legend-label">${seg.label}</span>
       <span class="donut-legend-value">${seg.value}</span>
     </div>
@@ -270,21 +280,22 @@ function renderNDVIBarChart(zones) {
 
   const legend = `
     <div class="hbar-legend">
-      <span><span class="hbar-legend-dot healthy"></span>Healthy</span>
+      <span><span class="hbar-legend-dot healthy"></span>High</span>
       <span><span class="hbar-legend-dot moderate"></span>Moderate</span>
-      <span><span class="hbar-legend-dot degraded"></span>Degraded</span>
+      <span><span class="hbar-legend-dot degraded"></span>Low</span>
     </div>
   `;
 
   const dataRows = withData.map(z => {
     const pct = Math.max((z.ndvi / max) * 100, 4);
+    const cls = z.ndvi >= 0.6 ? "healthy" : z.ndvi >= 0.3 ? "moderate" : "degraded";
     return `
       <div class="hbar-row">
         <span class="hbar-label" title="${escapeHtml(z.name)}">${escapeHtml(z.name)}</span>
         <div class="hbar-track">
-          <div class="hbar-fill ${z.status}" style="--pct:${pct.toFixed(1)}%"></div>
+          <div class="hbar-fill ${cls}" style="--pct:${pct.toFixed(1)}%"></div>
         </div>
-        <span class="hbar-value">${z.ndvi.toFixed(2)}</span>
+        <span class="hbar-value">${formatNdvi(z.ndvi)}</span>
       </div>
     `;
   }).join("");
@@ -306,6 +317,52 @@ function renderNDVIBarChart(zones) {
   }
 
   return `${legend}<div class="hbar-chart">${dataRows}${noDataRows}</div>${footnote}`;
+}
+
+const AQUAFARM_RISK_CLASS = { high: "degraded", moderate: "moderate", low: "healthy", none: "pending" };
+const AQUAFARM_RISK_LABEL = { high: "High", moderate: "Moderate", low: "Low", none: "None" };
+
+function renderAquafarmRiskChart(zones) {
+  const rows = zones
+    .map(z => ({ zone: z, reg: AQUAFARM_REGISTRY[z.id] }))
+    .filter(r => r.reg)
+    .sort((a, b) => b.reg.activeHectares - a.reg.activeHectares);
+
+  if (rows.length === 0) {
+    return `<div class="dashboard-empty">No aquafarm registry data available.</div>`;
+  }
+
+  const max = Math.max(...rows.map(r => r.reg.activeHectares), 0.1);
+
+  const legend = `
+    <div class="hbar-legend">
+      <span><span class="hbar-legend-dot degraded"></span>High</span>
+      <span><span class="hbar-legend-dot moderate"></span>Moderate</span>
+      <span><span class="hbar-legend-dot healthy"></span>Low</span>
+      <span><span class="hbar-legend-dot pending"></span>None</span>
+    </div>
+  `;
+
+  const dataRows = rows.map(({ zone, reg }) => {
+    const pct = Math.max((reg.activeHectares / max) * 100, 4);
+    const cls = AQUAFARM_RISK_CLASS[reg.risk] || "pending";
+    const valueText = reg.activeCount > 0
+      ? `${reg.activeCount} farm${reg.activeCount !== 1 ? "s" : ""} · ${reg.activeHectares.toFixed(1)} ha`
+      : "No active farms";
+    return `
+      <div class="hbar-row" title="${escapeHtml(reg.note || "")}">
+        <span class="hbar-label" title="${escapeHtml(zone.name)}">${escapeHtml(zone.name)}</span>
+        <div class="hbar-track">
+          <div class="hbar-fill ${cls}" style="--pct:${pct.toFixed(1)}%"></div>
+        </div>
+        <span class="hbar-value">${valueText}</span>
+      </div>
+    `;
+  }).join("");
+
+  const footnote = `<div class="hbar-footnote">Source: MENRO Updated List of Fishponds in Calatagan, 2026. Excludes farms marked "Stop operation."</div>`;
+
+  return `${legend}<div class="hbar-chart">${dataRows}</div>${footnote}`;
 }
 
 function renderBreakdownBarChart(breakdown, emptyText, fillClass = "threat-fill") {
@@ -330,12 +387,12 @@ function renderBreakdownBarChart(breakdown, emptyText, fillClass = "threat-fill"
   return `<div class="hbar-chart">${rows}</div>`;
 }
 
-function renderThreatBarChart(threatBreakdown) {
-  return renderBreakdownBarChart(threatBreakdown, "No threats reported in field surveys.", "threat-fill");
+function renderSpeciesBarChart(speciesBreakdown) {
+  return renderBreakdownBarChart(speciesBreakdown, "No species recorded in field surveys yet.", "threat-fill");
 }
 
-function renderNDVITrendChart(ndviTrend) {
-  const points = ndviTrend.filter(p => p.avg !== null);
+function renderCanopyTrendChart(canopyTrend, suffix = "%") {
+  const points = canopyTrend.filter(p => p.avg !== null);
   if (points.length < 2) {
     return `<div class="dashboard-empty">Not enough scene dates yet to plot a trend.</div>`;
   }
@@ -350,7 +407,7 @@ function renderNDVITrendChart(ndviTrend) {
 
   const rawMax = Math.max(...points.map(p => p.avg));
   const minV = 0;
-  const maxV = rawMax + Math.max(rawMax * 0.18, 0.03);
+  const maxV = rawMax + Math.max(rawMax * 0.18, 3);
 
   const baseline = padT + innerH;
   const slot = innerW / points.length;
@@ -365,7 +422,7 @@ function renderNDVITrendChart(ndviTrend) {
     const gy = y(v);
     return `
       <line x1="${padL}" y1="${gy.toFixed(1)}" x2="${w - padR}" y2="${gy.toFixed(1)}" stroke="#eef4f0" stroke-width="1"/>
-      <text x="${padL - 8}" y="${(gy + 3).toFixed(1)}" font-size="9.5" fill="#869790" text-anchor="end" font-family="'JetBrains Mono', monospace">${v.toFixed(2)}</text>
+      <text x="${padL - 8}" y="${(gy + 3).toFixed(1)}" font-size="9.5" fill="#869790" text-anchor="end" font-family="'JetBrains Mono', monospace">${v.toFixed(0)}${suffix}</text>
     `;
   }).join("");
 
@@ -380,7 +437,7 @@ function renderNDVITrendChart(ndviTrend) {
   const valueLabels = points.map((p, i) => {
     if (!showEveryValue && i !== points.length - 1) return "";
     const barTop = y(p.avg);
-    return `<text x="${xCenter(i).toFixed(1)}" y="${(barTop - 7).toFixed(1)}" font-size="9.5" font-weight="700" fill="#0a3128" text-anchor="middle" font-family="'JetBrains Mono', monospace">${p.avg.toFixed(2)}</text>`;
+    return `<text x="${xCenter(i).toFixed(1)}" y="${(barTop - 7).toFixed(1)}" font-size="9.5" font-weight="700" fill="#0a3128" text-anchor="middle" font-family="'JetBrains Mono', monospace">${p.avg.toFixed(0)}${suffix}</text>`;
   }).join("");
 
   const maxLabels = Math.max(Math.floor(innerW / 50), 3);
@@ -409,7 +466,7 @@ function renderNDVITrendChart(ndviTrend) {
   `;
 }
 
-function renderCalendarWidget(weekStart, weekEnd) {
+function renderCalendarWidget() {
   const monthLabel = new Date(dashboardCalendarYear, dashboardCalendarMonth, 1)
     .toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const cells   = buildMonthGrid(dashboardCalendarYear, dashboardCalendarMonth);
@@ -422,19 +479,19 @@ function renderCalendarWidget(weekStart, weekEnd) {
     const iso     = isoDate(d);
     const inMonth = d.getMonth() === dashboardCalendarMonth;
     const count   = submissionsOnDate(iso).length;
+    const isFuture = iso > todayIso;
 
     const classes = ["cal-day"];
     if (!inMonth) classes.push("outside");
     if (count > 0) classes.push("has-data");
-    if (iso >= weekStart && iso <= weekEnd) classes.push("in-week");
     if (iso === dashboardSelectedDate) classes.push("selected");
     if (iso === todayIso) classes.push("today");
+    if (isFuture) classes.push("future");
 
     return `
-      <button type="button" class="${classes.join(" ")}" data-date="${iso}"
+      <button type="button" class="${classes.join(" ")}" data-date="${iso}" ${isFuture ? "disabled" : ""}
         aria-label="${formatDate(iso)}, ${count} survey${count !== 1 ? "s" : ""}">
         <span class="cal-day-num">${d.getDate()}</span>
-        ${count > 0 ? `<span class="cal-day-dot"></span>` : ""}
       </button>
     `;
   }).join("");
@@ -453,16 +510,16 @@ function renderCalendarWidget(weekStart, weekEnd) {
     <div class="cal-grid cal-days">${dayCells}</div>
     <div class="cal-legend">
       <span><span class="cal-legend-dot"></span> Has survey data</span>
-      <span><span class="cal-legend-swatch"></span> Selected week</span>
+      <span><span class="cal-legend-swatch"></span> Selected</span>
     </div>
   `;
 }
 
-function renderDateSelector(weekStart, weekEnd) {
+function renderDateSelector() {
   if (dashboardCalendarYear === null || dashboardCalendarMonth === null) {
     return `<div class="dashboard-empty">No field survey submissions recorded yet.</div>`;
   }
-  return `<div class="survey-calendar">${renderCalendarWidget(weekStart, weekEnd)}</div>`;
+  return `<div class="survey-calendar">${renderCalendarWidget()}</div>`;
 }
 
 function shiftCalendarMonth(dir) {
@@ -470,50 +527,31 @@ function shiftCalendarMonth(dir) {
   if (dashboardCalendarMonth < 0)  { dashboardCalendarMonth = 11; dashboardCalendarYear--; }
   if (dashboardCalendarMonth > 11) { dashboardCalendarMonth = 0;  dashboardCalendarYear++; }
 
-  const hasSurveyDates = availableSurveyDates().length > 0;
-  const weekRangeObj = hasSurveyDates ? weekRange(dashboardSelectedDate) : null;
-  renderDatePicker(weekRangeObj);
+  renderDatePicker();
 }
 
-function renderDatePicker(weekRangeObj) {
+function renderDatePicker() {
   const el = document.getElementById("dashboardDatePicker");
   if (!el) return;
-  el.innerHTML = renderDateSelector(weekRangeObj && weekRangeObj.start, weekRangeObj && weekRangeObj.end);
+  el.innerHTML = renderDateSelector();
 }
 
 function renderSurveyLogCard(sub) {
-  const zoneId = BARANGAY_TO_ZONE[sub["Barangay"]];
-  const zone = ZONES.find(z => z.id === zoneId);
-  const hasThreat = sub["Observed_Threats"] && sub["Observed_Threats"] !== "none_observed";
+  const areaRaw = sub["Protected_area_Zone"] || sub["Barangay"] || "";
+  const zoneId  = sub["_zone_id"] || zoneIdFromProtectedArea(areaRaw) || BARANGAY_TO_ZONE[areaRaw];
+  const zone    = ZONES.find(z => z.id === zoneId);
+  const aquafarmRaw  = (sub["Nearby_aquafarm_activity"] || sub["Nearby_Aquafarm_Activity"] || "").toLowerCase();
+  const hasAquafarm  = aquafarmRaw === "yes" || aquafarmRaw.startsWith("active");
+  const summary = summarizeKoboTrees(koboExtractTrees(sub));
 
   return `
-    <div class="survey-log-card">
-      <div class="survey-log-card-head">
-        <span class="survey-log-zone">${escapeHtml(zone ? zone.name : (sub["Barangay"] || "Unknown zone").replace(/_/g, " "))}</span>
-        <span class="threat-tag ${hasThreat ? "flagged" : "none"}">
-          ${hasThreat ? escapeHtml(capitalise(sub["Observed_Threats"].replace(/_/g, " "))) : "None observed"}
-        </span>
-      </div>
-      <div class="survey-log-grid">
-        <div class="survey-log-field">
-          <span class="survey-log-label">Ranger</span>
-          <span class="survey-log-value">${escapeHtml(sub["Ranger_Name"] || "—")}</span>
-        </div>
-        <div class="survey-log-field">
-          <span class="survey-log-label">Canopy Cover</span>
-          <span class="survey-log-value">${sub["Estimated_Canopy_Cover_"] ? sub["Estimated_Canopy_Cover_"] + "%" : "—"}</span>
-        </div>
-        <div class="survey-log-field">
-          <span class="survey-log-label">Water Color</span>
-          <span class="survey-log-value">${escapeHtml(sub["Water_Color"] ? sub["Water_Color"].replace(/_/g, " ") : "—")}</span>
-        </div>
-        <div class="survey-log-field">
-          <span class="survey-log-label">Aquafarm Nearby</span>
-          <span class="survey-log-value">${escapeHtml(sub["Nearby_Aquafarm_Activity"] ? sub["Nearby_Aquafarm_Activity"].replace(/_/g, " ") : "—")}</span>
-        </div>
-      </div>
-      ${sub["Additional_Notes"] ? `<p class="survey-log-notes">${escapeHtml(sub["Additional_Notes"])}</p>` : ""}
-    </div>
+    <tr>
+      <td class="survey-log-zone-cell">${escapeHtml(zone ? zone.name : (sub["_zone_name"] || areaRaw || "Unknown zone").replace(/_/g, " "))}</td>
+      <td>${escapeHtml(sub["Ranger_Name"] || "—")}</td>
+      <td class="cell-center">${summary.count || "—"}</td>
+      <td>${escapeHtml(summary.speciesList.length ? summary.speciesList.join(", ") : "—")}</td>
+      <td class="cell-center"><span class="threat-tag ${hasAquafarm ? "flagged" : "none"}">${hasAquafarm ? "Aquafarm nearby" : "No aquafarm nearby"}</span></td>
+    </tr>
   `;
 }
 
@@ -538,7 +576,7 @@ function renderDashboardHeader(s) {
 
 function renderStatCards(s) {
   setText("statTotalZonesValue", s.total);
-  setText("statTotalZonesHint", s.pending > 0 ? `${s.pending} zone${s.pending !== 1 ? "s" : ""} awaiting data` : `Across ${s.total} barangays`);
+  setText("statTotalZonesHint", s.pending > 0 ? `${s.pending} zone${s.pending !== 1 ? "s" : ""} awaiting data` : `Across ${s.total} protected areas`);
 
   setText("statHealthyValue", s.healthy);
   setText("statHealthyHint", `${s.total ? Math.round((s.healthy / s.total) * 100) : 0}% of total`);
@@ -549,12 +587,7 @@ function renderStatCards(s) {
   setText("statDegradedValue", s.degraded);
   setText("statDegradedHint", `${s.total ? Math.round((s.degraded / s.total) * 100) : 0}% of total`);
 
-  setText("statAvgNdviValue", s.avgNdvi.toFixed(2));
-
-  setText("statAvgCanopyValue", s.avgCanopy !== null ? s.avgCanopy.toFixed(0) + "%" : "—");
-  setText("statAvgCanopyHint", s.avgCanopy !== null ? "From field surveys" : "No field data yet");
-
-  setText("statTotalSurveysValue", s.totalSurveys);
+  setText("statAvgNdviValue", formatNdvi(s.avgNdvi));
 
   setText("statLatestInspectionValue", s.latestDate ? formatDate(s.latestDate) : "—");
 }
@@ -578,7 +611,7 @@ function renderWeekSubmissions(weekRangeObj) {
   headEl.hidden = false;
 
   const weekSubs = submissionsInRange(weekRangeObj.start, weekRangeObj.end)
-    .sort((a, b) => (a["Inspection_Date"] || "").localeCompare(b["Inspection_Date"] || ""));
+    .sort((a, b) => koboSubmissionDate(a).localeCompare(koboSubmissionDate(b)));
 
   const rangeLabel = weekRangeObj.start.slice(0, 7) === weekRangeObj.end.slice(0, 7)
     ? `${formatDate(weekRangeObj.start)} – ${new Date(weekRangeObj.end + "T00:00:00").toLocaleDateString("en-US", { day: "numeric" })}, ${weekRangeObj.end.slice(0, 4)}`
@@ -605,6 +638,7 @@ function bindDashboardControls() {
       if (dayBtn) {
         dashboardSelectedDate = dayBtn.dataset.date;
         renderDashboard();
+        syncDashboardSatelliteNdvi();
         return;
       }
       if (e.target.closest("#calPrevMonth")) { shiftCalendarMonth(-1); return; }
@@ -614,7 +648,13 @@ function bindDashboardControls() {
 }
 
 function renderDashboard() {
-  if (!document.getElementById("dashboardBody")) return;
+  // dashboardBody is a static empty shell that's always in the page, even
+  // before the Dashboard tab has ever been opened — its charts (like
+  // healthDonutChart/ndviBarChart below) only actually exist once
+  // ensureDashboardMarkup() has fetched and injected Dashboard.php's markup
+  // into it. Rendering before that (e.g. a background refresh triggered
+  // while still on the Map tab) would otherwise crash on a null element.
+  if (!dashboardMarkupLoaded) return;
 
   ensureDashboardSelectedDate();
 
@@ -624,15 +664,10 @@ function renderDashboard() {
 
   renderDashboardHeader(s);
   renderStatCards(s);
-  renderDatePicker(weekRangeObj);
+  renderDatePicker();
   document.getElementById("healthDonutChart").innerHTML = renderHealthDonut(s.healthy, s.moderate, s.degraded, s.pending);
   document.getElementById("ndviBarChart").innerHTML     = renderNDVIBarChart(s.zoneSnapshot);
   renderWeekSubmissions(weekRangeObj);
-  document.getElementById("ndviTrendChart").innerHTML  = renderNDVITrendChart(s.ndviTrend);
-  document.getElementById("threatBarChart").innerHTML  = renderThreatBarChart(s.threatBreakdown);
-  document.getElementById("canopyBucketsChart").innerHTML = renderBreakdownBarChart(s.canopyBuckets, "No canopy cover data recorded yet.", "canopy-fill");
-  document.getElementById("waterColorChart").innerHTML    = renderBreakdownBarChart(s.waterColorBreakdown, "No water color data recorded yet.", "water-fill");
-  document.getElementById("aquafarmChart").innerHTML      = renderBreakdownBarChart(s.aquafarmBreakdown, "No aquafarm activity data recorded yet.", "aquafarm-fill");
 
   bindDashboardControls();
 }
@@ -647,9 +682,39 @@ async function ensureDashboardMarkup() {
   const body = document.getElementById("dashboardBody");
   if (!body) return;
 
-  const res = await fetch("Dashboard.html");
+  const res = await fetch("Dashboard.php", { cache: "no-store" });
   body.innerHTML = await res.text();
   dashboardMarkupLoaded = true;
+}
+
+let dashboardSatelliteSyncInProgress = false;
+
+// Fetches real Sentinel-2 NDVI (via map-core.js's fetchZoneNdviFromCopernicus) for every
+// zone that has coordinates, then re-renders the dashboard so the NDVI chart shows actual
+// satellite data instead of staying blank. Zones without lat/lng yet are skipped.
+async function syncDashboardSatelliteNdvi() {
+  if (dashboardSatelliteSyncInProgress) return;
+  if (typeof fetchZoneNdviFromCopernicus !== "function") return;
+  dashboardSatelliteSyncInProgress = true;
+
+  const dateStr = dashboardSelectedDate || todayISO();
+  const zonesWithCoords = ZONES.filter(z => z.lat != null && z.lng != null);
+
+  // Written to zone.dashboardNdvi, not zone.satNdvi — the map/sidebar has its
+  // own Scene Calendar date and keeps its own NDVI value in zone.satNdvi;
+  // sharing one field between the two meant whichever view synced last would
+  // silently overwrite the other's number, even though they're for different dates.
+  const batchSize = (typeof NDVI_SYNC_BATCH_SIZE === "number") ? NDVI_SYNC_BATCH_SIZE : 3;
+  for (let i = 0; i < zonesWithCoords.length; i += batchSize) {
+    const batch = zonesWithCoords.slice(i, i + batchSize);
+    await Promise.all(batch.map(async zone => {
+      zone.dashboardNdvi = await fetchZoneNdviFromCopernicus(zone, dateStr);
+    }));
+    if (i + batchSize < zonesWithCoords.length) await sleep(NDVI_SYNC_BATCH_DELAY_MS || 400);
+  }
+
+  dashboardSatelliteSyncInProgress = false;
+  renderDashboard();
 }
 
 async function switchTab(tab) {
@@ -658,9 +723,15 @@ async function switchTab(tab) {
   if (mapView)       mapView.style.display = toDashboard ? "none" : "flex";
   if (dashboardView) dashboardView.classList.toggle("active", toDashboard);
 
+  const menuMapEl = document.getElementById("menuMap");
+  const menuDashboardEl = document.getElementById("menuDashboard");
+  if (menuMapEl) menuMapEl.classList.toggle("active", !toDashboard);
+  if (menuDashboardEl) menuDashboardEl.classList.toggle("active", toDashboard);
+
   if (toDashboard) {
     await ensureDashboardMarkup();
     renderDashboard();
+    syncDashboardSatelliteNdvi();
   } else if (typeof map !== "undefined" && map.invalidateSize) {
     setTimeout(() => map.invalidateSize(), 0);
   }
