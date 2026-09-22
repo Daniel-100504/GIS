@@ -572,7 +572,8 @@ body {
 
 /* .confirm-modal and .btn-confirm-cancel/.btn-confirm-danger live in ../assets/theme.css (shared with Menro's Dashboard.css). */
 
-.row-delete-btn {
+.row-delete-btn,
+.row-edit-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -590,6 +591,16 @@ body {
   border-color: var(--degraded);
   color: var(--degraded);
   background: #fbeae7;
+}
+
+.row-edit-btn {
+  margin-right: 6px;
+}
+
+.row-edit-btn:hover {
+  border-color: var(--brand-600, #2563eb);
+  color: var(--brand-600, #2563eb);
+  background: #eaf1fb;
 }
 
 .submission-delete-btn {

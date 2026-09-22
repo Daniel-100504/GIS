@@ -72,37 +72,6 @@
   background: var(--surface-alt);
 }
 
-.cloud-coverage-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.cloud-coverage-label {
-  font-size: 0.76rem;
-  color: var(--ink-600);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.cloud-coverage-slider {
-  flex: 1;
-  min-width: 0;
-  accent-color: var(--brand-600);
-  cursor: pointer;
-}
-
-.cloud-coverage-value {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--ink-700);
-  font-family: var(--font-mono);
-  width: 38px;
-  flex-shrink: 0;
-  text-align: right;
-}
-
 .scene-calendar {
   margin-top: 12px;
   padding: 10px;
