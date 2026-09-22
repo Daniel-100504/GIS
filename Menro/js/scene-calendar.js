@@ -4,7 +4,9 @@ let dataReady = false;
 
 const refreshSentinelLayers = debounce((dateStr) => {
     sentinelLayer.setParams({ time: sentinelTimeRangeFor(dateStr) });
-    ndviHeatmapLayer.setParams({ time: sentinelTimeRangeFor(dateStr) });
+    if (typeof ndviOverlayLayer !== "undefined") {
+        ndviOverlayLayer.setParams({ time: sentinelTimeRangeFor(dateStr) });
+    }
 }, 450);
 
 function enableSentinel2Layer() {
@@ -159,15 +161,19 @@ async function renderSceneCalendar() {
 
     Object.keys(available).forEach(dateStr => {
         const cell = calGridEl.querySelector(`.cal-cell[data-date="${dateStr}"]`);
-        if (cell && !cell.classList.contains("out-of-range")) {
-            cell.classList.add("available");
-            const cc = available[dateStr];
-            if (cc !== null && cc !== undefined) {
-                cell.title = `Cloud cover: ${Math.round(cc)}%`;
-                if (cc <= currentMaxCC) cell.classList.add("cc-ok");
-            } else {
-                cell.classList.add("cc-ok");
-            }
+        if (!cell || cell.classList.contains("out-of-range")) return;
+
+        const cc = available[dateStr];
+        const usable = cc === null || cc === undefined || cc <= currentMaxCC;
+
+        // Only dates with clear enough imagery are marked "available" — a date
+        // with a picture that's too cloudy to actually use shouldn't be
+        // highlighted as if it were a good pick.
+        if (usable) {
+            cell.classList.add("available", "cc-ok");
+            if (cc !== null && cc !== undefined) cell.title = `Cloud cover: ${Math.round(cc)}%`;
+        } else {
+            cell.title = `Cloud cover: ${Math.round(cc)}% — too cloudy to use`;
         }
     });
 }
@@ -215,5 +221,11 @@ sceneDate.addEventListener("change", () => {
 renderSceneCalendar();
 
 syncSceneDateToToday();
+
+// Populate real satellite NDVI for the zone list/map popups on first load,
+// instead of waiting for the ranger to manually change the scene date.
+if (typeof syncAllZonesFromSatellite === "function") {
+    syncAllZonesFromSatellite(sceneDate.value || todayISO());
+}
 
 setInterval(syncSceneDateToToday, 60 * 1000);

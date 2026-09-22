@@ -1,3 +1,11 @@
+// Rounding a tiny negative NDVI (e.g. -0.001) to 2 decimals can produce the
+// string "-0.00" — technically correct but reads like a display bug to anyone
+// looking at it, so it's normalized to "0.00" everywhere NDVI is shown.
+function formatNdvi(value) {
+  const fixed = value.toFixed(2);
+  return fixed === "-0.00" ? "0.00" : fixed;
+}
+
 function todayISO() {
     const d = new Date();
     const yyyy = d.getFullYear();
@@ -68,10 +76,23 @@ const osmTile = L.tileLayer(
 osmTile.addTo(map);
 
 const satelliteBasemap = L.tileLayer(
-    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    "https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     {
         attribution: "Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics",
-        maxZoom: 19
+        maxZoom: 19,
+        maxNativeZoom: 17
+    }
+);
+
+// Sharper satellite imagery alone has no text on it, so this free Esri overlay
+// adds place names, roads, and boundaries as labels floating on top of it.
+const satelliteLabelsOverlay = L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+    {
+        attribution: "Labels © Esri",
+        maxZoom: 19,
+        maxNativeZoom: 17,
+        zIndex: 5
     }
 );
 
@@ -85,8 +106,10 @@ function setMapType(satellite) {
     if (satellite) {
         map.removeLayer(osmTile);
         satelliteBasemap.addTo(map);
+        satelliteLabelsOverlay.addTo(map);
     } else {
         map.removeLayer(satelliteBasemap);
+        map.removeLayer(satelliteLabelsOverlay);
         osmTile.addTo(map);
     }
 
@@ -118,7 +141,7 @@ function sentinelTimeRangeFor(dateStr) {
     return `${from}/${to}`;
 }
 
-const currentMaxCC = 100;
+const currentMaxCC = 50;
 
 const sentinelLayer = L.tileLayer.wms(`${SENTINEL_PROXY_URL}?mode=wms`, {
     layers: "TRUE_COLOR",
@@ -127,17 +150,6 @@ const sentinelLayer = L.tileLayer.wms(`${SENTINEL_PROXY_URL}?mode=wms`, {
     maxZoom: 19,
     zIndex: 2,
     attribution: "Imagery © Copernicus Sentinel-2 (CDSE)",
-    time: sentinelTimeRangeFor(sceneDateInputValueOrToday()),
-    maxcc: currentMaxCC,
-});
-
-const ndviHeatmapLayer = L.tileLayer.wms(`${SENTINEL_PROXY_URL}?mode=wms`, {
-    layers: "NDVI",
-    format: "image/png",
-    transparent: true,
-    maxZoom: 19,
-    zIndex: 3,
-    attribution: "NDVI © Copernicus Sentinel-2 (CDSE)",
     time: sentinelTimeRangeFor(sceneDateInputValueOrToday()),
     maxcc: currentMaxCC,
 });
@@ -151,24 +163,148 @@ if (layerSentinel2El) {
             map.removeLayer(sentinelLayer);
         }
     });
+    if (layerSentinel2El.checked) sentinelLayer.addTo(map);
 }
 
-const layerNdviEl = document.getElementById("layerNdvi");
-if (layerNdviEl) {
-    layerNdviEl.addEventListener("change", function () {
+// Colorized NDVI map overlay (green = healthy vegetation, red/gray = little
+// or none) — a visual companion to the per-zone NDVI numbers already shown
+// in the sidebar/dashboard, using the same standard "NDVI" layer Sentinel
+// Hub provides out of the box, the same way "TRUE_COLOR" is used above.
+const ndviOverlayLayer = L.tileLayer.wms(`${SENTINEL_PROXY_URL}?mode=wms`, {
+    layers: "NDVI_CUSTOM",
+    format: "image/png",
+    transparent: true,
+    maxZoom: 19,
+    zIndex: 3,
+    attribution: "Imagery © Copernicus Sentinel-2 (CDSE)",
+    time: sentinelTimeRangeFor(sceneDateInputValueOrToday()),
+    maxcc: currentMaxCC,
+});
+
+const layerNdviOverlayEl = document.getElementById("layerNdviOverlay");
+if (layerNdviOverlayEl) {
+    layerNdviOverlayEl.addEventListener("change", function () {
         if (this.checked) {
-            ndviHeatmapLayer.addTo(map);
+            ndviOverlayLayer.addTo(map);
         } else {
-            map.removeLayer(ndviHeatmapLayer);
+            map.removeLayer(ndviOverlayLayer);
         }
     });
+    if (layerNdviOverlayEl.checked) ndviOverlayLayer.addTo(map);
+}
+
+// Real mangrove boundary shapes for Calatagan, clipped from the Global Mangrove
+// Watch (10m resolution, 2020) worldwide dataset — a broader, satellite-derived
+// view of mangrove cover, separate from the officially-surveyed protected areas below.
+// Real mangrove strips are only tens of meters wide, so a thin, semi-transparent
+// outline is nearly invisible once zoomed out to see the whole municipality.
+// A bold, fully-opaque stroke keeps them visible at any zoom, the way GMW's
+// own viewer renders thin coastal features.
+const mangroveExtentLayer = L.geoJSON(null, {
+    style: {
+        color: "#8a2be2",
+        weight: 2,
+        opacity: 0.8,
+        fillColor: "#8a2be2",
+        fillOpacity: 0.3,
+    },
+    onEachFeature: (feature, layer) => {
+        layer._mangroveExtentId = feature.properties.id;
+        bindMangroveExtentPopup(layer, feature.properties.name);
+    },
+});
+
+function bindMangroveExtentPopup(layer, name) {
+    layer._mangroveExtentName = name;
+    layer.unbindPopup();
+    layer.bindPopup(`
+        <div style="min-width:150px">
+          <div class="popup-title">${name ? escapeHtml(name) : "Unnamed mangrove patch"}</div>
+          <p style="font-size:0.78rem;color:#777;margin:4px 0 0;">Satellite-detected mangrove cover.</p>
+        </div>
+    `);
+}
+
+fetch("../API/mangrove-extent.php?action=list")
+    .then(res => res.json())
+    .then(data => mangroveExtentLayer.addData(data))
+    .catch(err => console.warn("Could not load mangrove extent layer:", err));
+
+const layerMangroveExtentEl = document.getElementById("layerMangroveExtent");
+if (layerMangroveExtentEl) {
+    layerMangroveExtentEl.addEventListener("change", function () {
+        if (this.checked) {
+            mangroveExtentLayer.addTo(map);
+        } else {
+            map.removeLayer(mangroveExtentLayer);
+        }
+    });
+    if (layerMangroveExtentEl.checked) mangroveExtentLayer.addTo(map);
+}
+
+// The 6 legally-designated Mangrove Protected Areas, digitized from MENRO's own
+// official survey coordinates (not satellite-derived like the GMW layer above).
+// Four use their true surveyed boundary; two (flagged "approximate_circle" in
+// the data) only had a handful of rough reference points in the source survey,
+// so a hectare-accurate circle is shown for those instead of a wrong-shaped polygon.
+const officialAreasLayer = L.geoJSON(null, {
+    style: (feature) => ({
+        color: "#b8860b",
+        weight: 2.5,
+        opacity: 0.95,
+        fillColor: "#ffd166",
+        fillOpacity: 0.25,
+        dashArray: feature.properties.source === "approximate_circle" ? "6 4" : null,
+    }),
+    onEachFeature: (feature, layer) => {
+        layer._protectedAreaId = feature.properties.id;
+        bindProtectedAreaPopup(layer, feature.properties);
+    },
+});
+
+function bindProtectedAreaPopup(layer, p) {
+    layer._protectedAreaProps = p;
+    layer.unbindPopup();
+    layer.bindPopup(`
+        <div style="min-width:190px">
+          <div class="popup-title">${escapeHtml(p.name)}</div>
+          <table style="width:100%;font-size:0.78rem;border-collapse:collapse">
+            <tr><td style="color:#777;padding:2px 6px 2px 0">Barangay</td><td style="font-weight:600">${escapeHtml(p.barangay || "")}</td></tr>
+            <tr><td style="color:#777;padding:2px 6px 2px 0">Area</td><td style="font-weight:600">${p.statedHa} ha</td></tr>
+            <tr><td style="color:#777;padding:2px 6px 2px 0">Boundary</td><td style="font-weight:600">${p.source === "approximate_circle" ? "Approximate" : "Official survey"}</td></tr>
+          </table>
+        </div>
+    `);
+}
+
+fetch("../API/protected-areas.php?action=list")
+    .then(res => res.json())
+    .then(data => officialAreasLayer.addData(data))
+    .catch(err => console.warn("Could not load official protected areas layer:", err));
+
+const layerProtectedAreasEl = document.getElementById("layerProtectedAreas");
+if (layerProtectedAreasEl) {
+    layerProtectedAreasEl.addEventListener("change", function () {
+        if (this.checked) {
+            officialAreasLayer.addTo(map);
+        } else {
+            map.removeLayer(officialAreasLayer);
+        }
+    });
+    if (layerProtectedAreasEl.checked) officialAreasLayer.addTo(map);
 }
 
 const satelliteNdviCache = {};
 
+// Looks up (and caches) a zone's NDVI for one specific date, purely as a
+// value — it doesn't decide where that value gets stored. The map's Scene
+// Calendar and the Dashboard's own Summary Date each pick their own date and
+// must keep their own copy of the result (zone.satNdvi vs zone.dashboardNdvi);
+// this function used to write straight into zone.satNdvi regardless of which
+// date it was asked for, so whichever of the two synced most recently would
+// silently overwrite the other's number even though they were for different dates.
 async function fetchZoneNdviFromCopernicus(zone, dateStr) {
     if (zone.lat == null || zone.lng == null) {
-        zone.satNdvi = null;
         return null;
     }
 
@@ -176,8 +312,7 @@ async function fetchZoneNdviFromCopernicus(zone, dateStr) {
     const cacheKey = `${zone.id}|${date}|${currentMaxCC}`;
 
     if (Object.prototype.hasOwnProperty.call(satelliteNdviCache, cacheKey)) {
-        zone.satNdvi = satelliteNdviCache[cacheKey];
-        return zone.satNdvi;
+        return satelliteNdviCache[cacheKey];
     }
 
     const radius = Math.sqrt(zone.area) * 100;
@@ -189,22 +324,38 @@ async function fetchZoneNdviFromCopernicus(zone, dateStr) {
         date,
         maxcc: currentMaxCC,
     });
+    // A drawn field-mapped area has its own exact boundary — sampling that
+    // real shape instead of the circle above avoids picking up nearby water
+    // or mud that a rough circle would include, which can swing the reading
+    // a lot for coastal areas. Zones without a drawn shape (e.g. official
+    // zones with just a center point) fall back to the circle server-side.
+    if (zone.geometry) {
+        params.set("geometry", JSON.stringify(zone.geometry));
+    }
 
     try {
         const res = await fetch(`${SENTINEL_PROXY_URL}?${params.toString()}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        zone.satNdvi = (typeof data.ndvi === "number") ? data.ndvi : null;
-        satelliteNdviCache[cacheKey] = zone.satNdvi;
-        return zone.satNdvi;
+        const value = (typeof data.ndvi === "number") ? data.ndvi : null;
+        satelliteNdviCache[cacheKey] = value;
+        return value;
     } catch (err) {
         console.warn(`Satellite NDVI fetch failed for ${zone.name}:`, err);
-        zone.satNdvi = zone.satNdvi ?? null;
         return null;
     }
 }
 
 let satelliteSyncInProgress = false;
+
+// Sentinel Hub rejects too many requests fired at once ("rate limit exceeded"),
+// so zones are fetched a few at a time instead of all at once.
+const NDVI_SYNC_BATCH_SIZE = 3;
+const NDVI_SYNC_BATCH_DELAY_MS = 400;
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 async function syncAllZonesFromSatellite(dateStr) {
     if (satelliteSyncInProgress) return;
@@ -213,11 +364,14 @@ async function syncAllZonesFromSatellite(dateStr) {
     const date = dateStr || sceneDateInputValueOrToday();
     console.log(`Syncing satellite NDVI for ${ZONES.length} zones (cached dates are reused, no extra API calls)...`);
 
-    await Promise.all(ZONES.map(zone =>
-        fetchZoneNdviFromCopernicus(zone, date).then(() => {
-            renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");
-        })
-    ));
+    for (let i = 0; i < ZONES.length; i += NDVI_SYNC_BATCH_SIZE) {
+        const batch = ZONES.slice(i, i + NDVI_SYNC_BATCH_SIZE);
+        await Promise.all(batch.map(async zone => {
+            zone.satNdvi = await fetchZoneNdviFromCopernicus(zone, date);
+        }));
+        renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");
+        if (i + NDVI_SYNC_BATCH_SIZE < ZONES.length) await sleep(NDVI_SYNC_BATCH_DELAY_MS);
+    }
 
     satelliteSyncInProgress = false;
     console.log("Satellite NDVI sync complete.");
@@ -225,41 +379,19 @@ async function syncAllZonesFromSatellite(dateStr) {
 
 const markersLayer = L.layerGroup().addTo(map);
 
-function makeIcon(status){
-    const color = STATUS_COLOR[status];
-
-    return L.divIcon({
-        className: "",
-        html: `
-        <div style="
-        width:14px;
-        height:14px;
-        background:${color};
-        border:2.5px solid #fff;
-        border-radius:50%;
-        box-shadow:0 0 0 1px rgba(10,49,40,.15), 0 2px 6px rgba(10,49,40,.35);
-        "></div>
-        `,
-        iconSize:[14,14],
-        iconAnchor:[7,7]
-    });
-}
-
 function buildPopup(zone) {
   const hasKobo = zone.lastRanger && zone.lastRanger !== "—";
 
   const surveyRow = hasKobo ? `
     <tr><td style="color:#777;padding:2px 6px 2px 0">Last Inspection</td><td style="font-weight:600">${escapeHtml(zone.lastDate)}</td></tr>
-    <tr><td style="color:#777;padding:2px 6px 2px 0">Threats</td><td style="font-weight:600">${escapeHtml(capitalise(zone.threats))}</td></tr>
   ` : `<tr><td colspan="2" style="color:#999;font-size:0.72rem;padding-top:4px;">No field survey data yet</td></tr>`;
 
   return `
     <div style="min-width:190px">
       <div class="popup-title">${escapeHtml(zone.name)}</div>
       <table style="width:100%;font-size:0.78rem;border-collapse:collapse">
-        <tr><td style="color:#777;padding:2px 6px 2px 0">Status</td><td style="font-weight:600">${capitalise(zone.status)}</td></tr>
-        <tr><td style="color:#777;padding:2px 6px 2px 0">NDVI</td><td style="font-weight:600">${zone.ndvi !== null ? zone.ndvi.toFixed(2) : "Pending fetch…"}</td></tr>
-        ${zone.satNdvi != null ? `<tr><td style="color:#777;padding:2px 6px 2px 0">Satellite NDVI</td><td style="font-weight:600">${zone.satNdvi.toFixed(2)}</td></tr>` : ""}
+        <tr><td style="color:#777;padding:2px 6px 2px 0">Status</td><td style="font-weight:600">${(typeof STATUS_DISPLAY_LABELS !== "undefined" && STATUS_DISPLAY_LABELS[zone.status]) || capitalise(zone.status)}</td></tr>
+        <tr><td style="color:#777;padding:2px 6px 2px 0">NDVI</td><td style="font-weight:600">${zone.satNdvi != null ? formatNdvi(zone.satNdvi) : "Pending fetch…"}</td></tr>
         <tr><td style="color:#777;padding:2px 6px 2px 0">Area</td><td style="font-weight:600">${zone.area !== null ? zone.area + " ha" : "—"}</td></tr>
         ${surveyRow}
       </table>
@@ -304,29 +436,3 @@ if (layersToggleBtn && mapLayersControl) {
         });
 }
 
-document.getElementById("layerZones")
-.addEventListener("change",function(){
-
-    if(this.checked){
-
-        markersLayer.addTo(map);
-
-    }else{
-
-        markersLayer.remove();
-
-    }
-
-});
-
-const mouseCoordinates=document.getElementById("mouseCoordinates");
-
-map.on("mousemove",(e)=>{
-
-    mouseCoordinates.innerHTML=`
-        Lat : ${e.latlng.lat.toFixed(6)}
-        <br>
-        Lng : ${e.latlng.lng.toFixed(6)}
-    `;
-
-});

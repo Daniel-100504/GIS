@@ -7,9 +7,9 @@
   const errorMsg      = document.getElementById('errorMsg');
 
   const REDIRECT_BY_ROLE = {
-    menro:  '../Menro/html/satellite.html',
-    ranger: '../ranger/ranger.html',
-    admin:  '../Admin/admin.html',
+    menro:  '../Menro/html/satellite.php',
+    ranger: '../ranger/ranger.php',
+    admin:  '../Admin/admin.php',
   };
 
   togglePw.addEventListener('click', () => {
