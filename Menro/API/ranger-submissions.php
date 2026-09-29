@@ -4,7 +4,10 @@ session_start();
 
 header('Content-Type: application/json');
 
-$allowedRoles = ['ranger', 'menro', 'admin'];
+// admin is account-management only, not an operator role — it never gets
+// review/approval authority over field survey data, the same as it can't
+// see this data's own map page (satellite.php only lets 'menro' load at all).
+$allowedRoles = ['ranger', 'menro'];
 if (!isset($_SESSION['user']) || !in_array($_SESSION['user']['role'], $allowedRoles, true)) {
     http_response_code(401);
     echo json_encode(['error' => 'Not authorized.']);
@@ -45,6 +48,41 @@ if ($action === 'delete') {
     }
 
     $pdo = getDbConnection();
+
+    if ($currentUser['role'] === 'ranger') {
+        $check = $pdo->prepare("SELECT raw_json, approval_status FROM ranger_submissions WHERE kobo_id = :id");
+        $check->execute(['id' => $submissionId]);
+        $row = $check->fetch(PDO::FETCH_ASSOC);
+
+        if ($row === false) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Submission not found']);
+            exit;
+        }
+
+        // A ranger can only ever delete their own submissions — without this,
+        // any logged-in ranger could delete another ranger's survey just by
+        // knowing or guessing its id.
+        $record = json_decode($row['raw_json'], true);
+        $ownName = mb_strtolower(trim((string) ($currentUser['fullName'] ?: $currentUser['username'])));
+        $recordRanger = mb_strtolower(trim((string) ($record['Ranger_Name'] ?? '')));
+        if ($recordRanger !== $ownName) {
+            http_response_code(403);
+            echo json_encode(['error' => 'You can only delete your own submissions']);
+            exit;
+        }
+
+        // Same reasoning as the edit lock: once MENRO has approved a
+        // submission it's the official reviewed record, so the ranger who
+        // submitted it shouldn't be able to erase it unilaterally. Enforced
+        // here since the UI's own disabled button is only a client-side hint.
+        if ($row['approval_status'] === 'approved') {
+            http_response_code(403);
+            echo json_encode(['error' => 'This submission has already been approved and can\'t be deleted. Contact MENRO if a correction is needed.']);
+            exit;
+        }
+    }
+
     $stmt = $pdo->prepare("DELETE FROM ranger_submissions WHERE kobo_id = :id");
     $stmt->execute(['id' => $submissionId]);
     deleteFromSupabase((int) $submissionId);
@@ -77,17 +115,17 @@ if ($action === 'updateFields') {
 
     $pdo = getDbConnection();
 
-    $stmt = $pdo->prepare("SELECT raw_json FROM ranger_submissions WHERE kobo_id = :id");
+    $stmt = $pdo->prepare("SELECT raw_json, approval_status FROM ranger_submissions WHERE kobo_id = :id");
     $stmt->execute(['id' => $submissionId]);
-    $rawJson = $stmt->fetchColumn();
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if ($rawJson === false) {
+    if ($row === false) {
         http_response_code(404);
         echo json_encode(['error' => 'Submission not found']);
         exit;
     }
 
-    $record = json_decode($rawJson, true);
+    $record = json_decode($row['raw_json'], true);
 
     if ($currentUser['role'] === 'ranger') {
         $ownName = mb_strtolower(trim((string) ($currentUser['fullName'] ?: $currentUser['username'])));
@@ -95,6 +133,15 @@ if ($action === 'updateFields') {
         if ($recordRanger !== $ownName) {
             http_response_code(403);
             echo json_encode(['error' => 'You can only edit your own submissions']);
+            exit;
+        }
+        // Once MENRO has approved a submission it's the official record of
+        // what was reviewed — a silent edit afterward would invalidate that
+        // approval without MENRO ever knowing. Locked in the UI too, but
+        // enforced here since the UI's own lock is only a client-side hint.
+        if ($row['approval_status'] === 'approved') {
+            http_response_code(403);
+            echo json_encode(['error' => 'This submission has already been approved and can\'t be edited. Contact MENRO if a correction is needed.']);
             exit;
         }
     }
@@ -204,17 +251,145 @@ if ($action === 'updateFields') {
         }
     }
 
+    // A resubmitted revision needs a fresh look from MENRO, same as a
+    // resent government form or a pull request pushed after "changes
+    // requested" — it goes back into the review queue instead of staying
+    // parked under its old rejection, which nothing would otherwise clear.
+    $backToPending = $row['approval_status'] === 'rejected';
+
     $update = $pdo->prepare(
         "UPDATE ranger_submissions
-         SET raw_json = :raw_json, locally_edited = 1, edited_at = NOW()
-         WHERE kobo_id = :id"
+         SET raw_json = :raw_json, locally_edited = 1, edited_at = NOW()"
+        . ($backToPending ? ", approval_status = 'pending', reviewed_at = NULL, reviewed_by = NULL, review_notes = NULL" : "")
+        . " WHERE kobo_id = :id"
     );
     $update->execute([
         'raw_json' => json_encode($record),
         'id'       => $submissionId,
     ]);
 
-    echo json_encode(['success' => true, 'record' => $record]);
+    echo json_encode([
+        'success'         => true,
+        'record'          => $record,
+        'approval_status' => $backToPending ? 'pending' : $row['approval_status'],
+    ]);
+    exit;
+}
+
+if ($action === 'approve' || $action === 'reject') {
+    if ($currentUser['role'] !== 'menro') {
+        http_response_code(403);
+        echo json_encode(['error' => 'Only MENRO can review submissions.']);
+        exit;
+    }
+
+    $submissionId = $_POST['id'] ?? null;
+    if ($submissionId === null || $submissionId === '' || !ctype_digit(ltrim((string) $submissionId, '-'))) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Missing or invalid submission id']);
+        exit;
+    }
+
+    $pdo = getDbConnection();
+    $stmt = $pdo->prepare("SELECT raw_json, approval_status FROM ranger_submissions WHERE kobo_id = :id");
+    $stmt->execute(['id' => $submissionId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($row === false) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Submission not found']);
+        exit;
+    }
+    $record = json_decode($row['raw_json'], true);
+
+    // Already approved — nothing left to do. The UI itself disables the
+    // Approve button once a submission reaches this state, but this is
+    // enforced here too so a duplicate "approved" notification can't reach
+    // the ranger a second time from a stray direct request.
+    if ($action === 'approve' && $row['approval_status'] === 'approved') {
+        echo json_encode(['success' => true, 'id' => $submissionId, 'approval_status' => 'approved']);
+        exit;
+    }
+
+    $newStatus = $action === 'approve' ? 'approved' : 'rejected';
+    $reviewerName = trim((string) ($currentUser['fullName'] ?: $currentUser['username']));
+    // Only meaningful on a rejection — MENRO can optionally explain what
+    // needs fixing, but Approve never shows this field in the first place.
+    $reviewNotes = trim((string) ($_POST['notes'] ?? ''));
+
+    $update = $pdo->prepare(
+        "UPDATE ranger_submissions
+         SET approval_status = :status, reviewed_at = NOW(), reviewed_by = :reviewer, review_notes = :notes
+         WHERE kobo_id = :id"
+    );
+    $update->execute([
+        'status'   => $newStatus,
+        'reviewer' => $reviewerName,
+        'notes'    => $reviewNotes !== '' ? $reviewNotes : null,
+        'id'       => $submissionId,
+    ]);
+
+    // The ranger only learns about this through their own notification bell
+    // (polled from the ranger app), never a push of any kind — a plain row
+    // here is all that's needed for that poll to pick it up. Zone/date are
+    // stored as their own columns (not baked into one message string) so the
+    // ranger app can render title + subtitle the same way MENRO's own bell
+    // does, instead of one long wrapped sentence.
+    if ($record && !empty($record['Ranger_Name'])) {
+        $areaLabel = $record['_zone_name'] ?? ($record['Protected_area_Zone'] ?? ($record['Barangay'] ?? 'Unknown zone'));
+        $areaLabel = str_replace('_', ' ', (string) $areaLabel);
+        $dateLabel = $record['Inspection_Date'] ?? '';
+        $message = $newStatus === 'approved' ? 'Your survey was approved' : 'Your survey needs revision';
+
+        $notif = $pdo->prepare(
+            "INSERT INTO ranger_notifications (kobo_id, ranger_name, message, status, zone_name, inspection_date, notes)
+             VALUES (:kobo_id, :ranger_name, :message, :status, :zone_name, :inspection_date, :notes)"
+        );
+        $notif->execute([
+            'kobo_id'         => $submissionId,
+            'ranger_name'     => $record['Ranger_Name'],
+            'message'         => $message,
+            'status'          => $newStatus,
+            'zone_name'       => $areaLabel,
+            'inspection_date' => $dateLabel,
+            'notes'           => $reviewNotes !== '' ? $reviewNotes : null,
+        ]);
+    }
+
+    echo json_encode(['success' => true, 'id' => $submissionId, 'approval_status' => $newStatus]);
+    exit;
+}
+
+// Clears a flagged survey off MENRO's active Threats & Alerts board once
+// someone has actually looked into it — a separate flag from the survey's
+// own approval status, since reviewing a threat and approving the data
+// quality of the survey that reported it are two different things.
+if ($action === 'markAlertReviewed') {
+    if ($currentUser['role'] !== 'menro') {
+        http_response_code(403);
+        echo json_encode(['error' => 'Only MENRO can review alerts.']);
+        exit;
+    }
+
+    $submissionId = $_POST['id'] ?? null;
+    if ($submissionId === null || $submissionId === '' || !ctype_digit(ltrim((string) $submissionId, '-'))) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Missing or invalid submission id']);
+        exit;
+    }
+
+    $pdo = getDbConnection();
+    $reviewerName = trim((string) ($currentUser['fullName'] ?: $currentUser['username']));
+    $update = $pdo->prepare(
+        "UPDATE ranger_submissions
+         SET alert_reviewed = 1, alert_reviewed_at = NOW(), alert_reviewed_by = :reviewer
+         WHERE kobo_id = :id"
+    );
+    $update->execute([
+        'reviewer' => $reviewerName,
+        'id'       => $submissionId,
+    ]);
+
+    echo json_encode(['success' => true, 'id' => $submissionId]);
     exit;
 }
 

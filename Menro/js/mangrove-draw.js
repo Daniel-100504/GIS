@@ -10,31 +10,9 @@ const MANGROVE_CATEGORY_STYLES = {
 const MANGROVE_CATEGORY_LABELS = {
   mangrove: "Mangrove Forest Area",
   protected_area: "Protected Area",
-  watershed_hazard: "Watershed Hazard",
 };
 
-// Watershed hazards are colored by severity instead of by category.
-const HAZARD_SEVERITY_STYLES = {
-  low:      { color: "#4d7c0f", weight: 2, opacity: 1, fillColor: "#84cc16", fillOpacity: 0.3 },
-  moderate: { color: "#c2410c", weight: 2, opacity: 1, fillColor: "#fb923c", fillOpacity: 0.3 },
-  high:     { color: "#991b1b", weight: 2, opacity: 1, fillColor: "#dc2626", fillOpacity: 0.35 },
-};
-const HAZARD_SEVERITY_LABELS = { low: "Low", moderate: "Moderate", high: "High" };
-const HAZARD_TYPE_LABELS = {
-  illegal_cutting: "Illegal Cutting/Logging",
-  aquaculture_conversion: "Aquaculture/Fishpond Conversion",
-  siltation: "Siltation/Sedimentation",
-  pollution: "Pollution/Runoff",
-  erosion: "Coastal Erosion",
-  land_reclamation: "Land Reclamation/Development",
-  illegal_dumping: "Illegal Dumping",
-  other: "Other",
-};
-
-function mangroveCategoryStyle(category, severity) {
-  if (category === "watershed_hazard") {
-    return HAZARD_SEVERITY_STYLES[severity] || HAZARD_SEVERITY_STYLES.high;
-  }
+function mangroveCategoryStyle(category) {
   return MANGROVE_CATEGORY_STYLES[category] || { color: MANGROVE_COLOR, weight: 2, fillColor: MANGROVE_COLOR, fillOpacity: 0.25 };
 }
 
@@ -127,12 +105,6 @@ function syncMangroveAreaZoneEntry(layer) {
   }
 
   if (typeof renderZoneList === "function") renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");
-  if (typeof fetchZoneNdviFromCopernicus === "function") {
-    fetchZoneNdviFromCopernicus(zoneEntry).then((value) => {
-      zoneEntry.satNdvi = value;
-      if (typeof renderZoneList === "function") renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");
-    });
-  }
 }
 
 function removeMangroveAreaZoneEntry(layer) {
@@ -143,21 +115,11 @@ function removeMangroveAreaZoneEntry(layer) {
 }
 
 const layerFieldMangrovesEl  = document.getElementById("layerFieldMangroves");
-const layerWatershedHazardEl = document.getElementById("layerWatershedHazard");
 
-// Watershed hazards share the same drawn-shapes group as mangrove/protected
-// areas (so no extra draw/edit/delete toolbar buttons were needed for them),
-// but they still need their own visibility toggle. Rather than adding or
-// removing a whole Leaflet layer group — which would also affect the OTHER
-// category sharing that group — each layer is individually hidden by
-// zeroing its own style and disabling its pointer events, leaving group
-// membership (and Leaflet.Draw's edit/delete tracking) untouched.
 function applyMangroveLayerVisibility(layer) {
-  const isHazard = layer._mangroveAreaCategory === "watershed_hazard";
-  const toggleEl = isHazard ? layerWatershedHazardEl : layerFieldMangrovesEl;
-  const visible = !toggleEl || toggleEl.checked;
+  const visible = !layerFieldMangrovesEl || layerFieldMangrovesEl.checked;
 
-  layer.setStyle(visible ? mangroveCategoryStyle(layer._mangroveAreaCategory, layer._mangroveSeverity) : { opacity: 0, fillOpacity: 0 });
+  layer.setStyle(visible ? mangroveCategoryStyle(layer._mangroveAreaCategory) : { opacity: 0, fillOpacity: 0 });
 
   const el = layer.getElement && layer.getElement();
   if (el) el.style.pointerEvents = visible ? "" : "none";
@@ -167,43 +129,38 @@ function refreshMangroveLayersVisibility() {
   mangroveDrawnItems.eachLayer(applyMangroveLayerVisibility);
 }
 
-function bindMangrovePopup(layer, name, barangay, category, hazardType, severity) {
+function bindMangrovePopup(layer, name, barangay, category) {
   layer._mangroveAreaName = name;
   layer._mangroveAreaBarangay = barangay;
   layer._mangroveAreaCategory = category;
-  layer._mangroveHazardType = hazardType || "";
-  layer._mangroveSeverity = severity || "";
   layer.unbindPopup();
   applyMangroveLayerVisibility(layer);
-
-  const isHazard = category === "watershed_hazard";
-  const extraRows = isHazard
-    ? `<tr><td style="color:#777;padding:2px 6px 2px 0">Hazard Type</td><td style="font-weight:600">${escapeHtml(HAZARD_TYPE_LABELS[hazardType] || "—")}</td></tr>
-       <tr><td style="color:#777;padding:2px 6px 2px 0">Severity</td><td style="font-weight:600">${escapeHtml(HAZARD_SEVERITY_LABELS[severity] || "—")}</td></tr>`
-    : "";
 
   // Built as a function, not a fixed string, so the popup always shows
   // whatever NDVI value is current at the moment it's opened — NDVI loads
   // in asynchronously after the shape itself appears on the map, so a fixed
   // string here would keep showing "Pending" forever even once real data arrives.
-  layer.bindPopup(() => {
-    const ndviRow = !isHazard
-      ? `<tr><td style="color:#777;padding:2px 6px 2px 0">NDVI</td><td style="font-weight:600">${mangroveNdviDisplay(layer)}</td></tr>`
-      : "";
-    return `
+  layer.bindPopup(() => `
     <div style="min-width:190px">
       <div class="popup-title">${escapeHtml(name)}</div>
       <table style="width:100%;font-size:0.78rem;border-collapse:collapse">
         <tr><td style="color:#777;padding:2px 6px 2px 0">Category</td><td style="font-weight:600">${escapeHtml(MANGROVE_CATEGORY_LABELS[category] || "—")}</td></tr>
-        ${extraRows}
         <tr><td style="color:#777;padding:2px 6px 2px 0">Barangay</td><td style="font-weight:600">${escapeHtml(barangay || "—")}</td></tr>
         <tr><td style="color:#777;padding:2px 6px 2px 0">Area</td><td style="font-weight:600">${mangroveAreaHa(layer)} ha</td></tr>
-        ${ndviRow}
+        <tr><td style="color:#777;padding:2px 6px 2px 0">NDVI</td><td style="font-weight:600">${mangroveNdviDisplay(layer)}</td></tr>
       </table>
     </div>
-  `;
+  `);
+  syncMangroveAreaZoneEntry(layer);
+
+  // NDVI for this shape is only fetched once its popup is actually opened
+  // (clicked directly on the map, or via the zone list's own click handler,
+  // which calls ensureZoneNdviLoaded before opening the popup) — not eagerly
+  // for every field-mapped area as soon as it loads.
+  layer.on("popupopen", () => {
+    const zoneEntry = ZONES.find(z => z.id === "field-" + layer._mangroveAreaId);
+    if (zoneEntry && typeof ensureZoneNdviLoaded === "function") ensureZoneNdviLoaded(zoneEntry);
   });
-  if (!isHazard) syncMangroveAreaZoneEntry(layer);
 }
 
 function loadMangroveAreas() {
@@ -213,11 +170,11 @@ function loadMangroveAreas() {
       mangroveDrawnItems.clearLayers();
       (data.features || []).forEach(feature => {
         const layer = L.geoJSON(feature, {
-          style: mangroveCategoryStyle(feature.properties.category, feature.properties.severity),
+          style: mangroveCategoryStyle(feature.properties.category),
         }).getLayers()[0];
         if (!layer) return;
         layer._mangroveAreaId = feature.properties.id;
-        bindMangrovePopup(layer, feature.properties.name, feature.properties.barangay, feature.properties.category, feature.properties.hazard_type, feature.properties.severity);
+        bindMangrovePopup(layer, feature.properties.name, feature.properties.barangay, feature.properties.category);
         mangroveDrawnItems.addLayer(layer);
       });
       // The Dashboard's zone counts are computed from ZONES, which this loop
@@ -376,7 +333,6 @@ let mangroveRenameControlLink = null;
 map.addControl(new MangroveRenameControl());
 
 if (layerFieldMangrovesEl) layerFieldMangrovesEl.addEventListener("change", refreshMangroveLayersVisibility);
-if (layerWatershedHazardEl) layerWatershedHazardEl.addEventListener("change", refreshMangroveLayersVisibility);
 
 let pendingMangroveLayer = null;
 
@@ -386,14 +342,9 @@ const mangroveNameModalText   = document.getElementById("mangroveNameModalText")
 const mangroveNameInput       = document.getElementById("mangroveNameInput");
 const mangroveBarangaySelect  = document.getElementById("mangroveBarangaySelect");
 const mangroveCategorySelect  = document.getElementById("mangroveCategorySelect");
-const mangroveHazardFields    = document.getElementById("mangroveHazardFields");
-const mangroveHazardTypeSelect = document.getElementById("mangroveHazardTypeSelect");
-const mangroveSeveritySelect  = document.getElementById("mangroveSeveritySelect");
 const mangroveNameFieldError     = document.getElementById("mangroveNameFieldError");
 const mangroveBarangayFieldError = document.getElementById("mangroveBarangayFieldError");
 const mangroveCategoryFieldError = document.getElementById("mangroveCategoryFieldError");
-const mangroveHazardTypeFieldError = document.getElementById("mangroveHazardTypeFieldError");
-const mangroveSeverityFieldError    = document.getElementById("mangroveSeverityFieldError");
 const mangroveNameErrorMsg    = document.getElementById("mangroveNameErrorMsg");
 const btnCloseMangroveName    = document.getElementById("btnCloseMangroveName");
 const btnCancelMangroveName   = document.getElementById("btnCancelMangroveName");
@@ -425,14 +376,6 @@ function clearAllMangroveFieldErrors() {
   setMangroveFieldValid(mangroveNameInput, mangroveNameFieldError);
   setMangroveFieldValid(mangroveBarangaySelect, mangroveBarangayFieldError);
   setMangroveFieldValid(mangroveCategorySelect, mangroveCategoryFieldError);
-  setMangroveFieldValid(mangroveHazardTypeSelect, mangroveHazardTypeFieldError);
-  setMangroveFieldValid(mangroveSeveritySelect, mangroveSeverityFieldError);
-}
-
-if (mangroveCategorySelect) {
-  mangroveCategorySelect.addEventListener("change", function () {
-    if (mangroveHazardFields) mangroveHazardFields.hidden = this.value !== "watershed_hazard";
-  });
 }
 
 function openMangroveNameModal(layer) {
@@ -443,9 +386,6 @@ function openMangroveNameModal(layer) {
   if (mangroveNameInput) mangroveNameInput.value = "";
   if (mangroveBarangaySelect) mangroveBarangaySelect.value = "";
   if (mangroveCategorySelect) mangroveCategorySelect.value = "";
-  if (mangroveHazardTypeSelect) mangroveHazardTypeSelect.value = "";
-  if (mangroveSeveritySelect) mangroveSeveritySelect.value = "";
-  if (mangroveHazardFields) mangroveHazardFields.hidden = true;
   if (mangroveNameModalTitle) mangroveNameModalTitle.textContent = "Name this mangrove area";
   if (mangroveNameModalText) mangroveNameModalText.textContent = "Give it a short name so it can be identified later.";
   if (mangroveNameOverlay) mangroveNameOverlay.classList.add("open");
@@ -467,9 +407,6 @@ if (btnSaveMangroveName) {
     const name = mangroveNameInput ? mangroveNameInput.value.trim() : "";
     const barangay = mangroveBarangaySelect ? mangroveBarangaySelect.value : "";
     const category = mangroveCategorySelect ? mangroveCategorySelect.value : "";
-    const isHazard = category === "watershed_hazard";
-    const hazardType = isHazard && mangroveHazardTypeSelect ? mangroveHazardTypeSelect.value : "";
-    const severity = isHazard && mangroveSeveritySelect ? mangroveSeveritySelect.value : "";
     if (!pendingMangroveLayer) return;
 
     let hasError = false;
@@ -479,10 +416,6 @@ if (btnSaveMangroveName) {
     else { setMangroveFieldValid(mangroveBarangaySelect, mangroveBarangayFieldError); }
     if (!category) { setMangroveFieldInvalid(mangroveCategorySelect, mangroveCategoryFieldError); hasError = true; }
     else { setMangroveFieldValid(mangroveCategorySelect, mangroveCategoryFieldError); }
-    if (isHazard && !hazardType) { setMangroveFieldInvalid(mangroveHazardTypeSelect, mangroveHazardTypeFieldError); hasError = true; }
-    else { setMangroveFieldValid(mangroveHazardTypeSelect, mangroveHazardTypeFieldError); }
-    if (isHazard && !severity) { setMangroveFieldInvalid(mangroveSeveritySelect, mangroveSeverityFieldError); hasError = true; }
-    else { setMangroveFieldValid(mangroveSeveritySelect, mangroveSeverityFieldError); }
     if (hasError) return;
     clearMangroveNameError();
 
@@ -494,8 +427,6 @@ if (btnSaveMangroveName) {
       name: name,
       barangay: barangay,
       category: category,
-      hazard_type: hazardType,
-      severity: severity,
       geometry: JSON.stringify(geometry),
     });
 
@@ -504,8 +435,8 @@ if (btnSaveMangroveName) {
       .then(data => {
         if (data.success) {
           layer._mangroveAreaId = data.id;
-          layer.setStyle(mangroveCategoryStyle(category, severity));
-          bindMangrovePopup(layer, name, barangay, category, hazardType, severity);
+          layer.setStyle(mangroveCategoryStyle(category));
+          bindMangrovePopup(layer, name, barangay, category);
         } else {
           showMangroveNameError(data.error || "Could not save this mangrove area.");
           mangroveDrawnItems.removeLayer(layer);
@@ -531,17 +462,8 @@ const mangroveQuickEditOverlay   = document.getElementById("mangroveQuickEditOve
 const mangroveQuickEditNameInput = document.getElementById("mangroveQuickEditNameInput");
 const mangroveQuickEditBarangaySelect = document.getElementById("mangroveQuickEditBarangaySelect");
 const mangroveQuickEditCategorySelect = document.getElementById("mangroveQuickEditCategorySelect");
-const mangroveQuickEditHazardFields = document.getElementById("mangroveQuickEditHazardFields");
-const mangroveQuickEditHazardTypeSelect = document.getElementById("mangroveQuickEditHazardTypeSelect");
-const mangroveQuickEditSeveritySelect   = document.getElementById("mangroveQuickEditSeveritySelect");
 const btnCancelMangroveQuickEdit = document.getElementById("btnCancelMangroveQuickEdit");
 const btnSaveMangroveQuickEdit   = document.getElementById("btnSaveMangroveQuickEdit");
-
-if (mangroveQuickEditCategorySelect) {
-  mangroveQuickEditCategorySelect.addEventListener("change", function () {
-    if (mangroveQuickEditHazardFields) mangroveQuickEditHazardFields.hidden = this.value !== "watershed_hazard";
-  });
-}
 
 function startMangroveQuickEdit(layer) {
   mangroveQuickEditLayer = layer;
@@ -560,16 +482,6 @@ function startMangroveQuickEdit(layer) {
     mangroveQuickEditCategorySelect.value = layer._mangroveAreaCategory || "";
     mangroveQuickEditCategorySelect.classList.remove("mangrove-field-invalid");
   }
-  const isHazard = layer._mangroveAreaCategory === "watershed_hazard";
-  if (mangroveQuickEditHazardTypeSelect) {
-    mangroveQuickEditHazardTypeSelect.value = layer._mangroveHazardType || "";
-    mangroveQuickEditHazardTypeSelect.classList.remove("mangrove-field-invalid");
-  }
-  if (mangroveQuickEditSeveritySelect) {
-    mangroveQuickEditSeveritySelect.value = layer._mangroveSeverity || "";
-    mangroveQuickEditSeveritySelect.classList.remove("mangrove-field-invalid");
-  }
-  if (mangroveQuickEditHazardFields) mangroveQuickEditHazardFields.hidden = !isHazard;
   if (mangroveQuickEditOverlay) mangroveQuickEditOverlay.classList.add("open");
 }
 
@@ -589,9 +501,6 @@ if (btnSaveMangroveQuickEdit) {
     const name = mangroveQuickEditNameInput ? mangroveQuickEditNameInput.value.trim() : "";
     const barangay = mangroveQuickEditBarangaySelect ? mangroveQuickEditBarangaySelect.value : "";
     const category = mangroveQuickEditCategorySelect ? mangroveQuickEditCategorySelect.value : "";
-    const isHazard = category === "watershed_hazard";
-    const hazardType = isHazard && mangroveQuickEditHazardTypeSelect ? mangroveQuickEditHazardTypeSelect.value : "";
-    const severity = isHazard && mangroveQuickEditSeveritySelect ? mangroveQuickEditSeveritySelect.value : "";
 
     let hasError = false;
     [
@@ -603,16 +512,6 @@ if (btnSaveMangroveQuickEdit) {
       el.classList.toggle("mangrove-field-invalid", !value);
       if (!value) hasError = true;
     });
-    if (isHazard) {
-      [
-        [mangroveQuickEditHazardTypeSelect, hazardType],
-        [mangroveQuickEditSeveritySelect, severity],
-      ].forEach(([el, value]) => {
-        if (!el) return;
-        el.classList.toggle("mangrove-field-invalid", !value);
-        if (!value) hasError = true;
-      });
-    }
     if (hasError) return;
 
     const layer = mangroveQuickEditLayer;
@@ -623,8 +522,6 @@ if (btnSaveMangroveQuickEdit) {
       name: name,
       barangay: barangay,
       category: category,
-      hazard_type: hazardType,
-      severity: severity,
       geometry: JSON.stringify(geometry),
     });
 
@@ -632,8 +529,8 @@ if (btnSaveMangroveQuickEdit) {
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          layer.setStyle(mangroveCategoryStyle(category, severity));
-          bindMangrovePopup(layer, name, barangay, category, hazardType, severity);
+          layer.setStyle(mangroveCategoryStyle(category));
+          bindMangrovePopup(layer, name, barangay, category);
         } else {
           alert(data.error || "Could not save changes to this mangrove area.");
         }
@@ -662,7 +559,21 @@ map.on(L.Draw.Event.EDITED, function (e) {
       geometry: JSON.stringify(geometry),
     });
     fetch(MANGROVE_AREAS_API, { method: "POST", body }).catch(() => {});
-    if (layer._mangroveAreaCategory !== "watershed_hazard") syncMangroveAreaZoneEntry(layer);
+    syncMangroveAreaZoneEntry(layer);
+
+    // The shape just changed, so every NDVI reading on record for this zone
+    // (this map's own zone.satNdvi, the Dashboard's zone.dashboardNdvi, and
+    // the persisted cache behind both) was measured against the boundary
+    // that no longer exists. Clearing all of it forces a real, fresh
+    // reading against the actual new shape next time anyone looks, instead
+    // of silently showing a number that's now measuring the wrong ground.
+    const zoneId = "field-" + layer._mangroveAreaId;
+    const zoneEntry = ZONES.find(z => z.id === zoneId);
+    if (zoneEntry) {
+      zoneEntry.satNdvi = null;
+      zoneEntry.dashboardNdvi = null;
+      if (typeof invalidateZoneNdviCache === "function") invalidateZoneNdviCache(zoneId);
+    }
   });
 });
 

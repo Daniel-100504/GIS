@@ -6,6 +6,12 @@
 // a single highest-id watermark, letting both adds and edits show up as new.
 const NOTIF_SEEN_KEY = "aquaguard_menro_seen_submission_versions";
 
+// How many recent submissions the bell shows at once — read ones stay
+// visible (just unhighlighted) instead of disappearing the moment they're
+// seen, the same way a Facebook notification stays in the list after you've
+// opened it.
+const NOTIF_LIST_LIMIT = 20;
+
 function getSubmissionKoboId(sub) {
   return parseInt(sub && sub["_id"], 10) || 0;
 }
@@ -38,17 +44,17 @@ function prettifyNotifValue(raw) {
   return String(raw).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function renderNotifItem(sub) {
+function renderNotifItem(sub, isUnread) {
   const ranger = sub["Ranger_Name"] || "A ranger";
   const barangay = sub["_zone_name"] || prettifyNotifValue(sub["Protected_area_Zone"] || sub["Barangay"]);
   const date = sub["Inspection_Date"] || sub["Date_of_visit"] || (sub["_submission_time"] || "").slice(0, 10) || "—";
   const isEdit = !!sub["_locally_edited"];
   const action = isEdit ? "updated a survey" : "submitted a new survey";
   return `
-    <div class="notif-item">
+    <button type="button" class="notif-item${isUnread ? " unread" : ""}" data-kobo-id="${escapeHtml(String(getSubmissionKoboId(sub)))}">
       <div class="notif-item-title">${escapeHtml(ranger)} ${escapeHtml(action)}</div>
       <div class="notif-item-sub">${escapeHtml(barangay)} · ${escapeHtml(date)}</div>
-    </div>
+    </button>
   `;
 }
 
@@ -58,7 +64,10 @@ function renderNotifications() {
   if (!countEl || !listEl) return;
 
   const submissions = typeof ALL_SUBMISSIONS !== "undefined" ? ALL_SUBMISSIONS : [];
-  const validSubs = submissions.filter(sub => getSubmissionKoboId(sub) > 0);
+  // Every survey submitted through AquaGuard's own form (not Kobo) is given
+  // a negative id — only an actual Kobo submission is missing/zero here, so
+  // this must exclude 0, not every id that isn't positive.
+  const validSubs = submissions.filter(sub => getSubmissionKoboId(sub) !== 0);
 
   let seen = getNotifSeenSignatures();
   if (seen === null) {
@@ -68,37 +77,57 @@ function renderNotifications() {
     setNotifSeenSignatures(seen);
   }
 
-  const newOnes = validSubs
-    .filter(sub => !seen.has(getSubmissionSignature(sub)))
-    .sort((a, b) => {
-      const aTime = a["_edited_at"] || a["_submission_time"] || "";
-      const bTime = b["_edited_at"] || b["_submission_time"] || "";
-      return bTime.localeCompare(aTime) || (getSubmissionKoboId(b) - getSubmissionKoboId(a));
-    });
+  const sorted = [...validSubs].sort((a, b) => {
+    const aTime = a["_edited_at"] || a["_submission_time"] || "";
+    const bTime = b["_edited_at"] || b["_submission_time"] || "";
+    return bTime.localeCompare(aTime) || (getSubmissionKoboId(b) - getSubmissionKoboId(a));
+  });
 
-  if (newOnes.length > 0) {
+  const unreadCount = sorted.filter(sub => !seen.has(getSubmissionSignature(sub))).length;
+  if (unreadCount > 0) {
     countEl.hidden = false;
-    countEl.textContent = newOnes.length > 99 ? "99+" : String(newOnes.length);
+    countEl.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
   } else {
     countEl.hidden = true;
   }
 
-  listEl.innerHTML = newOnes.length
-    ? newOnes.map(renderNotifItem).join("")
-    : '<div class="notif-empty">No new submissions</div>';
+  const visible = sorted.slice(0, NOTIF_LIST_LIMIT);
+  listEl.innerHTML = visible.length
+    ? visible.map(sub => renderNotifItem(sub, !seen.has(getSubmissionSignature(sub)))).join("")
+    : '<div class="notif-empty">No submissions yet</div>';
 }
 
 function markAllNotificationsRead() {
   const submissions = typeof ALL_SUBMISSIONS !== "undefined" ? ALL_SUBMISSIONS : [];
-  const validSubs = submissions.filter(sub => getSubmissionKoboId(sub) > 0);
+  const validSubs = submissions.filter(sub => getSubmissionKoboId(sub) !== 0);
   setNotifSeenSignatures(new Set(validSubs.map(getSubmissionSignature)));
   renderNotifications();
+}
+
+// Clicking one notification only marks that submission's own signature as
+// seen (not the whole list), then switches to the Ranger Surveys tab and
+// opens the same submission-detail popup used from that tab's table, so
+// "click a notification, land on the survey" works the same way it does
+// on the ranger side.
+async function openNotificationSubmission(koboId) {
+  const submissions = typeof ALL_SUBMISSIONS !== "undefined" ? ALL_SUBMISSIONS : [];
+  const sub = submissions.find(s => getSubmissionKoboId(s) === koboId);
+  if (!sub) return;
+
+  const seen = getNotifSeenSignatures() || new Set();
+  seen.add(getSubmissionSignature(sub));
+  setNotifSeenSignatures(seen);
+  renderNotifications();
+
+  if (typeof openSurveys === "function") await openSurveys();
+  if (typeof openSubmissionDetailModal === "function") openSubmissionDetailModal(sub);
 }
 
 function bindNotifications() {
   const wrap = document.getElementById("notifWrap");
   const btn = document.getElementById("notifBtn");
   const panel = document.getElementById("notifPanel");
+  const listEl = document.getElementById("notifList");
   const clearBtn = document.getElementById("notifClearBtn");
   if (!wrap || !btn || !panel) return;
 
@@ -118,6 +147,16 @@ function bindNotifications() {
   });
 
   if (clearBtn) clearBtn.addEventListener("click", markAllNotificationsRead);
+
+  if (listEl) {
+    listEl.addEventListener("click", (e) => {
+      const item = e.target.closest(".notif-item[data-kobo-id]");
+      if (!item) return;
+      wrap.classList.remove("open");
+      btn.setAttribute("aria-expanded", "false");
+      openNotificationSubmission(parseInt(item.dataset.koboId, 10));
+    });
+  }
 }
 
 bindNotifications();

@@ -24,6 +24,10 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
       <span class="dashboard-header-inspection-value" id="statLatestInspectionValue">&mdash;</span>
     </div>
   </div>
+  <button type="button" class="dashboard-header-export-btn" id="dashboardExportBtn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="11" x2="12" y2="17"/><polyline points="9.5 14.5 12 17 14.5 14.5"/></svg>
+    <span>Export Report</span>
+  </button>
 </div>
 
 <p class="dashboard-section-title">Zone Health Overview</p>
@@ -65,7 +69,20 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     <span class="dashboard-stat-hint" id="statDegradedHint"></span>
   </div>
 
+  <div class="dashboard-stat-card accent-moderate">
+    <div class="dashboard-stat-icon icon-moderate">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </div>
+    <span class="dashboard-stat-label">Overdue for Inspection</span>
+    <span class="dashboard-stat-value amber" id="statOverdueValue">&mdash;</span>
+    <span class="dashboard-stat-hint" id="statOverdueHint"></span>
+  </div>
+
 </div>
+
+<p class="dashboard-section-title">Threats &amp; Alerts</p>
+<div class="alert-card-list" id="alertsCardList"></div>
+<div class="dashboard-empty" id="alertsEmpty" hidden>No threats or alerts reported.</div>
 
 <div class="dashboard-charts-row dashboard-charts-row-with-date">
   <div class="chart-card dashboard-date-picker">
@@ -85,26 +102,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
   </div>
 </div>
 
-<p class="dashboard-section-title">This Week's Field Submissions</p>
-<div class="chart-card survey-log-panel">
-  <div class="week-summary-head" id="weekSummaryHead" hidden>
-    <span class="week-summary-range" id="weekSummaryRange"></span>
-    <span class="week-summary-count" id="weekSummaryCount"></span>
-  </div>
-  <div class="survey-log-table-wrap">
-    <table class="survey-log-table">
-      <thead>
-        <tr>
-          <th>Protected Area</th>
-          <th>Ranger</th>
-          <th>Trees Measured</th>
-          <th>Species</th>
-          <th>Aquafarm Nearby</th>
-        </tr>
-      </thead>
-      <tbody id="weekSummaryCards"></tbody>
-    </table>
-  </div>
-  <div class="dashboard-empty" id="weekSummaryEmpty" hidden>No field surveys gathered this week.</div>
-  <div class="dashboard-empty" id="noSurveyDatesEmpty" hidden>No field survey submissions recorded yet.</div>
+<div class="chart-card">
+  <p class="chart-card-title">Threats Over Time</p>
+  <div id="threatsOverTimeChart"></div>
 </div>

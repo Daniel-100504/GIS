@@ -210,11 +210,31 @@ button, input {
 }
 
 .notif-item {
+  display: block;
+  width: 100%;
+  text-align: left;
   padding: 11px 14px;
+  border: none;
   border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  transition: background 0.15s ease;
 }
 
+.notif-item:hover { background: var(--surface-alt); }
 .notif-item:last-child { border-bottom: none; }
+
+/* Facebook-style unread state — a tinted background and an accent bar mark
+   a notification as not-yet-opened; clicking it (which also opens the
+   submission) clears both, the same way Facebook's own list does. */
+.notif-item.unread {
+  background: var(--brand-50);
+  border-left-color: var(--brand-600);
+}
+
+.notif-item.unread:hover { background: #e4f3ec; }
 
 .notif-item-title {
   font-size: 0.8rem;
@@ -655,6 +675,10 @@ button, input {
   text-align: center;
 }
 
+.mangrove-form-modal .confirm-modal-actions {
+  margin-top: 18px;
+}
+
 .leaflet-editing-icon,
 .leaflet-div-icon.leaflet-editing-icon {
   opacity: 0 !important;
@@ -825,33 +849,6 @@ body.mangrove-editing-active .leaflet-editing-icon.mangrove-midpoint-icon {
 }
 
 .resizer:hover { background: var(--brand-150); }
-
-.btn-help-fab {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  border: none;
-  background: var(--brand-600);
-  color: #ffffff;
-  font-size: 20px;
-  font-weight: 700;
-  font-family: inherit;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow-md);
-  z-index: 950;
-  transition: background 0.15s ease, transform 0.15s ease;
-}
-
-.btn-help-fab:hover {
-  background: var(--brand-700);
-  transform: translateY(-2px);
-}
 
 .guide-section {
   margin-bottom: 28px;

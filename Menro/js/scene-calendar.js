@@ -222,10 +222,9 @@ renderSceneCalendar();
 
 syncSceneDateToToday();
 
-// Populate real satellite NDVI for the zone list/map popups on first load,
-// instead of waiting for the ranger to manually change the scene date.
-if (typeof syncAllZonesFromSatellite === "function") {
-    syncAllZonesFromSatellite(sceneDate.value || todayISO());
-}
+// NDVI is no longer fetched for every zone on page load — Copernicus takes
+// 4+ seconds per zone, so doing this for 30+ zones up front visibly stalled
+// the page. Each zone's NDVI is now fetched on demand, only when that zone
+// is actually opened (see ensureZoneNdviLoaded in map-core.js).
 
 setInterval(syncSceneDateToToday, 60 * 1000);

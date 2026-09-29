@@ -144,7 +144,7 @@ if (sideMenuBackdrop) sideMenuBackdrop.addEventListener("click", closeSideMenu);
 
 const menuMap        = document.getElementById("menuMap");
 const menuDashboard = document.getElementById("menuDashboard");
-const menuExport    = document.getElementById("menuExport");
+const menuSurveys   = document.getElementById("menuSurveys");
 const menuSignOut   = document.getElementById("menuSignOut");
 
 if (menuMap) {
@@ -161,17 +161,17 @@ if (menuDashboard) {
   });
 }
 
+if (menuSurveys) {
+  menuSurveys.addEventListener("click", () => {
+    closeSideMenu();
+    openSurveys();
+  });
+}
+
 const btnHelpGuide = document.getElementById("btnHelpGuide");
 if (btnHelpGuide) {
   btnHelpGuide.addEventListener("click", () => {
     openGuide();
-  });
-}
-
-if (menuExport) {
-  menuExport.addEventListener("click", () => {
-    closeSideMenu();
-    openExportReport();
   });
 }
 

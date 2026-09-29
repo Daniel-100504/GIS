@@ -23,10 +23,10 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
   <link rel="icon" href="../../assets/calatagan-seal.png"/>
 
         <link rel="stylesheet" href="../../assets/theme.css"/>
-        <link rel="stylesheet" href="../css/style.css?v=24"/>
+        <link rel="stylesheet" href="../css/style.css?v=27"/>
         <link rel="stylesheet" href="../css/right-panel.css?v=2"/>
-        <link rel="stylesheet" href="../css/side-menu.css?v=5"/>
-        <link rel="stylesheet" href="../css/Dashboard.css?v=12"/>
+        <link rel="stylesheet" href="../css/side-menu.css?v=7"/>
+        <link rel="stylesheet" href="../css/Dashboard.css?v=37"/>
 </head>
 
 <body>
@@ -49,13 +49,17 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
             AquaGuard
         </span>
 
-        <span class="topbar-sub">
-            Mangrove Monitoring System
-        </span>
-
     </div>
 
     <div class="topbar-right">
+
+        <button type="button" class="notif-btn" id="btnHelpGuide" aria-label="Open user guide">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+        </button>
 
         <div class="notif-wrap" id="notifWrap">
             <button type="button" class="notif-btn" id="notifBtn" aria-label="Notifications" aria-expanded="false">
@@ -139,17 +143,6 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
                 <span class="layer-tile-label">Mangroves</span>
             </label>
 
-            <label class="layer-tile">
-                <input type="checkbox" id="layerWatershedHazard" class="layer-tile-input" checked>
-                <span class="layer-tile-icon layer-tile-icon-fieldmap" aria-hidden="true">
-                    <span class="layer-tile-art"></span>
-                    <span class="layer-tile-badge">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                    </span>
-                </span>
-                <span class="layer-tile-label">Watershed Hazard</span>
-            </label>
-
         </div>
 
     </div>
@@ -160,10 +153,6 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     <p class="map-legend-title">Area Type</p>
     <div class="map-legend-row"><span class="map-legend-dot" style="background:#8a2be2;"></span>Mangroves</div>
     <div class="map-legend-row"><span class="map-legend-dot" style="background:#ffd166;border:1.5px solid #b8860b;"></span>Protected Areas</div>
-    <p class="map-legend-title" style="margin-top:10px;">Hazard Severity</p>
-    <div class="map-legend-row"><span class="map-legend-dot" style="background:#84cc16;"></span>Low</div>
-    <div class="map-legend-row"><span class="map-legend-dot" style="background:#fb923c;"></span>Moderate</div>
-    <div class="map-legend-row"><span class="map-legend-dot" style="background:#dc2626;"></span>High</div>
 </div>
 
 </main>
@@ -179,11 +168,11 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 
     <div class="settings-group">
 
-        <label class="settings-label">
+        <span class="settings-label">
 
             Scene Date
 
-        </label>
+        </span>
 
 <input type="hidden" id="sceneDate">
 
@@ -295,21 +284,20 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     <p class="confirm-modal-text" id="mangroveNameModalText">Give the area you just drew a short name so it can be identified later.</p>
 
     <label class="mangrove-field-label">
+      Name
+      <input type="text" id="mangroveNameInput" class="modal-text-input" placeholder="e.g. Barangay 3 Pob. mangrove patch" autocomplete="off">
+    </label>
+    <div class="mangrove-field-error" id="mangroveNameFieldError" hidden>This is a required field</div>
+
+    <label class="mangrove-field-label">
       Category
     <select id="mangroveCategorySelect" class="modal-text-input">
       <option value="">Select category…</option>
       <option value="mangrove">Mangrove Forest Area</option>
       <option value="protected_area">Protected Area</option>
-      <option value="watershed_hazard">Watershed Hazard</option>
     </select>
     </label>
     <div class="mangrove-field-error" id="mangroveCategoryFieldError" hidden>This is a required field</div>
-
-    <label class="mangrove-field-label">
-      Name
-      <input type="text" id="mangroveNameInput" class="modal-text-input" placeholder="e.g. Barangay 3 Pob. mangrove patch" autocomplete="off">
-    </label>
-    <div class="mangrove-field-error" id="mangroveNameFieldError" hidden>This is a required field</div>
 
     <label class="mangrove-field-label">
       Barangay
@@ -343,35 +331,6 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     </select>
     </label>
     <div class="mangrove-field-error" id="mangroveBarangayFieldError" hidden>This is a required field</div>
-
-    <div id="mangroveHazardFields" hidden>
-      <label class="mangrove-field-label">
-        Hazard Type
-        <select id="mangroveHazardTypeSelect" class="modal-text-input">
-          <option value="">Select hazard type…</option>
-          <option value="illegal_cutting">Illegal Cutting/Logging</option>
-          <option value="aquaculture_conversion">Aquaculture/Fishpond Conversion</option>
-          <option value="siltation">Siltation/Sedimentation</option>
-          <option value="pollution">Pollution/Runoff</option>
-          <option value="erosion">Coastal Erosion</option>
-          <option value="land_reclamation">Land Reclamation/Development</option>
-          <option value="illegal_dumping">Illegal Dumping</option>
-          <option value="other">Other</option>
-        </select>
-      </label>
-      <div class="mangrove-field-error" id="mangroveHazardTypeFieldError" hidden>This is a required field</div>
-
-      <label class="mangrove-field-label">
-        Severity
-        <select id="mangroveSeveritySelect" class="modal-text-input">
-          <option value="">Select severity…</option>
-          <option value="low">Low</option>
-          <option value="moderate">Moderate</option>
-          <option value="high">High</option>
-        </select>
-      </label>
-      <div class="mangrove-field-error" id="mangroveSeverityFieldError" hidden>This is a required field</div>
-    </div>
 
     <div id="mangroveNameErrorMsg" class="mangrove-form-error" role="alert" aria-live="polite" hidden></div>
 
@@ -437,7 +396,21 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </div>
           <div class="guide-text">
             <h3>Dashboard</h3>
-            <p>Open <strong>Dashboard</strong> from the menu for a summary of zone health, NDVI, and surveys.</p>
+            <p>Open <strong>Dashboard</strong> from the menu for a summary of zone health, NDVI, and surveys. The <strong>Overdue for Inspection</strong> card counts zones that have never been surveyed or haven't been checked in the last 30 days.</p>
+          </div>
+        </div>
+
+        <div class="guide-item">
+          <div class="guide-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <path d="m9 15 2 2 4-4"/>
+            </svg>
+          </div>
+          <div class="guide-text">
+            <h3>Ranger Surveys</h3>
+            <p>Open <strong>Ranger Surveys</strong> from the menu to review every field submission in one place. Use the All / Pending / Approved / Needs Revision tabs to filter, search by zone or ranger name, and click a column header to sort by it. Click a row to open its full details, and Approve or Reject from there. Clicking a survey notification jumps straight to this tab and opens that submission.</p>
           </div>
         </div>
 
@@ -482,7 +455,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </div>
           <div class="guide-text">
             <h3>Layers</h3>
-            <p>Hover over the <strong>Layers</strong> button (bottom-left of the map) to toggle Sentinel-2 imagery, a colorized NDVI overlay, Mangroves, and Watershed Hazard shapes on or off independently. Click the button itself to switch the base map between <strong>Map</strong> and <strong>Satellite</strong> view.</p>
+            <p>Hover over the <strong>Layers</strong> button (bottom-left of the map) to toggle Sentinel-2 imagery, a colorized NDVI overlay, and Mangroves on or off independently. Click the button itself to switch the base map between <strong>Map</strong> and <strong>Satellite</strong> view.</p>
           </div>
         </div>
 
@@ -561,7 +534,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </div>
           <div class="guide-text">
             <h3>Export Report</h3>
-            <p>Choose <strong>Export Field Survey Report</strong> from the menu to download a PDF. Each field visit is exported as its own Annual Monitoring Data Sheet: Date, Protected Area, Area, and MPA Manager, followed by a tree-by-tree measurement table, matching MENRO's official paper form.</p>
+            <p>Click <strong>Export Report</strong> on the Dashboard to download a PDF. Each field visit is exported as its own Annual Monitoring Data Sheet: Date, Protected Area, Area, and MPA Manager, followed by a tree-by-tree measurement table, matching MENRO's official paper form.</p>
           </div>
         </div>
 
@@ -579,6 +552,99 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
         </div>
       </div>
 
+    </div>
+
+  </div>
+
+</div>
+
+<div class="dashboard-overlay" id="rangerSubmissionsOverlay">
+
+  <div class="dashboard-modal">
+
+    <div class="dashboard-modal-header">
+      <div>
+        <h2 id="rangerSubmissionsTitle">Ranger</h2>
+        <p class="dashboard-modal-sub" id="rangerSubmissionsSub">All field survey submissions</p>
+      </div>
+      <button class="dashboard-close" id="btnCloseRangerSubmissions" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="dashboard-modal-body">
+      <div class="survey-log-table-wrap">
+        <table class="survey-log-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Protected Area</th>
+              <th class="cell-center">Trees Measured</th>
+              <th>Species</th>
+              <th class="cell-center">Aquafarm Nearby</th>
+              <th class="cell-center">Status</th>
+            </tr>
+          </thead>
+          <tbody id="rangerSubmissionsBody"></tbody>
+        </table>
+      </div>
+      <div class="dashboard-empty" id="rangerSubmissionsEmpty" hidden>No submissions found for this ranger.</div>
+    </div>
+
+  </div>
+
+</div>
+
+<div class="dashboard-overlay" id="submissionDetailOverlay">
+
+  <div class="dashboard-modal view-modal">
+
+    <div class="dashboard-modal-header view-modal-header">
+      <div>
+        <h2>Field submission details</h2>
+        <p class="dashboard-modal-sub" id="submissionDetailSub">—</p>
+      </div>
+      <div class="view-modal-header-right">
+        <span class="threat-tag" id="submissionDetailBadge">—</span>
+        <button class="dashboard-close" id="btnCloseSubmissionDetail" aria-label="Close">&times;</button>
+      </div>
+    </div>
+
+    <div class="dashboard-modal-body view-body" id="submissionDetailBody"></div>
+
+    <div class="submission-detail-footer">
+      <div class="submission-detail-reject-panel" id="rejectNotesPanel" hidden>
+        <textarea class="reject-notes-input" id="rejectNotesInput" rows="2" placeholder="Add a note for the ranger (optional)"></textarea>
+        <div class="submission-detail-actions">
+          <button type="button" class="btn-confirm-cancel" id="btnCancelReject">Cancel</button>
+          <button type="button" class="btn-confirm-danger" id="btnConfirmReject">Confirm Rejection</button>
+        </div>
+      </div>
+      <div class="submission-detail-footer-main" id="submissionDetailFooterMain">
+        <span class="submission-detail-approval" id="submissionDetailApproval">—</span>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<div class="dashboard-overlay" id="confirmReviewOverlay">
+
+  <div class="confirm-modal">
+
+    <button class="confirm-modal-close" id="btnCloseConfirmReview" aria-label="Close">&times;</button>
+
+    <div class="confirm-modal-icon" id="confirmReviewIcon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="confirmReviewIconSvg">
+        <path d="M20 6 9 17l-5-5"/>
+      </svg>
+    </div>
+
+    <h2 class="confirm-modal-title" id="confirmReviewTitle">—</h2>
+    <p class="confirm-modal-text" id="confirmReviewText">—</p>
+
+    <div class="confirm-modal-actions">
+      <button type="button" class="btn-confirm-cancel" id="btnCancelConfirmReview">Cancel</button>
+      <button type="button" class="btn-confirm-primary" id="btnConfirmReview">Confirm</button>
     </div>
 
   </div>
@@ -662,6 +728,14 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 
 </section>
 
+<section class="dashboard-view" id="surveysView">
+
+  <div class="dashboard-view-inner" id="surveysBody">
+
+  </div>
+
+</section>
+
 <div class="side-menu-backdrop" id="sideMenuBackdrop"></div>
 
 <aside class="side-menu" id="sideMenu">
@@ -699,16 +773,15 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
       <span>Dashboard</span>
     </button>
 
-    <button class="side-menu-item" id="menuExport">
+    <button class="side-menu-item" id="menuSurveys">
       <span class="side-menu-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
           <polyline points="14 2 14 8 20 8"/>
-          <line x1="12" y1="11" x2="12" y2="17"/>
-          <polyline points="9.5 14.5 12 17 14.5 14.5"/>
+          <path d="m9 15 2 2 4-4"/>
         </svg>
       </span>
-      <span>Export Field Survey Report</span>
+      <span>Ranger Surveys</span>
     </button>
 
   </div>
@@ -736,8 +809,6 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 
 </aside>
 
-<button class="btn-help-fab" id="btnHelpGuide" type="button" aria-label="Open user guide">?</button>
-
 <div class="mangrove-edit-panel" id="verifiedEditPanel" hidden>
   <div class="mangrove-edit-panel-title">Editing shape</div>
   <p class="mangrove-edit-panel-hint">Drag the shape's corner points on the map to correct its boundary. Update the name below if needed.</p>
@@ -754,18 +825,17 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
   <p class="mangrove-edit-panel-hint">Update the name, barangay, or category below.</p>
 
   <label class="mangrove-field-label">
+    Name
+    <input type="text" id="mangroveQuickEditNameInput" class="modal-text-input" autocomplete="off">
+  </label>
+
+  <label class="mangrove-field-label">
     Category
     <select id="mangroveQuickEditCategorySelect" class="modal-text-input">
       <option value="">Select category…</option>
       <option value="mangrove">Mangrove Forest Area</option>
       <option value="protected_area">Protected Area</option>
-      <option value="watershed_hazard">Watershed Hazard</option>
     </select>
-  </label>
-
-  <label class="mangrove-field-label">
-    Name
-    <input type="text" id="mangroveQuickEditNameInput" class="modal-text-input" autocomplete="off">
   </label>
 
   <label class="mangrove-field-label">
@@ -800,33 +870,6 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     </select>
   </label>
 
-  <div id="mangroveQuickEditHazardFields" hidden>
-    <label class="mangrove-field-label">
-      Hazard Type
-      <select id="mangroveQuickEditHazardTypeSelect" class="modal-text-input">
-        <option value="">Select hazard type…</option>
-        <option value="illegal_cutting">Illegal Cutting/Logging</option>
-        <option value="aquaculture_conversion">Aquaculture/Fishpond Conversion</option>
-        <option value="siltation">Siltation/Sedimentation</option>
-        <option value="pollution">Pollution/Runoff</option>
-        <option value="erosion">Coastal Erosion</option>
-        <option value="land_reclamation">Land Reclamation/Development</option>
-        <option value="illegal_dumping">Illegal Dumping</option>
-        <option value="other">Other</option>
-      </select>
-    </label>
-
-    <label class="mangrove-field-label">
-      Severity
-      <select id="mangroveQuickEditSeveritySelect" class="modal-text-input">
-        <option value="">Select severity…</option>
-        <option value="low">Low</option>
-        <option value="moderate">Moderate</option>
-        <option value="high">High</option>
-      </select>
-    </label>
-  </div>
-
   <div class="mangrove-edit-panel-actions">
     <button type="button" class="btn-confirm-cancel" id="btnCancelMangroveQuickEdit">Cancel</button>
     <button type="button" class="btn-confirm-primary" id="btnSaveMangroveQuickEdit">Save</button>
@@ -839,16 +882,16 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/5.0.8/jspdf.plugin.autotable.min.js"></script>
 <script src="../../assets/utils.js"></script>
-<script src="../API/zones-data.php?v=2"></script>
-<script src="../js/map-core.js?v=9"></script>
-<script src="../js/mangrove-draw.js?v=21"></script>
+<script src="../API/zones-data.php?v=3"></script>
+<script src="../js/map-core.js?v=14"></script>
+<script src="../js/mangrove-draw.js?v=24"></script>
 <script src="../js/verified-layers-edit.js?v=3"></script>
-<script src="../js/zones-panel.js?v=6"></script>
-<script src="../js/scene-calendar.js?v=3"></script>
-<script src="../js/export-report.js?v=8"></script>
-<script src="../js/ui-chrome.js?v=2"></script>
-<script src="../js/Dashboard.js?v=15"></script>
-<script src="../js/notifications.js?v=7"></script>
+<script src="../js/zones-panel.js?v=7"></script>
+<script src="../js/scene-calendar.js?v=4"></script>
+<script src="../js/export-report.js?v=11"></script>
+<script src="../js/ui-chrome.js?v=6"></script>
+<script src="../js/Dashboard.js?v=45"></script>
+<script src="../js/notifications.js?v=10"></script>
 
 </body>
 </html>

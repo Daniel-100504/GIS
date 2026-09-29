@@ -1,30 +1,12 @@
 <?php
 
-// Serves the ZONES list (name, area, coordinates, protected area) straight
-// from the mangrove_zones database table, followed by the rest of the
-// zone/submission-handling script (connection status, aquafarm registry,
-// etc.), which lives in zones-data-body.js.
+// ZONES starts empty here and gets filled in on the client side, from the
+// real mangrove/protected areas in Supabase (see mangrove-draw.js's
+// loadMangroveAreas(), which pushes each one into this same ZONES array as
+// it loads). This file's other job is unconditional — it always serves the
+// rest of the zone/submission-handling script (connection status, aquafarm
+// registry, etc.), which lives in zones-data-body.js.
 header('Content-Type: application/javascript; charset=utf-8');
 
-require_once __DIR__ . '/../../Login/Database/db.php';
-
-$pdo = getDbConnection();
-$rows = $pdo->query(
-    "SELECT id, name, area_ha, lat, lng, partner FROM mangrove_zones ORDER BY name"
-)->fetchAll(PDO::FETCH_ASSOC);
-
-$zones = array_map(function ($row) {
-    return [
-        'id'      => $row['id'],
-        'name'    => $row['name'],
-        'area'    => $row['area_ha'] !== null ? (float) $row['area_ha'] : null,
-        'partner' => $row['partner'] ?: '—',
-        'ndvi'    => null,
-        'status'  => 'pending',
-        'lat'     => $row['lat'] !== null ? (float) $row['lat'] : null,
-        'lng'     => $row['lng'] !== null ? (float) $row['lng'] : null,
-    ];
-}, $rows);
-
-echo "const ZONES = " . json_encode($zones, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . ";\n\n";
+echo "const ZONES = [];\n\n";
 readfile(__DIR__ . '/../js/zones-data-body.js');

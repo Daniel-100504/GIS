@@ -14,6 +14,7 @@ session_write_close();
 
 require_once __DIR__ . '/../../Login/Database/db.php';
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/zone-lookup.php';
 
 // Sends a copy of the finished submission to Supabase — a plain data store
 // with no form or UI of its own, so the ranger never sees or interacts with
@@ -45,53 +46,6 @@ function backupToSupabase(array $record, int $localId) {
     curl_close($ch);
 }
 
-// Matches this submission's GPS point to the nearest field-mapped mangrove
-// or protected area, so it shows up attached to a zone on the map.
-function nearestMangroveAreaZone(PDO $pdo, float $lat, float $lng) {
-    $rows = $pdo->query(
-        "SELECT id, name, barangay, coordinates FROM mangrove_areas WHERE category IN ('mangrove', 'protected_area')"
-    )->fetchAll(PDO::FETCH_ASSOC);
-
-    $best = null;
-    $bestDist = null;
-
-    foreach ($rows as $row) {
-        $geo = json_decode($row['coordinates'], true);
-        $ring = $geo['coordinates'][0] ?? null;
-        if (!is_array($ring) || count($ring) === 0) continue;
-
-        $lngSum = 0;
-        $latSum = 0;
-        foreach ($ring as $point) {
-            $lngSum += $point[0];
-            $latSum += $point[1];
-        }
-        $centroidLng = $lngSum / count($ring);
-        $centroidLat = $latSum / count($ring);
-
-        $dist = haversineMeters($lat, $lng, $centroidLat, $centroidLng);
-        if ($bestDist === null || $dist < $bestDist) {
-            $bestDist = $dist;
-            $best = $row;
-        }
-    }
-
-    if ($best === null) return null;
-
-    return [
-        'zoneId'   => 'field-' . $best['id'],
-        'name'     => $best['name'],
-        'barangay' => $best['barangay'],
-    ];
-}
-
-function haversineMeters(float $lat1, float $lng1, float $lat2, float $lng2) {
-    $earthRadius = 6371000;
-    $dLat = deg2rad($lat2 - $lat1);
-    $dLng = deg2rad($lng2 - $lng1);
-    $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
-    return $earthRadius * 2 * atan2(sqrt($a), sqrt(1 - $a));
-}
 
 $lat = isset($_POST['lat']) && $_POST['lat'] !== '' ? floatval($_POST['lat']) : null;
 $lng = isset($_POST['lng']) && $_POST['lng'] !== '' ? floatval($_POST['lng']) : null;
@@ -146,16 +100,14 @@ if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
     }
 }
 
+$pdo = getDbConnection();
 if ($lat !== null && $lng !== null) {
-    $pdo = getDbConnection();
-    $zone = nearestMangroveAreaZone($pdo, $lat, $lng);
+    $zone = nearestMangroveAreaZone($lat, $lng);
     if ($zone !== null) {
         $record['_zone_id']       = $zone['zoneId'];
         $record['_zone_name']     = $zone['name'];
         $record['_zone_barangay'] = $zone['barangay'];
     }
-} else {
-    $pdo = getDbConnection();
 }
 
 // Kobo IDs are large positive integers, so a negative one can never collide —

@@ -2,7 +2,7 @@
 
 session_start();
 
-require_once __DIR__ . '/../../Login/Database/db.php';
+require_once __DIR__ . '/config.php';
 
 header('Content-Type: application/json');
 
@@ -18,16 +18,47 @@ function requireMenro() {
     }
 }
 
-const CATEGORIES = ['mangrove', 'protected_area', 'watershed_hazard'];
-const HAZARD_TYPES = ['illegal_cutting', 'aquaculture_conversion', 'siltation', 'pollution', 'erosion', 'land_reclamation', 'illegal_dumping', 'other'];
-const SEVERITY_LEVELS = ['low', 'moderate', 'high'];
+const CATEGORIES = ['mangrove', 'protected_area'];
 
-$pdo = getDbConnection();
+// Every mangrove/protected area shape now lives in Supabase (Postgres with
+// PostGIS), not the local database — this talks to it over Supabase's REST
+// API (PostgREST) using the server-side secret key, which bypasses Row
+// Level Security the same way the ranger_submissions backup already does.
+function supabaseRequest($method, $path, $body = null) {
+    $ch = curl_init(SUPABASE_URL . $path);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+    $headers = [
+        'apikey: ' . SUPABASE_SECRET_KEY,
+        'Authorization: Bearer ' . SUPABASE_SECRET_KEY,
+        'Content-Type: application/json',
+    ];
+    if ($method === 'POST') {
+        $headers[] = 'Prefer: return=representation';
+    }
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    if ($body !== null) {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
+    }
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($response === false) {
+        respond(['success' => false, 'error' => 'Could not reach the database.'], 502);
+    }
+    return ['code' => $httpCode, 'data' => json_decode($response, true)];
+}
+
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 if ($action === 'list') {
     requireMenro();
-    $rows = $pdo->query("SELECT id, name, barangay, category, hazard_type, severity, coordinates, created_by, created_at FROM mangrove_areas ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+    $result = supabaseRequest('GET', '/rest/v1/mangrove_areas_geojson?select=id,name,barangay,category,created_by,created_at,coordinates&order=created_at.desc');
+    if ($result['code'] >= 400) {
+        respond(['success' => false, 'error' => 'Could not load mangrove areas.'], 502);
+    }
 
     $features = array_map(function ($row) {
         return [
@@ -37,14 +68,12 @@ if ($action === 'list') {
                 'name'        => $row['name'],
                 'barangay'    => $row['barangay'],
                 'category'    => $row['category'],
-                'hazard_type' => $row['hazard_type'],
-                'severity'    => $row['severity'],
                 'created_by'  => $row['created_by'],
                 'created_at'  => $row['created_at'],
             ],
-            'geometry' => json_decode($row['coordinates'], true),
+            'geometry' => $row['coordinates'],
         ];
-    }, $rows);
+    }, $result['data'] ?? []);
 
     respond(['type' => 'FeatureCollection', 'features' => $features]);
 }
@@ -54,34 +83,28 @@ if ($action === 'create') {
     $name = trim($_POST['name'] ?? '');
     $barangay = trim($_POST['barangay'] ?? '');
     $category = trim($_POST['category'] ?? '');
-    $hazardType = trim($_POST['hazard_type'] ?? '');
-    $severity = trim($_POST['severity'] ?? '');
     $geometry = $_POST['geometry'] ?? '';
-    $isHazard = $category === 'watershed_hazard';
 
     if ($name === '' || $barangay === '' || $geometry === '' || !in_array($category, CATEGORIES, true)) {
         respond(['success' => false, 'error' => 'Name, barangay, category, and shape are required.'], 400);
-    }
-    if ($isHazard && (!in_array($hazardType, HAZARD_TYPES, true) || !in_array($severity, SEVERITY_LEVELS, true))) {
-        respond(['success' => false, 'error' => 'Hazard type and severity are required for a watershed hazard.'], 400);
     }
     json_decode($geometry);
     if (json_last_error() !== JSON_ERROR_NONE) {
         respond(['success' => false, 'error' => 'Invalid shape data.'], 400);
     }
 
-    $stmt = $pdo->prepare("INSERT INTO mangrove_areas (name, barangay, category, hazard_type, severity, coordinates, created_by) VALUES (:name, :barangay, :category, :hazardType, :severity, :coordinates, :createdBy)");
-    $stmt->execute([
-        'name'        => $name,
-        'barangay'    => $barangay,
-        'category'    => $category,
-        'hazardType'  => $isHazard ? $hazardType : null,
-        'severity'    => $isHazard ? $severity : null,
-        'coordinates' => $geometry,
-        'createdBy'   => $_SESSION['user']['username'],
+    $result = supabaseRequest('POST', '/rest/v1/rpc/create_mangrove_area', [
+        'in_name'       => $name,
+        'in_barangay'   => $barangay,
+        'in_category'   => $category,
+        'in_geometry'   => $geometry,
+        'in_created_by' => $_SESSION['user']['username'],
     ]);
+    if ($result['code'] >= 400) {
+        respond(['success' => false, 'error' => 'Could not save this mangrove area.'], 502);
+    }
 
-    respond(['success' => true, 'id' => $pdo->lastInsertId()]);
+    respond(['success' => true, 'id' => $result['data']]);
 }
 
 if ($action === 'update') {
@@ -91,41 +114,25 @@ if ($action === 'update') {
     $name = trim($_POST['name'] ?? '');
     $barangay = trim($_POST['barangay'] ?? '');
     $category = trim($_POST['category'] ?? '');
-    $hazardType = trim($_POST['hazard_type'] ?? '');
-    $severity = trim($_POST['severity'] ?? '');
 
     if (!ctype_digit((string) $id) || $geometry === '') {
         respond(['success' => false, 'error' => 'Invalid id or shape data.'], 400);
-    }
-    if ($category === 'watershed_hazard' && (!in_array($hazardType, HAZARD_TYPES, true) || !in_array($severity, SEVERITY_LEVELS, true))) {
-        respond(['success' => false, 'error' => 'Hazard type and severity are required for a watershed hazard.'], 400);
     }
     json_decode($geometry);
     if (json_last_error() !== JSON_ERROR_NONE) {
         respond(['success' => false, 'error' => 'Invalid shape data.'], 400);
     }
 
-    $fields = ['coordinates = :coordinates'];
-    $params = ['coordinates' => $geometry, 'id' => $id];
-    if ($name !== '') {
-        $fields[] = 'name = :name';
-        $params['name'] = $name;
+    $result = supabaseRequest('POST', '/rest/v1/rpc/update_mangrove_area', [
+        'in_id'       => (int) $id,
+        'in_name'     => $name,
+        'in_barangay' => $barangay,
+        'in_category' => in_array($category, CATEGORIES, true) ? $category : '',
+        'in_geometry' => $geometry,
+    ]);
+    if ($result['code'] >= 400) {
+        respond(['success' => false, 'error' => 'Could not save changes to this mangrove area.'], 502);
     }
-    if ($barangay !== '') {
-        $fields[] = 'barangay = :barangay';
-        $params['barangay'] = $barangay;
-    }
-    if (in_array($category, CATEGORIES, true)) {
-        $fields[] = 'category = :category';
-        $params['category'] = $category;
-        $fields[] = 'hazard_type = :hazardType';
-        $params['hazardType'] = $category === 'watershed_hazard' ? $hazardType : null;
-        $fields[] = 'severity = :severity';
-        $params['severity'] = $category === 'watershed_hazard' ? $severity : null;
-    }
-
-    $stmt = $pdo->prepare("UPDATE mangrove_areas SET " . implode(', ', $fields) . " WHERE id = :id");
-    $stmt->execute($params);
 
     respond(['success' => true]);
 }
@@ -138,8 +145,10 @@ if ($action === 'delete') {
         respond(['success' => false, 'error' => 'Invalid id.'], 400);
     }
 
-    $stmt = $pdo->prepare("DELETE FROM mangrove_areas WHERE id = :id");
-    $stmt->execute(['id' => $id]);
+    $result = supabaseRequest('POST', '/rest/v1/rpc/delete_mangrove_area', ['in_id' => (int) $id]);
+    if ($result['code'] >= 400) {
+        respond(['success' => false, 'error' => 'Could not delete this mangrove area.'], 502);
+    }
 
     respond(['success' => true]);
 }

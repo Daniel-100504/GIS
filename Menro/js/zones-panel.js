@@ -179,6 +179,8 @@ if (zoneSortEl) {
 
 function selectZone(zone){
 
+    if (typeof ensureZoneNdviLoaded === "function") ensureZoneNdviLoaded(zone);
+
     document.querySelectorAll(".zone-item").forEach(item=>{
 
         item.style.background=

@@ -2,7 +2,10 @@
 
 session_start();
 
-$allowedRoles = ['menro', 'admin'];
+// admin is account-management only — it can't even load the map page this
+// imagery feeds (satellite.php only lets 'menro' in), so it has no business
+// calling this endpoint directly either.
+$allowedRoles = ['menro'];
 if (!isset($_SESSION['user']) || !in_array($_SESSION['user']['role'], $allowedRoles, true)) {
     http_response_code(401);
     header('Content-Type: application/json');
@@ -12,6 +15,25 @@ if (!isset($_SESSION['user']) || !in_array($_SESSION['user']['role'], $allowedRo
 session_write_close();
 
 require_once __DIR__ . '/config.php';
+
+// The NDVI lookup is sent as a POST JSON body (not query-string params),
+// since a drawn zone's exact outline can be long enough to blow past the
+// server's max URL length if sent as a GET param. WMS tile requests still
+// come in as plain GET, so both are supported here via one accessor.
+$jsonBody = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $decoded = json_decode(file_get_contents('php://input'), true);
+    if (is_array($decoded)) {
+        $jsonBody = $decoded;
+    }
+}
+function reqParam($key, $default = null) {
+    global $jsonBody;
+    if ($jsonBody !== null && array_key_exists($key, $jsonBody)) {
+        return $jsonBody[$key];
+    }
+    return $_GET[$key] ?? $default;
+}
 
 define('CDSE_TOKEN_URL', 'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token');
 define('CDSE_WMS_BASE',  'https://sh.dataspace.copernicus.eu/ogc/wms/' . CDSE_INSTANCE_ID);
@@ -72,7 +94,7 @@ function getAccessToken() {
     return $data['access_token'];
 }
 
-$mode = $_GET['mode'] ?? 'wms';
+$mode = reqParam('mode', 'wms');
 
 if ($mode === 'wms') {
     $params = $_GET;
@@ -178,13 +200,14 @@ EVAL;
 if ($mode === 'ndvi') {
     header('Content-Type: application/json');
 
-    $lat    = floatval($_GET['lat'] ?? 0);
-    $lng    = floatval($_GET['lng'] ?? 0);
-    $radius = floatval($_GET['radius'] ?? 300); 
-    $to     = $_GET['date'] ?? date('Y-m-d');
+    $lat    = floatval(reqParam('lat', 0));
+    $lng    = floatval(reqParam('lng', 0));
+    $radius = floatval(reqParam('radius', 300));
+    $to     = reqParam('date', date('Y-m-d'));
     $windowDays = 30;
     $from   = date('Y-m-d', strtotime($to . " -{$windowDays} days"));
-    $maxcc  = isset($_GET['maxcc']) ? floatval($_GET['maxcc']) : 50;
+    $maxccRaw = reqParam('maxcc', null);
+    $maxcc  = ($maxccRaw !== null) ? floatval($maxccRaw) : 50;
 
     if (!$lat || !$lng) {
         http_response_code(400);
@@ -197,9 +220,13 @@ if ($mode === 'ndvi') {
     // area's center can include nearby water or mud, which swings the
     // reading in ways that have nothing to do with the mangrove itself.
     $geometry = null;
-    $geometryJson = $_GET['geometry'] ?? null;
-    if ($geometryJson) {
-        $decoded = json_decode($geometryJson, true);
+    $geometryRaw = reqParam('geometry', null);
+    if (is_array($geometryRaw) && isset($geometryRaw['type'], $geometryRaw['coordinates'])) {
+        // Sent as a real JSON object in the POST body.
+        $geometry = $geometryRaw;
+    } elseif (is_string($geometryRaw) && $geometryRaw !== '') {
+        // Legacy path: a JSON-encoded string in a GET query param.
+        $decoded = json_decode($geometryRaw, true);
         if (is_array($decoded) && isset($decoded['type'], $decoded['coordinates'])) {
             $geometry = $decoded;
         }

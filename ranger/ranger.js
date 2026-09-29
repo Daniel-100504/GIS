@@ -112,6 +112,7 @@ function closeGuide() {
 (function displayLoggedInUser() {
   const rangerName = document.getElementById('rangerName');
   const rangerAvatar = document.getElementById('rangerAvatar');
+  const welcomeBannerName = document.getElementById('welcomeBannerName');
   if (!rangerName || !rangerAvatar) return;
 
   try {
@@ -124,6 +125,7 @@ function closeGuide() {
 
     rangerName.textContent = displayName;
     rangerAvatar.textContent = displayName.charAt(0).toUpperCase();
+    if (welcomeBannerName) welcomeBannerName.textContent = displayName.split(' ')[0];
   } catch (err) {
     // Malformed or missing stored user info — leave the default placeholder as-is.
   }
@@ -199,8 +201,13 @@ function switchView(viewName, btn) {
     window.refreshAquaGuardSubmissions();
   }
 
-  if (viewName === 'submit' && typeof window.initSurveyGpsMap === 'function') {
-    window.initSurveyGpsMap();
+  if (viewName === 'submit') {
+    // Every plain visit to this tab starts a fresh, new submission — a
+    // caller that wants to edit an existing one instead (see
+    // bindEditDelegation below) calls startFieldSurveyEdit right after this,
+    // which re-arms edit mode on top of this reset.
+    if (typeof window.resetFieldSurveyEditMode === 'function') window.resetFieldSurveyEditMode();
+    if (typeof window.initSurveyGpsMap === 'function') window.initSurveyGpsMap();
   }
 }
 
@@ -468,11 +475,11 @@ function switchView(viewName, btn) {
       canopyWidth: parseCanopyValue(t['canopy_width_m']),
       canopyCoverDirect: parseCanopyValue(t['estimated_canopy_cover_']),
       molluskSpecies: t['mollusk_species_name'] || '',
-      molluskCount: parseCanopyValue(t['mollusk_count']) || 0,
+      molluskCount: parseCanopyValue(t['mollusk_count']),
       seedlingSpecies: t['seedling_species'] || t['seedling_species_name'] || '',
-      seedlingCount: parseCanopyValue(t['seedling_count']) || 0,
+      seedlingCount: parseCanopyValue(t['seedling_count']),
       saplingSpecies: t['sapling_species'] || t['sapling_species_name'] || '',
-      saplingCount: parseCanopyValue(t['sapling_count']) || 0,
+      saplingCount: parseCanopyValue(t['sapling_count']),
     };
   }
 
@@ -589,6 +596,8 @@ function switchView(viewName, btn) {
       status: deriveStatus(summary, healthAssessmentRaw),
       submittedBy: findField(flat, FIELD_CANDIDATES.rangerName) || '—',
       photos: collectPhotos(flat, record),
+      approvalStatus: flat['_approval_status'] || 'pending',
+      reviewNotes: flat['_review_notes'] || '',
       raw: record,
     };
   }
@@ -602,28 +611,22 @@ function switchView(viewName, btn) {
     const totalEl = document.getElementById('stat-total');
     if (totalEl) totalEl.textContent = String(submissions.length);
 
-    const sorted = [...submissions].sort((a, b) => {
-      const at = a.date ? a.date.getTime() : 0;
-      const bt = b.date ? b.date.getTime() : 0;
-      return bt - at;
-    });
-    const latest = sorted[0];
-
-    const lastDateEl = document.getElementById('stat-last-date');
-    const lastBrgyEl = document.getElementById('stat-last-barangay');
-    if (latest) {
-      if (lastDateEl) lastDateEl.textContent = formatDate(latest.date);
-      if (lastBrgyEl) lastBrgyEl.textContent = latest.barangay;
-    } else {
-      if (lastDateEl) lastDateEl.textContent = 'No data';
-      if (lastBrgyEl) lastBrgyEl.textContent = '\u00A0';
+    const bannerSubEl = document.getElementById('welcomeBannerSub');
+    if (bannerSubEl) {
+      bannerSubEl.textContent = submissions.length > 0
+        ? `You've submitted ${submissions.length} field ${submissions.length === 1 ? 'survey' : 'surveys'} so far.`
+        : "You haven't submitted a field survey yet.";
     }
 
-    const areasSet = new Set(submissions.map(s => s.area).filter(a => a && a !== '—'));
-    const areasEl = document.getElementById('stat-areas');
-    const areasMetaEl = document.getElementById('stat-areas-meta');
-    if (areasEl) areasEl.textContent = String(areasSet.size);
-    if (areasMetaEl) areasMetaEl.textContent = `of ${AQUAGUARD_CONFIG.TOTAL_PROTECTED_AREAS} protected areas`;
+    const counts = { pending: 0, approved: 0, rejected: 0 };
+    submissions.forEach(s => {
+      const key = s.approvalStatus || 'pending';
+      if (counts[key] !== undefined) counts[key] += 1;
+    });
+    const setCount = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = String(n); };
+    setCount('dash-pending-count', counts.pending);
+    setCount('dash-approved-count', counts.approved);
+    setCount('dash-rejected-count', counts.rejected);
   }
 
   function renderRecentSubmissions(submissions) {
@@ -693,36 +696,54 @@ function switchView(viewName, btn) {
     }
 
     const sorted = [...submissions].sort((a, b) => {
-      const at = a.date ? a.date.getTime() : 0;
-      const bt = b.date ? b.date.getTime() : 0;
-      return bt - at;
+      const av = sortValue(a, sortState.key);
+      const bv = sortValue(b, sortState.key);
+      const cmp = typeof av === 'string' ? av.localeCompare(bv) : av - bv;
+      return sortState.dir === 'asc' ? cmp : -cmp;
     });
+
+    updateSortHeaderIndicators();
 
     tbody.innerHTML = sorted.map(s => {
       const badge = statusBadge(s.status);
-      const canopyText = String(s.summary.count);
-      const editBtn = s.koboId
-        ? `<button class="row-edit-btn" data-edit-id="${escapeHtml(String(s.koboId))}" aria-label="Edit submission">
+      const threatsText = s.observedThreats ? prettifyLabel(s.observedThreats) : 'None';
+      const isLocked = s.approvalStatus === 'approved';
+      const editBtn = !s.koboId
+        ? ''
+        : isLocked
+        ? `<button class="row-edit-btn row-edit-btn-locked" disabled aria-label="Approved submissions can't be edited" title="Approved submissions can't be edited. Contact MENRO if a correction is needed.">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+             </svg>
+           </button>`
+        : `<button class="row-edit-btn" data-edit-id="${escapeHtml(String(s.koboId))}" aria-label="Edit submission">
              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
              </svg>
-           </button>`
-        : '';
-      const deleteBtn = s.koboId
-        ? `<button class="row-delete-btn" data-delete-id="${escapeHtml(String(s.koboId))}" aria-label="Delete submission">
+           </button>`;
+      const deleteBtn = !s.koboId
+        ? '—'
+        : isLocked
+        ? `<button class="row-delete-btn row-delete-btn-locked" disabled aria-label="Approved submissions can't be deleted" title="Approved submissions can't be deleted. Contact MENRO if a correction is needed.">
              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                <polyline points="3 6 5 6 21 6" />
                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
              </svg>
            </button>`
-        : '—';
+        : `<button class="row-delete-btn" data-delete-id="${escapeHtml(String(s.koboId))}" aria-label="Delete submission">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+               <polyline points="3 6 5 6 21 6" />
+               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+             </svg>
+           </button>`;
       return `
         <tr class="${s.koboId ? 'row-clickable' : ''}"${s.koboId ? ` data-view-id="${escapeHtml(String(s.koboId))}"` : ''}>
           <td class="cell-nowrap" data-label="Date">${formatDate(s.date)}</td>
+          <td class="cell-truncate" data-label="Mangroves" title="${escapeHtml(s.areaRaw || s.area)}">${escapeHtml(s.area)}</td>
           <td data-label="Barangay">${escapeHtml(s.barangay)}</td>
-          <td class="cell-truncate" data-label="Protected Area" title="${escapeHtml(s.areaRaw || s.area)}">${escapeHtml(s.area)}</td>
-          <td class="cell-center cell-nowrap" data-label="Trees Recorded">${canopyText}</td>
+          <td class="cell-center" data-label="Observed Threats">${escapeHtml(threatsText)}</td>
           <td class="cell-center" data-label="Aquafarm Nearby"><span class="wq ${s.water.cls}">${escapeHtml(String(s.water.label))}</span></td>
           <td class="cell-center" data-label="Status"><span class="badge ${badge.badgeCls}">${badge.label}</span></td>
           <td class="cell-center" data-label="Actions">${editBtn}${deleteBtn}</td>
@@ -752,33 +773,71 @@ function switchView(viewName, btn) {
   let currentSubmissions = [];
   let pendingDeleteId = null;
 
+  // Newest-first by default, same as before this became sortable.
+  const sortState = { key: 'date', dir: 'desc' };
+  const SORT_STATUS_RANK = { healthy: 0, moderate: 1, degraded: 2, pending: 3 };
+
+  function sortValue(s, key) {
+    switch (key) {
+      case 'date':     return s.date ? s.date.getTime() : 0;
+      case 'barangay': return s.barangay || '';
+      case 'area':     return s.area || '';
+      case 'threats':  return s.observedThreats || '';
+      case 'aquafarm': return s.water.label || '';
+      case 'status':   return SORT_STATUS_RANK[s.status] ?? 99;
+      default:         return 0;
+    }
+  }
+
+  function updateSortHeaderIndicators() {
+    document.querySelectorAll('.history-table th[data-sort-key]').forEach(th => {
+      const isActive = th.getAttribute('data-sort-key') === sortState.key;
+      th.classList.toggle('sort-active', isActive);
+      th.classList.toggle('sort-asc', isActive && sortState.dir === 'asc');
+      th.classList.toggle('sort-desc', isActive && sortState.dir === 'desc');
+    });
+  }
+
+  function bindSortableHeaders() {
+    document.querySelectorAll('.history-table th[data-sort-key]').forEach(th => {
+      const btn = th.querySelector('.sort-th-btn');
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        const key = th.getAttribute('data-sort-key');
+        if (sortState.key === key) {
+          sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortState.key = key;
+          sortState.dir = 'asc';
+        }
+        renderHistoryTable(getFilteredSubmissions(), currentSubmissions.length);
+      });
+    });
+    updateSortHeaderIndicators();
+  }
+
   const filterState = {
     search: '',
     barangay: '',
     area: '',
     status: '',
-    dateFrom: null,
-    dateTo: null,
   };
 
+  // Separate from filterState/Clear — this is which tab (All/Pending/
+  // Approved/Needs Revision) is selected, not a filter someone dials in.
+  let activeApprovalTab = 'all';
+
   function isFilterActive() {
-    return !!(filterState.search || filterState.barangay || filterState.area ||
-      filterState.status || filterState.dateFrom || filterState.dateTo);
+    return !!(filterState.search || filterState.barangay || filterState.area || filterState.status);
   }
 
   function getFilteredSubmissions() {
     const q = filterState.search.trim().toLowerCase();
     return currentSubmissions.filter(s => {
+      if (activeApprovalTab !== 'all' && s.approvalStatus !== activeApprovalTab) return false;
       if (filterState.barangay && s.barangay !== filterState.barangay) return false;
       if (filterState.area && s.area !== filterState.area) return false;
       if (filterState.status && s.status !== filterState.status) return false;
-
-      if (filterState.dateFrom) {
-        if (!s.date || isNaN(s.date.getTime()) || s.date < filterState.dateFrom) return false;
-      }
-      if (filterState.dateTo) {
-        if (!s.date || isNaN(s.date.getTime()) || s.date > filterState.dateTo) return false;
-      }
 
       if (q) {
         const haystack = `${s.barangay} ${s.area} ${s.transect}`.toLowerCase();
@@ -801,7 +860,7 @@ function switchView(viewName, btn) {
 
     barangaySelect.innerHTML = '<option value="">All barangays</option>' +
       barangays.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
-    areaSelect.innerHTML = '<option value="">All protected areas</option>' +
+    areaSelect.innerHTML = '<option value="">All mangroves</option>' +
       areas.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('');
 
     if (barangays.includes(prevBarangay)) barangaySelect.value = prevBarangay;
@@ -823,30 +882,18 @@ function switchView(viewName, btn) {
     filterState.barangay = '';
     filterState.area = '';
     filterState.status = '';
-    filterState.dateFrom = null;
-    filterState.dateTo = null;
 
     const searchInput = document.getElementById('filter-search');
     const barangaySelect = document.getElementById('filter-barangay');
     const areaSelect = document.getElementById('filter-area');
     const statusSelect = document.getElementById('filter-status');
-    const dateFromInput = document.getElementById('filter-date-from');
-    const dateToInput = document.getElementById('filter-date-to');
 
     if (searchInput) searchInput.value = '';
     if (barangaySelect) barangaySelect.value = '';
     if (areaSelect) areaSelect.value = '';
     if (statusSelect) statusSelect.value = '';
-    if (dateFromInput) dateFromInput.value = '';
-    if (dateToInput) dateToInput.value = '';
 
     applyFilters();
-  }
-
-  function parseDateInput(value) {
-    if (!value) return null;
-    const d = new Date(value + 'T00:00:00');
-    return isNaN(d.getTime()) ? null : d;
   }
 
   function bindFilterBar() {
@@ -854,8 +901,6 @@ function switchView(viewName, btn) {
     const barangaySelect = document.getElementById('filter-barangay');
     const areaSelect = document.getElementById('filter-area');
     const statusSelect = document.getElementById('filter-status');
-    const dateFromInput = document.getElementById('filter-date-from');
-    const dateToInput = document.getElementById('filter-date-to');
     const clearBtn = document.getElementById('filter-clear');
 
     let searchDebounce = null;
@@ -886,29 +931,54 @@ function switchView(viewName, btn) {
         applyFilters();
       });
     }
-    if (dateFromInput) {
-      dateFromInput.addEventListener('change', () => {
-        filterState.dateFrom = parseDateInput(dateFromInput.value);
-        applyFilters();
-      });
-    }
-    if (dateToInput) {
-      dateToInput.addEventListener('change', () => {
-        const d = parseDateInput(dateToInput.value);
-        if (d) d.setHours(23, 59, 59, 999);
-        filterState.dateTo = d;
-        applyFilters();
-      });
-    }
     if (clearBtn) clearBtn.addEventListener('click', clearFilters);
 
     updateClearButtonState();
+  }
+
+  function updateApprovalTabCounts(submissions) {
+    const counts = { all: submissions.length, pending: 0, approved: 0, rejected: 0 };
+    submissions.forEach(s => {
+      const key = s.approvalStatus || 'pending';
+      if (counts[key] !== undefined) counts[key] += 1;
+    });
+    const setCount = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = String(n); };
+    setCount('tabCountAll', counts.all);
+    setCount('tabCountPending', counts.pending);
+    setCount('tabCountApproved', counts.approved);
+    setCount('tabCountRejected', counts.rejected);
+  }
+
+  function bindApprovalTabs() {
+    document.querySelectorAll('.approval-tab').forEach(tab => {
+      if (tab.dataset.bound) return;
+      tab.dataset.bound = 'true';
+      tab.addEventListener('click', () => {
+        activeApprovalTab = tab.getAttribute('data-approval-tab');
+        document.querySelectorAll('.approval-tab').forEach(t => t.classList.toggle('active', t === tab));
+        applyFilters();
+      });
+    });
+  }
+
+  function bindApprovalSummaryCards() {
+    document.querySelectorAll('.stat-row [data-summary-tab]').forEach(card => {
+      if (card.dataset.bound) return;
+      card.dataset.bound = 'true';
+      card.addEventListener('click', () => {
+        const tabKey = card.getAttribute('data-summary-tab');
+        switchView('history', document.querySelector('[data-view=history]'));
+        const tabBtn = document.querySelector(`.approval-tab[data-approval-tab="${tabKey}"]`);
+        if (tabBtn) tabBtn.click();
+      });
+    });
   }
 
   function renderAll() {
     renderStats(currentSubmissions);
     renderRecentSubmissions(currentSubmissions);
     populateFilterOptions(currentSubmissions);
+    updateApprovalTabCounts(currentSubmissions);
     renderHistoryTable(getFilteredSubmissions(), currentSubmissions.length);
   }
 
@@ -941,137 +1011,54 @@ function switchView(viewName, btn) {
     return e.target.closest('[data-edit-id]');
   }
 
-  let pendingEditId = null;
-
-  function toggleAquafarmNameField() {
-    const select = document.getElementById('edit-aquafarm');
-    const field = document.getElementById('edit-aquafarm-name-field');
-    const input = document.getElementById('edit-aquafarm-name');
-    if (!select || !field || !input) return;
-    const isDischargeObserved = select.value === 'active___discharge_observed';
-    field.hidden = !isDischargeObserved;
-    if (!isDischargeObserved) input.value = '';
-  }
-
-  function setEditFieldValue(id, value) {
-    const el = document.getElementById(id);
-    if (el) el.value = value === null || value === undefined ? '' : value;
-  }
-
-  // Species fields pair a dropdown of common mangrove species with a plain
-  // text field for anything not on the list ("Other (specify)").
-  function setupSpeciesField(selectId, inputId) {
-    const select = document.getElementById(selectId);
-    const input = document.getElementById(inputId);
-    if (!select || !input) return;
-    select.addEventListener('change', () => {
-      if (select.value === '__other__') {
-        input.hidden = false;
-        input.value = '';
-        input.focus();
-      } else {
-        input.hidden = true;
-        input.value = select.value;
-      }
-    });
-  }
-
-  function populateSpeciesField(selectId, inputId, value) {
-    const select = document.getElementById(selectId);
-    const input = document.getElementById(inputId);
-    if (!select || !input) return;
-    const val = value || '';
-    const isKnown = val && Array.from(select.options).some(o => o.value === val);
-    if (isKnown) {
-      select.value = val;
-      input.hidden = true;
-      input.value = val;
-    } else if (val) {
-      select.value = '__other__';
-      input.hidden = false;
-      input.value = val;
-    } else {
-      select.value = '';
-      input.hidden = true;
-      input.value = '';
-    }
-  }
-
-  function openEditModal(submission) {
-    pendingEditId = submission.koboId;
-
-    document.getElementById('editModalSubtitle').textContent =
-      `${submission.barangay} · ${formatDate(submission.date)}`;
-
-    const tree = (submission.trees && submission.trees[0]) || {};
-    populateSpeciesField('edit-species-name-select', 'edit-species-name', tree.species !== '—' ? tree.species : '');
-    setEditFieldValue('edit-canopy-cover', tree.canopyCoverDirect);
-    setEditFieldValue('edit-canopy-length', tree.canopyLength);
-    setEditFieldValue('edit-canopy-width', tree.canopyWidth);
-    setEditFieldValue('edit-tree-count', submission.treeCount);
-    setEditFieldValue('edit-avg-height', tree.height);
-    setEditFieldValue('edit-gbh', tree.gbh);
-    populateSpeciesField('edit-seedling-species-select', 'edit-seedling-species', tree.seedlingSpecies);
-    setEditFieldValue('edit-seedling-count', tree.seedlingCount);
-    populateSpeciesField('edit-sapling-species-select', 'edit-sapling-species', tree.saplingSpecies);
-    setEditFieldValue('edit-sapling-count', tree.saplingCount);
-    setEditFieldValue('edit-health-assessment', submission.healthAssessmentRaw);
-    populateSpeciesField('edit-mollusk-species-select', 'edit-mollusk-species', tree.molluskSpecies);
-    setEditFieldValue('edit-mollusk-count', tree.molluskCount);
-    setEditFieldValue('edit-observed-threats', submission.observedThreats);
-    setEditFieldValue('edit-additional-notes', submission.additionalNotes);
-    setEditFieldValue('edit-water-color', submission.waterColor);
-    setEditFieldValue('edit-odor', submission.odor);
-    setEditFieldValue('edit-foam-discharge', submission.foamOrDischarge);
-
-    const aquafarmSelectVal = submission.aquafarmRaw || '';
-    setEditFieldValue('edit-aquafarm', aquafarmSelectVal);
-    // A submission can have a leftover aquafarm name saved from before it was
-    // switched away from "discharge observed" — don't show/re-save that stale value once it no longer applies.
-    setEditFieldValue('edit-aquafarm-name', aquafarmSelectVal === 'active___discharge_observed' ? submission.aquafarmName : '');
-    setEditFieldValue('edit-water-notes', submission.waterNotes);
-    toggleAquafarmNameField();
-
-    const photoInput = document.getElementById('edit-photo');
-    const photoPreview = document.getElementById('editPhotoPreview');
-    const photoLabel = document.getElementById('editPhotoLabel');
-    if (photoInput) photoInput.value = '';
-    if (photoLabel) photoLabel.textContent = EDIT_PHOTO_LABEL_DEFAULT;
-    const existingPhoto = submission.photos && submission.photos[0];
-    if (photoPreview) {
-      if (existingPhoto) {
-        photoPreview.src = existingPhoto.thumb;
-        photoPreview.hidden = false;
-      } else {
-        photoPreview.hidden = true;
-        photoPreview.removeAttribute('src');
-      }
-    }
-
-    const body = document.querySelector('#editOverlay .edit-body');
-    if (body) body.scrollTop = 0;
-
-    const overlay = document.getElementById('editOverlay');
-    if (overlay) overlay.classList.add('open');
-  }
-
   let pendingViewSubmission = null;
 
-  function viewRow(question, value) {
+  function viewField(label, value, opts = {}) {
     const isEmpty = value === null || value === undefined || value === '';
-    const display = isEmpty ? '—' : String(value);
-    return `<tr><td class="qa-question">${escapeHtml(question)}</td><td class="qa-response${isEmpty ? ' muted' : ''}">${escapeHtml(display)}</td></tr>`;
+    const display = isEmpty ? '—' : escapeHtml(String(value));
+    const cls = `view-field${opts.full ? ' view-field-full' : ''}`;
+    return `<div class="${cls}"><span class="view-label">${escapeHtml(label)}</span><span class="view-value${isEmpty ? ' muted' : ''}">${display}</span></div>`;
   }
 
-  function viewPhotoRow(photos) {
-    if (!photos || photos.length === 0) {
-      return `<tr><td class="qa-question">Photo documentation</td><td class="qa-response muted">—</td></tr>`;
-    }
+  // .view-grid is a 3-column grid — a row left with only 1 or 2 real fields
+  // in it (e.g. right before a full-width field, or at the end of the list)
+  // has no element in its last column(s), so nothing paints a border or
+  // background there and the grid's box looks cut off. Blank filler cells
+  // close out that row so every row looks like a complete, evenly bordered
+  // row regardless of how many real fields are in it.
+  function viewGridPad(fieldCount) {
+    const remainder = fieldCount % 3;
+    if (remainder === 0) return '';
+    return '<div class="view-field view-field-blank"></div>'.repeat(3 - remainder);
+  }
+
+  function viewNotesField(label, value) {
+    if (value === null || value === undefined || value === '') return viewField(label, null, { full: true });
+    return `<div class="view-field view-field-full"><span class="view-label">${escapeHtml(label)}</span><div class="view-notes">${escapeHtml(String(value))}</div></div>`;
+  }
+
+  function viewPhotoField(photos) {
+    if (!photos || photos.length === 0) return viewField('Photo documentation', null, { full: true });
     const thumbs = photos.map(p => `
       <a href="${escapeHtml(p.full)}" target="_blank" rel="noopener">
         <img class="view-photo-thumb" src="${escapeHtml(p.thumb)}" alt="Field photo" />
       </a>`).join('');
-    return `<tr><td class="qa-question">Photo documentation</td><td class="qa-response"><div class="view-photos">${thumbs}</div></td></tr>`;
+    return `<div class="view-field view-field-full"><span class="view-label">Photo documentation</span><div class="view-photos">${thumbs}</div></div>`;
+  }
+
+  // Same icon glyphs as the matching step in the Submit Field Data wizard,
+  // so a submission's summary here reads as the same 4 sections, not a
+  // differently-designed view of the same thing.
+  const VIEW_SECTION_ICONS = {
+    site: '<path d="M12 22s8-9 8-14a8 8 0 1 0-16 0c0 5 8 14 8 14Z"/><circle cx="12" cy="8" r="3"/>',
+    vegetation: '<path d="M12 22V12"/><path d="M12 12C12 6.5 8 4 4 4c0 5 2.5 8 8 8Z"/><path d="M12 12c0-4.5 3-7 8-7 0 4.5-2 7-8 7Z"/>',
+    fauna: '<circle cx="12" cy="12" r="4"/><path d="M12 8V4"/><path d="M12 20v-4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/>',
+    water: '<path d="M12 2.69s6 7.34 6 11.31a6 6 0 1 1-12 0c0-3.97 6-11.31 6-11.31z"/>',
+  };
+
+  function viewSection(icon, title, innerHtml) {
+    const iconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${VIEW_SECTION_ICONS[icon] || ''}</svg>`;
+    return `<div class="view-section"><div class="view-section-title"><span class="view-section-icon">${iconSvg}</span>${escapeHtml(title)}</div><div class="view-section-body">${innerHtml}</div></div>`;
   }
 
   function gpsDisplayFromRaw(raw) {
@@ -1085,6 +1072,17 @@ function switchView(viewName, btn) {
     pendingViewSubmission = submission;
     const badge = statusBadge(submission.status);
 
+    // Once MENRO has approved a submission it's the official record of what
+    // was reviewed — editing it afterward would silently invalidate that
+    // approval, so the edit path is locked instead of quietly allowing it.
+    const editFromViewBtn = document.getElementById('btnEditFromView');
+    if (editFromViewBtn) {
+      const isApproved = submission.approvalStatus === 'approved';
+      editFromViewBtn.disabled = isApproved;
+      editFromViewBtn.textContent = isApproved ? 'Approved — locked from editing' : 'Edit this submission';
+      editFromViewBtn.title = isApproved ? 'Approved submissions can\'t be edited. Contact MENRO if a correction is needed.' : '';
+    }
+
     document.getElementById('viewModalSubtitle').textContent =
       `${submission.barangay} · ${formatDate(submission.date)}`;
 
@@ -1094,58 +1092,71 @@ function switchView(viewName, btn) {
       statusEl.textContent = badge.label;
     }
 
-    const rows = [
-      `<tr class="qa-part-header"><td colspan="2">Section 1: Site Information</td></tr>`,
-      viewRow('Date of visit', formatDate(submission.date)),
-      viewRow('Nearest mangrove zone (auto-matched by GPS)', submission.area !== '—' ? submission.area : null),
-      viewRow('GPS location', gpsDisplayFromRaw(submission.raw || {})),
-      `<tr class="qa-part-header"><td colspan="2">Section 2: Vegetation</td></tr>`,
-    ];
+    const siteFields = [
+      viewField('Date of visit', formatDate(submission.date)),
+      viewField('Nearest mangrove zone', submission.area !== '—' ? submission.area : null),
+      viewField('GPS location', gpsDisplayFromRaw(submission.raw || {})),
+    ].join('');
 
+    let vegetationHtml = '';
     if (submission.trees && submission.trees.length > 0) {
       submission.trees.forEach((t, i) => {
-        if (submission.trees.length > 1) rows.push(`<tr class="qa-tree-header"><td colspan="2">Tree ${i + 1}</td></tr>`);
-        rows.push(viewRow('Species name', t.species !== '—' ? t.species : null));
-        rows.push(viewRow('Average tree height (m)', t.height));
-        rows.push(viewRow('GBH (cm)', t.gbh));
-        rows.push(viewRow('Canopy length (m)', t.canopyLength));
-        rows.push(viewRow('Canopy width (m)', t.canopyWidth));
-        rows.push(viewRow('Estimated canopy cover (%)', t.canopyCoverDirect));
-        rows.push(viewRow('Seedling species', t.seedlingSpecies || null));
-        rows.push(viewRow('Seedling count', t.seedlingCount));
-        rows.push(viewRow('Sapling species', t.saplingSpecies || null));
-        rows.push(viewRow('Sapling count', t.saplingCount));
+        if (submission.trees.length > 1) vegetationHtml += `<div class="view-tree-heading">Tree ${i + 1}</div>`;
+        const treeFields = [
+          viewField('Species name', t.species !== '—' ? t.species : null),
+          viewField('Average tree height (m)', t.height),
+          viewField('GBH (cm)', t.gbh),
+          viewField('Canopy length (m)', t.canopyLength),
+          viewField('Canopy width (m)', t.canopyWidth),
+          viewField('Estimated canopy cover (%)', t.canopyCoverDirect),
+          viewField('Seedling species', t.seedlingSpecies || null),
+          viewField('Seedling count', t.seedlingCount),
+          viewField('Sapling species', t.saplingSpecies || null),
+          viewField('Sapling count', t.saplingCount),
+        ];
+        vegetationHtml += `<div class="view-grid">${treeFields.join('')}${viewGridPad(treeFields.length)}</div>`;
       });
     } else {
-      rows.push(`<tr><td colspan="2" style="text-align:center; color:var(--ink-400); padding:12px;">No trees recorded for this visit.</td></tr>`);
+      vegetationHtml = `<div class="view-empty-note">No trees recorded for this visit.</div>`;
     }
-    rows.push(
-      viewRow('Tree count', submission.treeCount),
-      viewRow('Overall health assessment', submission.healthAssessmentRaw ? healthAssessmentLabel(submission.healthAssessmentRaw) : null),
-    );
+    const summaryFields = [
+      viewField('Tree count', submission.treeCount),
+      viewField('Overall health assessment', submission.healthAssessmentRaw ? healthAssessmentLabel(submission.healthAssessmentRaw) : null),
+    ];
+    vegetationHtml += `<div class="view-tree-heading">Summary</div><div class="view-grid">${summaryFields.join('')}${viewGridPad(summaryFields.length)}</div>`;
 
-    rows.push(
-      `<tr class="qa-part-header"><td colspan="2">Section 3: Fauna</td></tr>`,
-      viewRow('Mollusk species name', submission.trees[0] ? submission.trees[0].molluskSpecies || null : null),
-      viewRow('Mollusk count', submission.trees[0] ? submission.trees[0].molluskCount : null),
-      viewRow('Observed threats', submission.observedThreats ? prettifyLabel(submission.observedThreats) : null),
-      viewRow('Additional notes', submission.additionalNotes || null),
-      viewPhotoRow(submission.photos),
-      `<tr class="qa-part-header"><td colspan="2">Section 4: Water Quality</td></tr>`,
-      viewRow('Water color', submission.waterColor ? prettifyLabel(submission.waterColor) : null),
-      viewRow('Odor', submission.odor ? prettifyLabel(submission.odor) : null),
-      viewRow('Visible foam or discharge', submission.foamOrDischarge ? prettifyLabel(submission.foamOrDischarge) : null),
-      viewRow('Nearby aquafarm activity', submission.water.label !== 'No data' ? submission.water.label : null),
-      viewRow('Aquafarm name (if discharge observed)', isAquafarmActive(submission.aquafarmRaw) ? (submission.aquafarmName || null) : null),
-      viewRow('Water quality notes', submission.waterNotes || null),
-    );
+    const faunaFields = [
+      viewField('Mollusk species name', submission.trees[0] ? submission.trees[0].molluskSpecies || null : null),
+      viewField('Mollusk count', submission.trees[0] ? submission.trees[0].molluskCount : null),
+    ];
+    const faunaHtml = `<div class="view-grid">${faunaFields.join('')}${viewGridPad(faunaFields.length)}${viewField('Observed threats', submission.observedThreats ? prettifyLabel(submission.observedThreats) : null, { full: true })}</div>${viewNotesField('Additional notes', submission.additionalNotes || null)}${viewPhotoField(submission.photos)}`;
 
-    document.getElementById('viewModalBody').innerHTML = `
-      <div class="view-table-wrap">
-        <table class="view-qa-table">
-          <tbody>${rows.join('')}</tbody>
-        </table>
-      </div>`;
+    const waterFields = [
+      viewField('Water color', submission.waterColor ? prettifyLabel(submission.waterColor) : null),
+      viewField('Odor', submission.odor ? prettifyLabel(submission.odor) : null),
+      viewField('Visible foam or discharge', submission.foamOrDischarge ? prettifyLabel(submission.foamOrDischarge) : null),
+      viewField('Nearby aquafarm activity', submission.water.label !== 'No data' ? submission.water.label : null),
+      viewField('Aquafarm name (if discharge observed)', isAquafarmActive(submission.aquafarmRaw) ? (submission.aquafarmName || null) : null),
+    ];
+    const waterHtml = `<div class="view-grid">${waterFields.join('')}${viewGridPad(waterFields.length)}</div>${viewNotesField('Water quality notes', submission.waterNotes || null)}`;
+
+    // MENRO's rejection reason is otherwise invisible on this side — it only
+    // ever showed up once, briefly, in the notification dropdown — so a
+    // ranger revisiting an older "Needs Revision" submission had no way to
+    // recall what needed fixing without asking MENRO again.
+    const revisionNoticeHtml = submission.approvalStatus === 'rejected'
+      ? `<div class="view-revision-notice">
+           <strong>Needs Revision</strong>
+           <p>${submission.reviewNotes ? escapeHtml(submission.reviewNotes) : 'MENRO requested changes to this submission. Edit and resubmit when ready.'}</p>
+         </div>`
+      : '';
+
+    document.getElementById('viewModalBody').innerHTML =
+      revisionNoticeHtml +
+      viewSection('site', 'Site Information', `<div class="view-grid">${siteFields}</div>`) +
+      viewSection('vegetation', 'Vegetation', vegetationHtml) +
+      viewSection('fauna', 'Fauna', faunaHtml) +
+      viewSection('water', 'Water Quality', waterHtml);
 
     const overlay = document.getElementById('viewOverlay');
     if (overlay) overlay.classList.add('open');
@@ -1191,15 +1202,11 @@ function switchView(viewName, btn) {
       editFromViewBtn.addEventListener('click', () => {
         const submission = pendingViewSubmission;
         closeViewModal();
-        if (submission) openEditModal(submission);
+        if (!submission) return;
+        switchView('submit', document.querySelector('[data-view=submit]'));
+        if (typeof window.startFieldSurveyEdit === 'function') window.startFieldSurveyEdit(submission);
       });
     }
-  }
-
-  function closeEditModal() {
-    const overlay = document.getElementById('editOverlay');
-    if (overlay) overlay.classList.remove('open');
-    pendingEditId = null;
   }
 
   function bindEditDelegation() {
@@ -1213,104 +1220,9 @@ function switchView(viewName, btn) {
         const submissionId = target.getAttribute('data-edit-id');
         const submission = currentSubmissions.find(s => String(s.koboId) === String(submissionId));
         if (!submission) return;
-        openEditModal(submission);
+        switchView('submit', document.querySelector('[data-view=submit]'));
+        if (typeof window.startFieldSurveyEdit === 'function') window.startFieldSurveyEdit(submission);
       });
-    });
-  }
-
-  const EDIT_PHOTO_LABEL_DEFAULT = 'Take or choose a photo';
-
-  function bindEditModal() {
-    const overlay = document.getElementById('editOverlay');
-    const closeBtn = document.getElementById('btnCloseEdit');
-    const cancelBtn = document.getElementById('btnCancelEdit');
-    const form = document.getElementById('editForm');
-    if (!overlay || !form) return;
-
-    if (closeBtn) closeBtn.addEventListener('click', closeEditModal);
-    if (cancelBtn) cancelBtn.addEventListener('click', closeEditModal);
-    const aquafarmSelect = document.getElementById('edit-aquafarm');
-    if (aquafarmSelect) aquafarmSelect.addEventListener('change', toggleAquafarmNameField);
-    setupSpeciesField('edit-species-name-select', 'edit-species-name');
-    setupSpeciesField('edit-seedling-species-select', 'edit-seedling-species');
-    setupSpeciesField('edit-sapling-species-select', 'edit-sapling-species');
-    setupSpeciesField('edit-mollusk-species-select', 'edit-mollusk-species');
-
-    const editPhotoInput = document.getElementById('edit-photo');
-    const editPhotoLabel = document.getElementById('editPhotoLabel');
-    const editPhotoPreview = document.getElementById('editPhotoPreview');
-    if (editPhotoInput) {
-      editPhotoInput.addEventListener('change', () => {
-        const file = editPhotoInput.files[0];
-        if (editPhotoLabel) editPhotoLabel.textContent = file ? file.name : EDIT_PHOTO_LABEL_DEFAULT;
-        if (editPhotoPreview && file) {
-          editPhotoPreview.src = URL.createObjectURL(file);
-          editPhotoPreview.hidden = false;
-        }
-      });
-    }
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && overlay.classList.contains('open')) closeEditModal();
-    });
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      if (!pendingEditId) return;
-
-      const saveBtn = document.getElementById('btnSaveEdit');
-      if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
-
-      try {
-        const treeFields = {
-          species: document.getElementById('edit-species-name').value,
-          canopyCover: document.getElementById('edit-canopy-cover').value,
-          canopyLength: document.getElementById('edit-canopy-length').value,
-          canopyWidth: document.getElementById('edit-canopy-width').value,
-          treeCount: document.getElementById('edit-tree-count').value,
-          height: document.getElementById('edit-avg-height').value,
-          gbh: document.getElementById('edit-gbh').value,
-          seedlingSpecies: document.getElementById('edit-seedling-species').value,
-          seedlingCount: document.getElementById('edit-seedling-count').value,
-          saplingSpecies: document.getElementById('edit-sapling-species').value,
-          saplingCount: document.getElementById('edit-sapling-count').value,
-          healthAssessment: document.getElementById('edit-health-assessment').value,
-          molluskSpecies: document.getElementById('edit-mollusk-species').value,
-          molluskCount: document.getElementById('edit-mollusk-count').value,
-        };
-
-        const body = new FormData();
-        body.append('action', 'updateFields');
-        body.append('id', pendingEditId);
-        body.append('aquafarm', document.getElementById('edit-aquafarm').value);
-        body.append('aquafarmName', document.getElementById('edit-aquafarm-name').value);
-        body.append('waterNotes', document.getElementById('edit-water-notes').value);
-        body.append('observedThreats', document.getElementById('edit-observed-threats').value);
-        body.append('additionalNotes', document.getElementById('edit-additional-notes').value);
-        body.append('waterColor', document.getElementById('edit-water-color').value);
-        body.append('odor', document.getElementById('edit-odor').value);
-        body.append('foamDischarge', document.getElementById('edit-foam-discharge').value);
-        body.append('trees', JSON.stringify([treeFields]));
-        const photoFile = editPhotoInput && editPhotoInput.files[0];
-        if (photoFile) body.append('photo', photoFile, photoFile.name || 'photo.jpg');
-
-        const res = await fetch(AQUAGUARD_CONFIG.SUBMISSIONS_API_URL, {
-          method: 'POST',
-          credentials: 'same-origin',
-          body,
-        });
-
-        const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.error || `HTTP ${res.status}`);
-
-        closeEditModal();
-        await loadSubmissions();
-      } catch (err) {
-        console.error('AquaGuard: failed to save edit', err);
-        alert(`Couldn't save this submission: ${err.message || 'Unknown error'}`);
-      } finally {
-        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save changes'; }
-      }
     });
   }
 
@@ -1397,11 +1309,23 @@ function switchView(viewName, btn) {
   bindEditDelegation();
   bindViewDelegation();
   bindDeleteModal();
-  bindEditModal();
   bindViewModal();
   bindFilterBar();
+  bindSortableHeaders();
+  bindApprovalTabs();
+  bindApprovalSummaryCards();
   loadSubmissions();
 
   window.refreshAquaGuardSubmissions = loadSubmissions;
   setInterval(loadSubmissions, 20000);
+
+  // Lets a notification (which only knows a submission's kobo id) jump
+  // straight to that submission's detail popup on Submission History,
+  // re-fetching first so a just-approved record is guaranteed to be there.
+  window.openSubmissionViewByKoboId = async function (koboId) {
+    switchView('history', document.querySelector('[data-view=history]'));
+    await loadSubmissions();
+    const submission = currentSubmissions.find(s => String(s.koboId) === String(koboId));
+    if (submission) openViewModal(submission);
+  };
 })();

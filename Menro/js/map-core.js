@@ -294,7 +294,50 @@ if (layerProtectedAreasEl) {
     if (layerProtectedAreasEl.checked) officialAreasLayer.addTo(map);
 }
 
-const satelliteNdviCache = {};
+// Persisted in localStorage (not just kept in memory) so a zone whose NDVI
+// was already fetched today doesn't get asked for again on every single page
+// load — without this, reopening the dashboard even a minute later re-fires
+// requests for all ~37 zones at once, which is what was actually causing the
+// repeated 502 "satellite service busy" errors, not anything wrong with a
+// single request.
+const NDVI_CACHE_STORAGE_KEY = "aquaguard_ndvi_cache";
+
+function loadPersistedNdviCache() {
+    try {
+        const stored = localStorage.getItem(NDVI_CACHE_STORAGE_KEY);
+        return stored ? JSON.parse(stored) : {};
+    } catch (err) {
+        return {};
+    }
+}
+
+const satelliteNdviCache = loadPersistedNdviCache();
+
+function persistNdviCache() {
+    try {
+        localStorage.setItem(NDVI_CACHE_STORAGE_KEY, JSON.stringify(satelliteNdviCache));
+    } catch (err) {
+        // Storage full or unavailable (private browsing, etc.) — the cache
+        // still works for the rest of this page load, it just won't survive
+        // a reload this one time.
+    }
+}
+
+// Every cached NDVI reading for this zone was sampled against its *old*
+// boundary — a real edit to that shape (a bigger/smaller area, or moved
+// somewhere else) makes every one of those readings wrong, for every date
+// they were ever fetched for, not just today's. Called whenever a
+// field-mapped area's geometry is actually redrawn, so the next time
+// anyone opens it, it fetches a fresh reading against the real shape
+// instead of quietly showing a number measured against the shape that no
+// longer exists.
+function invalidateZoneNdviCache(zoneId) {
+    const prefix = `${zoneId}|`;
+    Object.keys(satelliteNdviCache).forEach(key => {
+        if (key.startsWith(prefix)) delete satelliteNdviCache[key];
+    });
+    persistNdviCache();
+}
 
 // Looks up (and caches) a zone's NDVI for one specific date, purely as a
 // value — it doesn't decide where that value gets stored. The map's Scene
@@ -316,42 +359,65 @@ async function fetchZoneNdviFromCopernicus(zone, dateStr) {
     }
 
     const radius = Math.sqrt(zone.area) * 100;
-    const params = new URLSearchParams({
+    const body = {
         mode: "ndvi",
         lat: zone.lat,
         lng: zone.lng,
         radius: radius.toFixed(0),
         date,
         maxcc: currentMaxCC,
-    });
+    };
     // A drawn field-mapped area has its own exact boundary — sampling that
     // real shape instead of the circle above avoids picking up nearby water
     // or mud that a rough circle would include, which can swing the reading
     // a lot for coastal areas. Zones without a drawn shape (e.g. official
     // zones with just a center point) fall back to the circle server-side.
+    //
+    // Sent as a POST body (not query-string params) because a detailed
+    // drawn shape's coordinates can be long enough to exceed the server's
+    // max URL length, which used to fail with "414 Request-URI Too Long"
+    // for exactly the zones with the most precise outlines.
     if (zone.geometry) {
-        params.set("geometry", JSON.stringify(zone.geometry));
+        body.geometry = zone.geometry;
     }
 
-    try {
-        const res = await fetch(`${SENTINEL_PROXY_URL}?${params.toString()}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        const value = (typeof data.ndvi === "number") ? data.ndvi : null;
-        satelliteNdviCache[cacheKey] = value;
-        return value;
-    } catch (err) {
-        console.warn(`Satellite NDVI fetch failed for ${zone.name}:`, err);
-        return null;
+    // The satellite service occasionally rejects a request under load
+    // (502/503/504) even though the same request would succeed a moment
+    // later — retried once after a short pause instead of giving up
+    // immediately, since a whole sync can otherwise lose most of its zones
+    // to nothing more than momentary congestion.
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+            const res = await fetch(SENTINEL_PROXY_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            const value = (typeof data.ndvi === "number") ? data.ndvi : null;
+            satelliteNdviCache[cacheKey] = value;
+            persistNdviCache();
+            return value;
+        } catch (err) {
+            if (attempt === 2) {
+                console.warn(`Satellite NDVI fetch failed for ${zone.name}:`, err);
+                return null;
+            }
+            await sleep(800);
+        }
     }
 }
 
 let satelliteSyncInProgress = false;
 
 // Sentinel Hub rejects too many requests fired at once ("rate limit exceeded"),
-// so zones are fetched a few at a time instead of all at once.
-const NDVI_SYNC_BATCH_SIZE = 3;
-const NDVI_SYNC_BATCH_DELAY_MS = 400;
+// so zones are fetched a few at a time instead of all at once. Kept small
+// and spaced out — the NDVI cache (see satelliteNdviCache above) means this
+// full-batch sync now only actually runs for zones that aren't already
+// cached, so being gentle here costs little extra time in practice.
+const NDVI_SYNC_BATCH_SIZE = 2;
+const NDVI_SYNC_BATCH_DELAY_MS = 700;
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -375,6 +441,27 @@ async function syncAllZonesFromSatellite(dateStr) {
 
     satelliteSyncInProgress = false;
     console.log("Satellite NDVI sync complete.");
+}
+
+// Fetches NDVI for exactly one zone, only when that zone is actually opened
+// (list click or map popup) — replaces the old behavior of eagerly fetching
+// every zone's NDVI on page load, which visibly stalled the page since each
+// Copernicus call takes 4+ seconds and there can be 30+ zones.
+function ensureZoneNdviLoaded(zone, dateStr) {
+    if (zone.satNdvi !== null && zone.satNdvi !== undefined) return;
+    if (zone._ndviLoading) return;
+    zone._ndviLoading = true;
+
+    fetchZoneNdviFromCopernicus(zone, dateStr).then((value) => {
+        zone._ndviLoading = false;
+        zone.satNdvi = value;
+        if (typeof renderZoneList === "function") renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");
+
+        const layer = zone._mangroveAreaLayer || (typeof zoneShapes !== "undefined" ? zoneShapes[zone.id] : null);
+        if (layer && typeof layer.isPopupOpen === "function" && layer.isPopupOpen()) {
+            layer.getPopup().update();
+        }
+    });
 }
 
 const markersLayer = L.layerGroup().addTo(map);

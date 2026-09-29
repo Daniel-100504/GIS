@@ -93,7 +93,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
     rel="stylesheet">
   <link rel="stylesheet" href="../assets/theme.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="ranger.css?v=21" />
+  <link rel="stylesheet" href="ranger.css?v=60" />
 </head>
 
 <body>
@@ -178,10 +178,53 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             <div class="topbar-sub">Calatagan Mangrove Reserve · <span id="topbar-date"></span></div>
           </div>
         </div>
-        <div class="topbar-coord">13.8317° N, 120.6400° E</div>
+        <div class="topbar-right">
+          <div class="topbar-coord">13.8317° N, 120.6400° E</div>
+          <button type="button" class="notif-btn" id="btnHelpGuide" aria-label="Open user guide">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          </button>
+          <div class="notif-wrap" id="notifWrap">
+            <button type="button" class="notif-btn" id="notifBtn" aria-label="Notifications" aria-expanded="false">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              <span class="notif-count" id="notifCount" hidden>0</span>
+            </button>
+            <div class="notif-panel" id="notifPanel">
+              <div class="notif-panel-header">
+                <span>Notifications</span>
+                <button type="button" class="notif-clear" id="notifClearBtn">Mark all read</button>
+              </div>
+              <div class="notif-list" id="notifList">
+                <div class="notif-empty">No notifications yet</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </header>
 
       <section class="view active" id="view-dashboard">
+
+        <div class="welcome-banner">
+          <div>
+            <div class="welcome-banner-eyebrow">Ranger Field Portal</div>
+            <div class="welcome-banner-title">Welcome back, <span id="welcomeBannerName">Ranger</span></div>
+            <div class="welcome-banner-sub" id="welcomeBannerSub">Keep the momentum going.</div>
+          </div>
+          <button class="btn-new-survey" onclick="switchView('submit', document.querySelector('[data-view=submit]'))">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            New Survey
+          </button>
+        </div>
 
         <div class="stat-row">
           <div class="stat-card">
@@ -196,43 +239,40 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             <div class="stat-value" id="stat-total">–</div>
             <div class="stat-meta">All time</div>
           </div>
-          <div class="stat-card">
-            <div class="stat-icon stat-icon-blue">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
+          <button type="button" class="stat-card stat-card-clickable stat-card-pending" data-summary-tab="pending">
+            <div class="stat-icon stat-icon-pending">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
               </svg>
             </div>
-            <div class="stat-label">Last Inspection</div>
-            <div class="stat-value" style="font-size:1.1rem;" id="stat-last-date">–</div>
-            <div class="stat-meta" id="stat-last-barangay">&nbsp;</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon stat-icon-amber">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                <circle cx="12" cy="10" r="3" />
+            <div class="stat-label">Pending Review</div>
+            <div class="stat-value" id="dash-pending-count">–</div>
+            <div class="stat-meta">Awaiting MENRO</div>
+          </button>
+          <button type="button" class="stat-card stat-card-clickable stat-card-approved" data-summary-tab="approved">
+            <div class="stat-icon stat-icon-approved">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 17.01" />
               </svg>
             </div>
-            <div class="stat-label">Areas Covered</div>
-            <div class="stat-value" id="stat-areas">–</div>
-            <div class="stat-meta" id="stat-areas-meta">&nbsp;</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon stat-icon-teal">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            <div class="stat-label">Approved</div>
+            <div class="stat-value" id="dash-approved-count">–</div>
+            <div class="stat-meta">Reviewed &amp; accepted</div>
+          </button>
+          <button type="button" class="stat-card stat-card-clickable stat-card-rejected" data-summary-tab="rejected">
+            <div class="stat-icon stat-icon-rejected">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="14.83" y1="9.17" x2="9.17" y2="14.83" />
+                <line x1="9.17" y1="9.17" x2="14.83" y2="14.83" />
               </svg>
             </div>
-            <div class="stat-label">Next Schedule</div>
-            <div class="stat-value" style="font-size:1.1rem;">Annual</div>
-            <div class="stat-meta">MENRO assigned</div>
-          </div>
+            <div class="stat-label">Needs Revision</div>
+            <div class="stat-value" id="dash-rejected-count">–</div>
+            <div class="stat-meta">MENRO left a note</div>
+          </button>
         </div>
 
         <div class="dash-grid">
@@ -244,39 +284,6 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </div>
             <div class="submission-list" id="recent-submission-list">
               <div class="submission-empty">Loading submissions…</div>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-header">
-              <span class="panel-title">Quick Actions</span>
-            </div>
-            <div class="quick-actions">
-              <button class="qa-btn" onclick="switchView('submit', document.querySelector('[data-view=submit]'))">
-                <div class="qa-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M12 5v14M5 12l7 7 7-7" />
-                  </svg>
-                </div>
-                <div>
-                  <div class="qa-title">Submit field data</div>
-                  <div class="qa-sub">Record today's inspection</div>
-                </div>
-              </button>
-              <button class="qa-btn" onclick="switchView('history', document.querySelector('[data-view=history]'))">
-                <div class="qa-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
-                </div>
-                <div>
-                  <div class="qa-title">View submission history</div>
-                  <div class="qa-sub">All past field records</div>
-                </div>
-              </button>
             </div>
           </div>
         </div>
@@ -353,10 +360,15 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                 </label>
                 <div class="edit-field">
                   <span>GPS location <em>*</em></span>
-                  <div class="survey-gps-row" id="surveyGpsRow">
-                    <span class="survey-gps-dot" id="surveyGpsDot"></span>
-                    <span id="surveyGpsStatus">Getting your location…</span>
-                    <button type="button" class="inline-link" id="btnRetryGps" hidden>Retry</button>
+                  <div class="survey-gps-field">
+                    <div class="survey-gps-row" id="surveyGpsRow">
+                      <span class="survey-gps-dot" id="surveyGpsDot"></span>
+                      <span id="surveyGpsStatus">Getting your location…</span>
+                      <button type="button" class="inline-link" id="btnRetryGps" hidden>Retry</button>
+                    </div>
+                    <button type="button" class="survey-gps-locate-btn" id="btnLocateGps" aria-label="Use my current location" title="Use my current location">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+                    </button>
                   </div>
                 </div>
                 <div class="edit-field edit-field-full">
@@ -366,6 +378,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                     <div class="survey-gps-map-loading" id="surveyGpsMapLoading">Loading map…</div>
                   </div>
                   <p class="survey-gps-map-hint">Tap or click anywhere on the map to move the pin, or drag it directly.</p>
+                  <div class="survey-zone-preview" id="surveyZonePreview" hidden></div>
                 </div>
               </div>
             </div>
@@ -411,7 +424,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                   <span>Average tree height (m)</span>
                   <input type="number" step="0.1" min="0" id="fs-avg-height" />
                 </label>
-                <label class="edit-field">
+                <label class="edit-field edit-field-full">
                   <span>GBH — Girth at Breast Height (cm)</span>
                   <input type="number" step="0.1" min="0" id="fs-gbh" />
                 </label>
@@ -422,7 +435,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                 </label>
                 <label class="edit-field">
                   <span>Seedling count</span>
-                  <input type="number" step="1" min="0" id="fs-seedling-count" />
+                  <input type="number" step="1" min="0" id="fs-seedling-count" disabled placeholder="Select a species first" />
                 </label>
                 <label class="edit-field">
                   <span>Sapling species</span>
@@ -431,7 +444,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                 </label>
                 <label class="edit-field">
                   <span>Sapling count</span>
-                  <input type="number" step="1" min="0" id="fs-sapling-count" />
+                  <input type="number" step="1" min="0" id="fs-sapling-count" disabled placeholder="Select a species first" />
                 </label>
                 <label class="edit-field edit-field-full">
                   <span>Overall health assessment <em>*</em></span>
@@ -463,19 +476,20 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                 </label>
                 <label class="edit-field">
                   <span>Mollusk count</span>
-                  <input type="number" step="1" min="0" id="fs-mollusk-count" />
+                  <input type="number" step="1" min="0" id="fs-mollusk-count" disabled placeholder="Select a species first" />
                 </label>
                 <label class="edit-field edit-field-full">
                   <span>Observed threats</span>
-                  <select id="fs-observed-threats">
+                  <select id="fs-observed-threats-select">
                     <option value="">Select…</option>
                     <option value="none_observed">None observed</option>
                     <option value="minor_encroachment">Minor encroachment</option>
                     <option value="illegal_cutting">Illegal cutting</option>
                     <option value="debris___waste_dumping">Debris / waste dumping</option>
                     <option value="storm_damage">Storm damage</option>
-                    <option value="other">Other</option>
+                    <option value="__other__">Other</option>
                   </select>
+                  <input type="text" id="fs-observed-threats" placeholder="Describe the observed threat" hidden />
                 </label>
                 <label class="edit-field edit-field-full">
                   <span>Additional notes</span>
@@ -568,10 +582,13 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </div>
 
             <div class="field-survey-actions">
-              <span class="field-survey-msg" id="fieldSurveyMsg"></span>
-              <button type="button" class="btn-confirm-cancel" id="btnSurveyBack" hidden>Back</button>
-              <button type="button" class="btn-confirm-primary" id="btnSurveyNext">Next</button>
-              <button type="submit" class="btn-confirm-primary" id="btnSubmitSurvey" hidden>Submit field report</button>
+              <button type="button" class="btn-confirm-cancel" id="btnSurveyCancel">Cancel</button>
+              <div class="field-survey-actions-right">
+                <span class="field-survey-msg" id="fieldSurveyMsg"></span>
+                <button type="button" class="btn-confirm-cancel" id="btnSurveyBack" hidden>Back</button>
+                <button type="button" class="btn-confirm-primary" id="btnSurveyNext">Next</button>
+                <button type="submit" class="btn-confirm-primary" id="btnSubmitSurvey" hidden>Submit field report</button>
+              </div>
             </div>
           </form>
         </div>
@@ -594,6 +611,13 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </div>
           </div>
 
+          <div class="approval-tabs" id="approvalTabs">
+            <button type="button" class="approval-tab active" data-approval-tab="all">All <span class="approval-tab-count" id="tabCountAll">0</span></button>
+            <button type="button" class="approval-tab" data-approval-tab="pending">Pending <span class="approval-tab-count" id="tabCountPending">0</span></button>
+            <button type="button" class="approval-tab" data-approval-tab="approved">Approved <span class="approval-tab-count" id="tabCountApproved">0</span></button>
+            <button type="button" class="approval-tab" data-approval-tab="rejected">Needs Revision <span class="approval-tab-count" id="tabCountRejected">0</span></button>
+          </div>
+
           <div class="filter-bar" id="history-filter-bar">
             <div class="filter-search">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -602,7 +626,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
               <input type="text" id="filter-search" class="filter-search-input"
-                placeholder="Search barangay, protected area, transect…" autocomplete="off" />
+                placeholder="Search barangay, mangrove, transect…" autocomplete="off" />
             </div>
 
             <select id="filter-barangay" class="filter-select">
@@ -610,22 +634,16 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </select>
 
             <select id="filter-area" class="filter-select">
-              <option value="">All protected areas</option>
+              <option value="">All mangroves</option>
             </select>
 
             <select id="filter-status" class="filter-select">
-              <option value="">All statuses</option>
+              <option value="">All status</option>
               <option value="healthy">Good</option>
               <option value="moderate">Fair</option>
               <option value="degraded">Poor</option>
               <option value="pending">Pending</option>
             </select>
-
-            <div class="filter-date-group">
-              <input type="date" id="filter-date-from" class="filter-date" aria-label="From date" />
-              <span class="filter-date-sep">–</span>
-              <input type="date" id="filter-date-to" class="filter-date" aria-label="To date" />
-            </div>
 
             <button type="button" id="filter-clear" class="filter-clear-btn">Clear</button>
           </div>
@@ -643,12 +661,12 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </colgroup>
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Barangay</th>
-                <th>Protected Area</th>
-                <th class="cell-center">Trees Recorded</th>
-                <th class="cell-center">Aquafarm Nearby</th>
-                <th class="cell-center">Status</th>
+                <th data-sort-key="date"><button type="button" class="sort-th-btn">Date<span class="sort-arrow"></span></button></th>
+                <th data-sort-key="area"><button type="button" class="sort-th-btn">Mangroves<span class="sort-arrow"></span></button></th>
+                <th data-sort-key="barangay"><button type="button" class="sort-th-btn">Barangay<span class="sort-arrow"></span></button></th>
+                <th class="cell-center" data-sort-key="threats"><button type="button" class="sort-th-btn">Observed Threats<span class="sort-arrow"></span></button></th>
+                <th class="cell-center" data-sort-key="aquafarm"><button type="button" class="sort-th-btn">Aquafarm Nearby<span class="sort-arrow"></span></button></th>
+                <th class="cell-center" data-sort-key="status"><button type="button" class="sort-th-btn">Status<span class="sort-arrow"></span></button></th>
                 <th class="cell-center">Actions</th>
               </tr>
             </thead>
@@ -862,205 +880,43 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
     </div>
   </div>
 
-  <div class="confirm-overlay" id="editOverlay">
-    <div class="confirm-modal confirm-modal-wide edit-modal">
-      <button class="confirm-modal-close" id="btnCloseEdit" aria-label="Close">&times;</button>
-
-      <div class="edit-modal-header">
-        <div class="edit-modal-title">Edit field submission</div>
-        <div class="edit-modal-subtitle" id="editModalSubtitle">—</div>
+  <div class="confirm-overlay" id="discardSurveyOverlay">
+    <div class="confirm-modal">
+      <button class="confirm-modal-close" id="btnCloseDiscardSurvey" aria-label="Close">&times;</button>
+      <div class="confirm-modal-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="3 6 5 6 21 6" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          <line x1="10" y1="11" x2="10" y2="17" />
+          <line x1="14" y1="11" x2="14" y2="17" />
+        </svg>
       </div>
+      <div class="confirm-modal-title" id="discardSurveyTitle">Discard This Survey?</div>
+      <div class="confirm-modal-text" id="discardSurveyText">The information you've entered will be permanently deleted and cannot be recovered.</div>
+      <div class="confirm-modal-actions">
+        <button class="btn-confirm-cancel" id="btnKeepEditingSurvey">Keep Editing</button>
+        <button class="btn-confirm-danger" id="btnConfirmDiscardSurvey">Discard</button>
+      </div>
+    </div>
+  </div>
 
-      <form id="editForm" class="edit-form">
-        <div class="edit-body">
-          <div class="survey-section-title">
-            <span class="survey-section-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22V12"/><path d="M12 12C12 6.5 8 4 4 4c0 5 2.5 8 8 8Z"/><path d="M12 12c0-4.5 3-7 8-7 0 4.5-2 7-8 7Z"/></svg>
-            </span>
-            <span class="survey-section-text">
-              <span class="survey-section-name">Vegetation</span>
-              <span class="survey-section-desc">Canopy, tree measurements, and regeneration</span>
-            </span>
-            <span class="survey-section-num">1 / 3</span>
-          </div>
-          <p class="survey-group-label">Canopy &amp; Cover</p>
-          <div class="edit-panel active">
-            <label class="edit-field">
-              <span>Species name</span>
-              <select id="edit-species-name-select"><?= $mangroveSpeciesOptions ?></select>
-              <input type="text" id="edit-species-name" placeholder="Enter species name" hidden />
-            </label>
-            <label class="edit-field">
-              <span>Estimated canopy cover (%)</span>
-              <input type="number" step="1" min="0" max="100" id="edit-canopy-cover" />
-            </label>
-            <label class="edit-field">
-              <span>Canopy length (m)</span>
-              <input type="number" step="0.1" min="0" id="edit-canopy-length" />
-            </label>
-            <label class="edit-field">
-              <span>Canopy width (m)</span>
-              <input type="number" step="0.1" min="0" id="edit-canopy-width" />
-            </label>
-          </div>
-
-          <p class="survey-group-label">Tree &amp; Regeneration Counts</p>
-          <div class="edit-panel active">
-            <label class="edit-field">
-              <span>Tree count</span>
-              <input type="number" step="1" min="0" id="edit-tree-count" />
-            </label>
-            <label class="edit-field">
-              <span>Average tree height (m)</span>
-              <input type="number" step="0.1" min="0" id="edit-avg-height" />
-            </label>
-            <label class="edit-field">
-              <span>GBH — Girth at Breast Height (cm)</span>
-              <input type="number" step="0.1" min="0" id="edit-gbh" />
-            </label>
-            <label class="edit-field">
-              <span>Seedling species</span>
-              <select id="edit-seedling-species-select"><?= $mangroveSpeciesOptions ?></select>
-              <input type="text" id="edit-seedling-species" placeholder="Enter species name" hidden />
-            </label>
-            <label class="edit-field">
-              <span>Seedling count</span>
-              <input type="number" step="1" min="0" id="edit-seedling-count" />
-            </label>
-            <label class="edit-field">
-              <span>Sapling species</span>
-              <select id="edit-sapling-species-select"><?= $mangroveSpeciesOptions ?></select>
-              <input type="text" id="edit-sapling-species" placeholder="Enter species name" hidden />
-            </label>
-            <label class="edit-field">
-              <span>Sapling count</span>
-              <input type="number" step="1" min="0" id="edit-sapling-count" />
-            </label>
-            <label class="edit-field edit-field-full">
-              <span>Overall health assessment</span>
-              <select id="edit-health-assessment">
-                <option value="">Select…</option>
-                <option value="healthy">Good</option>
-                <option value="moderate">Fair</option>
-                <option value="degraded">Poor</option>
-              </select>
-            </label>
-          </div>
-
-          <div class="survey-section-title">
-            <span class="survey-section-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 8V4"/><path d="M12 20v-4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
-            </span>
-            <span class="survey-section-text">
-              <span class="survey-section-name">Fauna</span>
-              <span class="survey-section-desc">Wildlife observed and any threats to the site</span>
-            </span>
-            <span class="survey-section-num">2 / 3</span>
-          </div>
-          <div class="edit-panel active">
-            <label class="edit-field">
-              <span>Mollusk species name</span>
-              <select id="edit-mollusk-species-select"><?= $molluskSpeciesOptions ?></select>
-              <input type="text" id="edit-mollusk-species" placeholder="Enter species name" hidden />
-            </label>
-            <label class="edit-field">
-              <span>Mollusk count</span>
-              <input type="number" step="1" min="0" id="edit-mollusk-count" />
-            </label>
-            <label class="edit-field edit-field-full">
-              <span>Observed threats</span>
-              <select id="edit-observed-threats">
-                <option value="">Select…</option>
-                <option value="none_observed">None observed</option>
-                <option value="minor_encroachment">Minor encroachment</option>
-                <option value="illegal_cutting">Illegal cutting</option>
-                <option value="debris___waste_dumping">Debris / waste dumping</option>
-                <option value="storm_damage">Storm damage</option>
-                <option value="other">Other</option>
-              </select>
-            </label>
-            <label class="edit-field edit-field-full">
-              <span>Additional notes</span>
-              <textarea id="edit-additional-notes" rows="2"></textarea>
-            </label>
-            <div class="edit-field edit-field-full">
-              <span>Photo documentation</span>
-              <img id="editPhotoPreview" class="edit-photo-preview" hidden />
-              <label class="survey-photo-picker" id="editPhotoPicker" for="edit-photo">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>
-                <span id="editPhotoLabel">Take or choose a photo</span>
-              </label>
-              <input type="file" accept="image/*" capture="environment" id="edit-photo" hidden />
-            </div>
-          </div>
-
-          <div class="survey-section-title">
-            <span class="survey-section-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.69s6 7.34 6 11.31a6 6 0 1 1-12 0c0-3.97 6-11.31 6-11.31z"/></svg>
-            </span>
-            <span class="survey-section-text">
-              <span class="survey-section-name">Water Quality</span>
-              <span class="survey-section-desc">Condition of water near the mangrove area</span>
-            </span>
-            <span class="survey-section-num">3 / 3</span>
-          </div>
-          <div class="edit-panel active">
-            <label class="edit-field">
-              <span>Water color</span>
-              <select id="edit-water-color">
-                <option value="">Select…</option>
-                <option value="clear">Clear</option>
-                <option value="slightly_turbid">Slightly turbid</option>
-                <option value="turbid___murky">Turbid / murky</option>
-                <option value="dark___discolored">Dark / discolored</option>
-              </select>
-            </label>
-            <label class="edit-field">
-              <span>Odor</span>
-              <select id="edit-odor">
-                <option value="">Select…</option>
-                <option value="none">None</option>
-                <option value="mild">Mild</option>
-                <option value="strong___chemical">Strong / chemical</option>
-                <option value="sewage_like">Sewage-like</option>
-              </select>
-            </label>
-            <label class="edit-field">
-              <span>Visible foam or discharge</span>
-              <select id="edit-foam-discharge">
-                <option value="">Select…</option>
-                <option value="none">None</option>
-                <option value="minor_foam">Minor foam</option>
-                <option value="discharge_visible">Discharge visible</option>
-                <option value="heavy_discharge">Heavy discharge</option>
-              </select>
-            </label>
-            <label class="edit-field">
-              <span>Nearby aquafarm activity</span>
-              <select id="edit-aquafarm">
-                <option value="">Select…</option>
-                <option value="none_nearby">None nearby</option>
-                <option value="active___no_visible_discharge">Active — no visible discharge</option>
-                <option value="active___discharge_observed">Active — discharge observed</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </label>
-            <label class="edit-field edit-field-full" id="edit-aquafarm-name-field" hidden>
-              <span>Aquafarm name (if discharge observed)</span>
-              <input type="text" id="edit-aquafarm-name" placeholder="Leave blank if none" />
-            </label>
-            <label class="edit-field edit-field-full">
-              <span>Water quality notes</span>
-              <textarea id="edit-water-notes" rows="2"></textarea>
-            </label>
-          </div>
-        </div>
-
-        <div class="confirm-modal-actions">
-          <button type="button" class="btn-confirm-cancel" id="btnCancelEdit">Cancel</button>
-          <button type="submit" class="btn-confirm-primary" id="btnSaveEdit">Save changes</button>
-        </div>
-      </form>
+  <div class="confirm-overlay" id="confirmSubmitOverlay">
+    <div class="confirm-modal">
+      <button class="confirm-modal-close" id="btnCloseConfirmSubmit" aria-label="Close">&times;</button>
+      <div class="confirm-modal-icon confirm-modal-icon-positive">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+          <polyline points="22 4 12 14.01 9 17.01" />
+        </svg>
+      </div>
+      <div class="confirm-modal-title" id="confirmSubmitTitle">Submit This Survey?</div>
+      <div class="confirm-modal-text" id="confirmSubmitText">Make sure everything looks correct — you can still edit it afterward from Submission History.</div>
+      <div class="confirm-modal-actions">
+        <button class="btn-confirm-cancel" id="btnCancelConfirmSubmit">Review Again</button>
+        <button class="btn-confirm-primary" id="btnConfirmSubmit">Submit</button>
+      </div>
     </div>
   </div>
 
@@ -1085,12 +941,11 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
     </div>
   </div>
 
-  <button class="btn-help-fab" id="btnHelpGuide" type="button" aria-label="Open user guide">?</button>
-
   <script src="../assets/utils.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="ranger.js?v=19"></script>
-  <script src="field-survey.js?v=8"></script>
+  <script src="ranger.js?v=37"></script>
+  <script src="field-survey.js?v=32"></script>
+  <script src="ranger-notifications.js?v=5"></script>
 </body>
 
 </html>
