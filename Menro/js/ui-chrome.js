@@ -188,6 +188,7 @@ if (!sessionStorage.getItem("aquaguard_guide_shown")) {
 }
 
 initIdleLogout(15, confirmSignOut, { overlayClass: "dashboard-overlay" });
+initAccountStatusWatch(AUTH_API, confirmSignOut);
 
 // App bootstrap — runs last, after every module above has defined what it needs.
 async function initWithKobo() {

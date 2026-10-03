@@ -1,6 +1,6 @@
 <?php
 
-session_start();
+require_once __DIR__ . '/../../Login/Database/session-init.php';
 
 header('Content-Type: application/json');
 
@@ -56,29 +56,59 @@ $record = [
     'Ranger_Name'                          => $rangerName,
     'Inspection_Date'                      => $_POST['inspectionDate'] ?? date('Y-m-d'),
     'Record_your_current_location'         => ($lat !== null && $lng !== null) ? "{$lat} {$lng} 0 0" : '',
-    'Canopy_Length_m'                      => $_POST['canopyLength'] ?? '',
-    'Canopy_Width_m'                       => $_POST['canopyWidth'] ?? '',
     'Estimated_Canopy_Cover_'              => $_POST['canopyCover'] ?? '',
-    'Species_Name'                         => $_POST['speciesName'] ?? '',
-    'Tree_Count'                           => $_POST['treeCount'] ?? '',
-    'Average_Tree_Height_m'                => $_POST['avgHeight'] ?? '',
-    'GBH_Girth_at_Breast_Height_cm'        => $_POST['gbh'] ?? '',
-    'Seedling_Species'                     => $_POST['seedlingSpecies'] ?? '',
-    'Seedling_Count'                       => $_POST['seedlingCount'] ?? '',
-    'Sapling_Species'                      => $_POST['saplingSpecies'] ?? '',
-    'Sapling_Count'                        => $_POST['saplingCount'] ?? '',
     'Overall_Health_Assessment'            => $_POST['healthAssessment'] ?? '',
-    'Mollusk_Species_Name'                 => $_POST['molluskSpecies'] ?? '',
-    'Mollusk_Count'                        => $_POST['molluskCount'] ?? '',
     'Observed_Threats'                     => $_POST['observedThreats'] ?? '',
+    'Observed_Threats_Other'               => $_POST['observedThreatsOther'] ?? '',
     'Additional_Notes'                     => $_POST['additionalNotes'] ?? '',
+    'Water_Clarity'                        => $_POST['waterClarity'] ?? '',
     'Water_Color'                          => $_POST['waterColor'] ?? '',
     'Odor'                                 => $_POST['odor'] ?? '',
     'Visible_Foam_or_Discharge'            => $_POST['foamDischarge'] ?? '',
     'Nearby_Aquafarm_Activity'             => $_POST['aquafarmActivity'] ?? '',
-    'Aquafarm_Name_if_Discharge_Observed'  => $_POST['aquafarmName'] ?? '',
+    'Aquafarm_Name'                        => $_POST['aquafarmName'] ?? '',
+    'Aquafarm_Location_Lat'                => $_POST['aquafarmLat'] ?? '',
+    'Aquafarm_Location_Lng'                => $_POST['aquafarmLng'] ?? '',
+    'Aquafarm_Distance_m'                  => $_POST['aquafarmDistance'] ?? '',
+    'Discharge_Toward_Mangroves'           => $_POST['dischargeTowardMangroves'] ?? '',
+    'Salinity_ppt'                         => $_POST['salinity'] ?? '',
+    'PH'                                   => $_POST['ph'] ?? '',
+    'Water_Temperature_C'                  => $_POST['waterTemp'] ?? '',
+    'Secchi_Depth_cm'                      => $_POST['secchiDepth'] ?? '',
     'Water_Quality_Notes'                  => $_POST['waterNotes'] ?? '',
 ];
+
+// The Vegetation step now logs one row per species actually found in the
+// plot (Species | Trees | Saplings | Seedlings) instead of a single fixed
+// species — saved as a real repeat-group array so it displays and edits the
+// same way a Kobo repeat-group submission already does, with no schema
+// change needed (extractTrees() on the ranger/MENRO side already knows how
+// to find and read any array-of-objects field on the record).
+$speciesRows = json_decode($_POST['speciesRows'] ?? '[]', true);
+if (is_array($speciesRows)) {
+    $record['Species_Records'] = array_values(array_filter(array_map(function ($row) {
+        if (!is_array($row) || empty($row['species'])) return null;
+        return [
+            'Species_Name'  => $row['species'],
+            'Tree_Count'    => $row['treeCount'] ?? '',
+            'Sapling_Count' => $row['saplingCount'] ?? '',
+            'Seedling_Count' => $row['seedlingCount'] ?? '',
+        ];
+    }, $speciesRows)));
+}
+
+// Same idea for the Fauna step's mollusk table — its own separate
+// repeat-group array, distinct from Species_Records so a species row and a
+// mollusk row are never confused with each other. Species presence only,
+// no count — mollusks are too small and numerous to count reliably in the
+// field, unlike trees.
+$molluskRows = json_decode($_POST['molluskRows'] ?? '[]', true);
+if (is_array($molluskRows)) {
+    $record['Mollusk_Records'] = array_values(array_filter(array_map(function ($row) {
+        if (!is_array($row) || empty($row['species'])) return null;
+        return ['Mollusk_Species_Name' => $row['species']];
+    }, $molluskRows)));
+}
 
 // Photo upload — stored as a plain absolute URL so the existing photo
 // display logic (which only recognizes a value starting with http/https)

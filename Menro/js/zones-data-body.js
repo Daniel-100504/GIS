@@ -36,10 +36,18 @@ function zoneIdFromProtectedArea(raw) {
 
 // Kobo repeat groups come back as an array of objects under whatever key the
 // group was given — found generically here instead of hardcoding a group
-// name, since that name depends on how the form was built.
+// name, since that name depends on how the form was built. A native
+// submission can also carry a second repeat-group array for mollusks
+// (Mollusk_Records) alongside this one, so Species_Records is checked by its
+// exact name first — a generic "first array of objects on the record" scan
+// could otherwise grab the wrong array depending on key order.
 function koboExtractTrees(sub) {
+  if (Array.isArray(sub["Species_Records"]) && sub["Species_Records"].length > 0) {
+    return sub["Species_Records"];
+  }
   for (const key in sub) {
     if (!Object.prototype.hasOwnProperty.call(sub, key)) continue;
+    if (key === "Mollusk_Records") continue;
     const value = sub[key];
     // typeof null === "object" in JS, so a plain check would misread a
     // no-GPS submission's "_geolocation":[null,null] as the tree list.
@@ -57,18 +65,33 @@ function koboExtractTrees(sub) {
   return [sub];
 }
 
+// Mirrors koboExtractTrees, but for the Fauna step's separate mollusk table
+// — its own named array (Mollusk_Records) checked first, falling back to a
+// single implicit row for a legacy record that only ever had one flat
+// mollusk species/count pair.
+function koboExtractMollusks(sub) {
+  if (Array.isArray(sub["Mollusk_Records"]) && sub["Mollusk_Records"].length > 0) {
+    return sub["Mollusk_Records"];
+  }
+  const species = koboTreeField(sub, "Mollusk_Species_Name") || koboTreeField(sub, "Mollusk_species_name");
+  if (species) {
+    return [{ Mollusk_Species_Name: species, Mollusk_Count: koboTreeField(sub, "Mollusk_Count") ?? koboTreeField(sub, "Mollusk_count") }];
+  }
+  return [];
+}
+
 function koboTreeField(tree, name) {
   if (tree[name] !== undefined) return tree[name];
   const key = Object.keys(tree).find(k => k.split("/").pop() === name);
   return key ? tree[key] : undefined;
 }
 
-// Crown area from canopy length/width (ellipse approximation), as a % of the
-// 10m x 10m (100 sqm) plot the tree was measured in — used only as a fallback
-// for older submissions that don't have the survey's own direct canopy-cover
-// estimate (Estimated_Canopy_Cover_).
-function koboCanopyCoverPct(t) {
-  const direct = parseFloat(koboTreeField(t, "Estimated_Canopy_Cover_"));
+// The direct canopy-cover estimate is one answer for the whole survey now,
+// not per species/tree — read off the outer record, not the tree. Canopy
+// length/width (if present) are still per-tree, kept as a fallback only for
+// older Kobo submissions that had those instead of a direct estimate.
+function koboCanopyCoverPct(sub, t) {
+  const direct = parseFloat(sub["Estimated_Canopy_Cover_"]);
   if (!isNaN(direct)) return Math.min(100, direct);
 
   const l = parseFloat(koboTreeField(t, "Canopy_Length_m"));
@@ -78,10 +101,10 @@ function koboCanopyCoverPct(t) {
   return Math.min(100, (crownArea / 100) * 100);
 }
 
-function summarizeKoboTrees(trees) {
+function summarizeKoboTrees(trees, sub) {
   const heights = [], gbhs = [], canopyValues = [];
   const speciesSet = new Set();
-  let mollusk = 0, seedling = 0, sapling = 0;
+  let seedling = 0, sapling = 0;
 
   trees.forEach(t => {
     const sp = koboTreeField(t, "Species_Name") || koboTreeField(t, "Species");
@@ -90,12 +113,16 @@ function summarizeKoboTrees(trees) {
     if (!isNaN(h)) heights.push(h);
     const g = parseFloat(koboTreeField(t, "GBH_Girth_at_Breast_Height_cm") || koboTreeField(t, "GBH_cm"));
     if (!isNaN(g)) gbhs.push(g);
-    const c = koboCanopyCoverPct(t);
+    const c = koboCanopyCoverPct(sub, t);
     if (c !== null) canopyValues.push(c);
-    mollusk  += parseFloat(koboTreeField(t, "Mollusk_Count")  || koboTreeField(t, "Mollusk_count"))  || 0;
     seedling += parseFloat(koboTreeField(t, "Seedling_Count") || koboTreeField(t, "Seedling_count")) || 0;
     sapling  += parseFloat(koboTreeField(t, "Sapling_Count")  || koboTreeField(t, "Sapling_count"))  || 0;
   });
+
+  // Mollusks are their own repeat-group array now, not one field per tree —
+  // summed separately instead of inside the tree loop above.
+  const mollusk = koboExtractMollusks(sub).reduce((a, m) =>
+    a + (parseFloat(koboTreeField(m, "Mollusk_Count") || koboTreeField(m, "Mollusk_count")) || 0), 0);
 
   const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
   return {
@@ -120,7 +147,7 @@ function deriveStatus(sub) {
   const trees = koboExtractTrees(sub);
   if (trees.length === 0) return "pending";
 
-  const summary = summarizeKoboTrees(trees);
+  const summary = summarizeKoboTrees(trees, sub);
 
   let flags = 0;
   if (summary.avgCanopyCoverPct === null || summary.avgCanopyCoverPct < 40) flags++;
@@ -298,7 +325,7 @@ function mergeKoboIntoZones(submissions) {
     }
 
     const trees   = koboExtractTrees(sub);
-    const summary = summarizeKoboTrees(trees);
+    const summary = summarizeKoboTrees(trees, sub);
     const aquafarmRaw = sub["Nearby_aquafarm_activity"] || sub["Nearby_Aquafarm_Activity"] || "";
 
     // zone.ndvi is intentionally left alone here — it's only ever set from real
@@ -310,7 +337,7 @@ function mergeKoboIntoZones(submissions) {
     zone.lastRanger    = sub["Ranger_Name"]  || zone.lastRanger || "—";
     zone.lastDate      = koboSubmissionDate(sub) || zone.lastDate || "—";
     zone.transect      = sub["Plot_number"]  || zone.transect   || "—";
-    zone.canopyCover   = summary.count > 0 ? `${summary.count} tree${summary.count === 1 ? "" : "s"} measured` : "—";
+    zone.canopyCover   = summary.count > 0 ? `${summary.count} species recorded` : "—";
     zone.speciesName   = summary.speciesList.length ? summary.speciesList.join(", ") : (zone.speciesName || "—");
     zone.treeCount     = summary.count || zone.treeCount || "—";
     zone.waterColor    = sub["Water_Color"] ? sub["Water_Color"].replace(/_/g," ") : "—";

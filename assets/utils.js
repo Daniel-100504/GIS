@@ -94,3 +94,53 @@ function initIdleLogout(timeoutMinutes, onTimeout, options = {}) {
 
   reset();
 }
+
+// Polls whether the current account is still active — an admin deactivating
+// a ranger or MENRO officer mid-session doesn't touch their existing PHP
+// session, so without this they'd stay fully logged in and working until it
+// happened to expire on its own. `authApi` is that page's own auth endpoint
+// ("Database/api.php" from ranger.php, "../../Login/Database/api.php" from
+// satellite.php), since the two pages sit at different depths.
+function initAccountStatusWatch(authApi, onDeactivated, pollSeconds = 20) {
+  let shown = false;
+
+  async function check() {
+    if (shown) return;
+    try {
+      const res = await fetch(`${authApi}?action=checkSession`);
+      const data = await res.json();
+      if (!data.success && data.deactivated) {
+        shown = true;
+        clearInterval(timer);
+        showDeactivatedNotice(onDeactivated);
+      }
+    } catch (err) {
+      // A network hiccup shouldn't sign anyone out — just try again next tick.
+    }
+  }
+
+  function showDeactivatedNotice(onContinue) {
+    const overlayEl = document.createElement("div");
+    overlayEl.className = "confirm-overlay open";
+    overlayEl.style.zIndex = "99999";
+    overlayEl.innerHTML = `
+      <div class="confirm-modal">
+        <div class="confirm-modal-icon" style="background:#fbeae7;color:var(--degraded);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        </div>
+        <h2 class="confirm-modal-title">Your account has been deactivated</h2>
+        <p class="confirm-modal-text">An administrator deactivated this account. You'll be returned to the login page.</p>
+        <div class="confirm-modal-actions">
+          <button type="button" class="btn-confirm-primary" id="deactivatedContinueBtn">Go to login</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlayEl);
+
+    const goToLogin = () => onContinue();
+    overlayEl.querySelector("#deactivatedContinueBtn").addEventListener("click", goToLogin);
+    setTimeout(goToLogin, 6000);
+  }
+
+  const timer = setInterval(check, pollSeconds * 1000);
+}

@@ -83,25 +83,6 @@ function computeZoneSnapshotForDate(dateStr) {
   });
 }
 
-// A zone is "overdue" the same way a real compliance schedule treats a site
-// that's gone quiet — never inspected at all, or not checked in the last 30
-// days, counts as needing a visit, not just sitting there unflagged.
-const OVERDUE_INSPECTION_DAYS = 30;
-
-function daysBetween(fromDateStr, toDateStr) {
-  const from = new Date(fromDateStr + "T00:00:00");
-  const to = new Date(toDateStr + "T00:00:00");
-  return Math.round((to - from) / 86400000);
-}
-
-function computeOverdueZones(zoneSnapshot, asOfDateStr) {
-  const asOf = asOfDateStr || todayISO();
-  return zoneSnapshot.filter(z => {
-    if (!z.lastInspectedDate) return true;
-    return daysBetween(z.lastInspectedDate, asOf) > OVERDUE_INSPECTION_DAYS;
-  });
-}
-
 function computeDashboardStats(dateStr) {
   const subsUpToDate = typeof submissionsUpToDate === "function" ? submissionsUpToDate(dateStr) : ALL_SUBMISSIONS;
   const zoneSnapshot  = computeZoneSnapshotForDate(dateStr);
@@ -153,7 +134,6 @@ function computeDashboardStats(dateStr) {
   })();
   const aquafarmBreakdown = computeFieldBreakdown(subsUpToDate, "Nearby_Aquafarm_Activity", ["none_nearby"]);
   const treeHeightBuckets = computeTreeHeightBuckets(subsUpToDate);
-  const overdueZones = computeOverdueZones(zoneSnapshot, dateStr);
 
   return {
     total, healthy, moderate, degraded, pending,
@@ -167,7 +147,6 @@ function computeDashboardStats(dateStr) {
     aquafarmBreakdown,
     treeHeightBuckets,
     treesTrend,
-    overdueZones,
     zoneSnapshot,
   };
 }
@@ -572,15 +551,25 @@ const SURVEY_STATUS_TAG = {
 // neutral, informational status instead of a false alarm.
 const AQUAFARM_TAG = {
   active___discharge_observed: { cls: "flagged", label: "Aquafarm discharge observed" },
-  yes:                          { cls: "flagged", label: "Aquafarm discharge observed" },
   active___no_visible_discharge: { cls: "none", label: "Active — no discharge" },
   inactive:                      { cls: "none", label: "Inactive" },
   none_nearby:                   { cls: "none", label: "No aquafarm nearby" },
   no:                            { cls: "none", label: "No aquafarm nearby" },
 };
 
-function aquafarmTag(raw) {
+// "Nearby aquafarm activity" alone no longer implies discharge — that's now
+// its own separate follow-up question (Discharge_Toward_Mangroves), so an
+// aquafarm being present only counts as the flagged, red "discharge" status
+// once that follow-up actually confirms discharge flowing toward the
+// mangroves. A plain "Yes" with no confirmed discharge reads as neutral.
+function aquafarmTag(raw, dischargeRaw) {
   const v = (raw || "").toString().toLowerCase();
+  if (v === "yes") {
+    const d = (dischargeRaw || "").toString().toLowerCase();
+    return d === "yes"
+      ? { cls: "flagged", label: "Aquafarm discharge observed" }
+      : { cls: "none", label: "Aquafarm nearby" };
+  }
   return AQUAFARM_TAG[v] || { cls: "none", label: v ? prettifyNotifValue(v) : "No aquafarm nearby" };
 }
 
@@ -619,20 +608,6 @@ function renderStatCards(s) {
   setText("statAvgNdviValue", formatNdvi(s.avgNdvi));
 
   setText("statLatestInspectionValue", s.latestDate ? formatDate(s.latestDate) : "—");
-
-  const overdueEl = document.getElementById("statOverdueValue");
-  if (overdueEl) {
-    setText("statOverdueValue", s.overdueZones.length);
-    const neverInspected = s.overdueZones.filter(z => !z.lastInspectedDate).length;
-    setText(
-      "statOverdueHint",
-      s.overdueZones.length === 0
-        ? `All zones checked within ${OVERDUE_INSPECTION_DAYS} days`
-        : neverInspected > 0
-        ? `${neverInspected} never inspected`
-        : `Over ${OVERDUE_INSPECTION_DAYS} days since last visit`
-    );
-  }
 }
 
 // One row per ranger who has ever submitted a survey, with how many
@@ -688,16 +663,17 @@ function renderRangerSubmissionRow(sub) {
   const zoneId  = sub["_zone_id"] || zoneIdFromProtectedArea(areaRaw) || BARANGAY_TO_ZONE[areaRaw];
   const zone    = ZONES.find(z => z.id === zoneId);
   const aquafarmRaw  = (sub["Nearby_aquafarm_activity"] || sub["Nearby_Aquafarm_Activity"] || "").toLowerCase();
-  const aquafarmInfo = aquafarmTag(aquafarmRaw);
+  const dischargeRaw = (sub["Discharge_Toward_Mangroves"] || sub["Discharge_toward_mangroves"] || "").toLowerCase();
+  const aquafarmInfo = aquafarmTag(aquafarmRaw, dischargeRaw);
   const statusTag = SURVEY_STATUS_TAG[deriveStatus(sub)] || SURVEY_STATUS_TAG.pending;
-  const summary = summarizeKoboTrees(koboExtractTrees(sub));
+  const summary = summarizeKoboTrees(koboExtractTrees(sub), sub);
 
   return `
     <tr class="row-clickable" data-kobo-id="${escapeHtml(String(sub["_id"] || ""))}">
       <td>${formatDate(koboSubmissionDate(sub))}</td>
-      <td class="survey-log-zone-cell">${escapeHtml(zone ? zone.name : (sub["_zone_name"] || areaRaw || "Unknown zone").replace(/_/g, " "))}</td>
+      <td class="survey-log-zone-cell" title="${escapeHtml(zone ? zone.name : (sub["_zone_name"] || areaRaw || "Unknown zone").replace(/_/g, " "))}">${escapeHtml(zone ? zone.name : (sub["_zone_name"] || areaRaw || "Unknown zone").replace(/_/g, " "))}</td>
       <td class="cell-center">${summary.count || "—"}</td>
-      <td>${escapeHtml(summary.speciesList.length ? summary.speciesList.join(", ") : "—")}</td>
+      <td class="cell-truncate" title="${escapeHtml(summary.speciesList.length ? summary.speciesList.join(", ") : "—")}">${escapeHtml(summary.speciesList.length ? summary.speciesList.join(", ") : "—")}</td>
       <td class="cell-center"><span class="threat-tag ${aquafarmInfo.cls}">${escapeHtml(aquafarmInfo.label)}</span></td>
       <td class="cell-center"><span class="threat-tag ${statusTag.cls}">${statusTag.label}</span></td>
     </tr>
@@ -755,16 +731,47 @@ function viewGridPad(fieldCount) {
   return '<div class="view-field view-field-blank"></div>'.repeat(3 - remainder);
 }
 
-function viewNotesField(label, value) {
-  if (value === null || value === undefined || value === "") return viewField(label, null, { full: true });
-  return `<div class="view-field view-field-full"><span class="view-label">${escapeHtml(label)}</span><div class="view-notes">${escapeHtml(String(value))}</div></div>`;
+// Same shape as viewField, but for a value that's already-built HTML (a
+// colored status badge) instead of plain text that needs escaping.
+function viewFieldHtml(label, html, opts = {}) {
+  const cls = `view-field${opts.full ? " view-field-full" : ""}`;
+  return `<div class="${cls}"><span class="view-label">${escapeHtml(label)}</span><span class="view-value">${html}</span></div>`;
 }
 
-function viewPhotoField(photoUrl) {
-  if (!photoUrl) return viewField("Photo documentation", null, { full: true });
-  return `<div class="view-field view-field-full"><span class="view-label">Photo documentation</span><div class="view-photos">
-    <a href="${escapeHtml(photoUrl)}" target="_blank" rel="noopener"><img class="view-photo-thumb" src="${escapeHtml(photoUrl)}" alt="Field photo" /></a>
-  </div></div>`;
+function viewEmptyNote(text) {
+  return `<p class="view-empty-note">${escapeHtml(text)}</p>`;
+}
+
+const HEALTH_BADGE_CLS = { healthy: "badge-healthy", moderate: "badge-moderate", degraded: "badge-degraded" };
+
+// Observed Threats are checked off from a fixed set of plain slugs — the
+// same label lookup the ranger's own survey form uses, so a submission
+// reads identically whichever side it's seen from.
+const OBSERVED_THREAT_LABELS = {
+  none_observed: "None observed",
+  charcoal_making: "Charcoal making",
+  cutting: "Cutting",
+  dieback: "Dieback",
+  pests: "Pests",
+  garbage: "Garbage",
+  erosion: "Erosion",
+  land_conversion: "Land conversion",
+  encroachment: "Encroachment",
+  illegal_fishing: "Illegal fishing",
+  sand_gravel_extraction: "Sand / gravel extraction",
+  siltation: "Siltation",
+  storm_damage: "Storm damage",
+  fire: "Fire",
+  "pollution___oil_spill": "Pollution / oil spill",
+};
+function observedThreatsDisplay(raw, otherText) {
+  if (!raw) return null;
+  const values = String(raw).split(",").map(s => s.trim()).filter(Boolean);
+  if (values.length === 0) return null;
+  return values.map((v) => {
+    if (v === "__other__") return otherText || "Other";
+    return OBSERVED_THREAT_LABELS[v] || prettifyNotifValue(v) || v;
+  }).join(", ");
 }
 
 const VIEW_SECTION_ICONS = {
@@ -779,11 +786,19 @@ function viewSection(icon, title, innerHtml) {
   return `<div class="view-section"><div class="view-section-title"><span class="view-section-icon">${iconSvg}</span>${escapeHtml(title)}</div><div class="view-section-body">${innerHtml}</div></div>`;
 }
 
-function gpsDisplayFromSub(sub) {
-  const gpsRaw = sub["Record_your_current_location"] || sub["GPS_location"];
-  if (!gpsRaw) return null;
-  const parts = String(gpsRaw).trim().split(/\s+/);
-  return parts.length >= 2 ? `${parts[0]}, ${parts[1]}` : null;
+// Every zone in AquaGuard is already a designated mangrove area, so a plain
+// "protected or not" label would say the same thing for all of them. What
+// actually varies is the kind of designation named right in the zone's own
+// title — a Conservation Park, a Rehabilitation Project, an explicitly
+// named Protected Area, or (for the numbered zones with no special
+// designation yet) a plain Mangrove Area.
+function zoneTypeLabel(zoneName) {
+  if (!zoneName) return null;
+  const n = zoneName.toLowerCase();
+  if (n.includes("conservation park")) return "Conservation Park";
+  if (n.includes("rehabilitation")) return "Rehabilitation Project";
+  if (n.includes("protected area")) return "Protected Area";
+  return "Mangrove Area";
 }
 
 function healthAssessmentLabel(raw) {
@@ -839,54 +854,90 @@ function openSubmissionDetailModal(sub) {
   const siteFields = [
     viewField("Date of visit", formatDate(koboSubmissionDate(sub))),
     viewField("Nearest mangrove zone", zoneName),
-    viewField("GPS location", gpsDisplayFromSub(sub)),
+    viewField("Zone type", zoneTypeLabel(zoneName)),
   ].join("");
 
+  // Mirrors the ranger's own Submission History "View" popup — same 3
+  // numbered Vegetation groups (Canopy / Species Found in Plot / Overall
+  // Health), so a submission reads identically on both sides.
   const trees = koboExtractTrees(sub);
-  let vegetationHtml = "";
-  if (trees.length > 0) {
-    trees.forEach((t, i) => {
-      if (trees.length > 1) vegetationHtml += `<div class="view-tree-heading">Tree ${i + 1}</div>`;
-      const treeFields = [
-        viewField("Species name", koboTreeField(t, "Species_Name") || koboTreeField(t, "Species") || null),
-        viewField("Average tree height (m)", koboTreeField(t, "Average_Tree_Height_m") ?? koboTreeField(t, "Height_m")),
-        viewField("GBH (cm)", koboTreeField(t, "GBH_Girth_at_Breast_Height_cm") ?? koboTreeField(t, "GBH_cm")),
-        viewField("Canopy length (m)", koboTreeField(t, "Canopy_Length_m")),
-        viewField("Canopy width (m)", koboTreeField(t, "Canopy_Width_m")),
-        viewField("Estimated canopy cover (%)", koboTreeField(t, "Estimated_Canopy_Cover_")),
-        viewField("Seedling species", koboTreeField(t, "Seedling_Species") || koboTreeField(t, "Seedling_species_name") || null),
-        viewField("Seedling count", koboTreeField(t, "Seedling_Count") ?? koboTreeField(t, "Seedling_count")),
-        viewField("Sapling species", koboTreeField(t, "Sapling_Species") || koboTreeField(t, "Sapling_species_name") || null),
-        viewField("Sapling count", koboTreeField(t, "Sapling_Count") ?? koboTreeField(t, "Sapling_count")),
-      ];
-      vegetationHtml += `<div class="view-grid">${treeFields.join("")}${viewGridPad(treeFields.length)}</div>`;
-    });
-  } else {
-    vegetationHtml = `<p class="view-empty-note">No trees recorded for this visit.</p>`;
-  }
-  const summary = summarizeKoboTrees(trees);
-  const summaryFields = [
-    viewField("Tree count", summary.count || null),
-    viewField("Overall health assessment", healthAssessmentLabel(sub["Overall_Health_Assessment"])),
-  ];
-  vegetationHtml += `<div class="view-tree-heading">Summary</div><div class="view-grid">${summaryFields.join("")}${viewGridPad(summaryFields.length)}</div>`;
+  const canopyHtml = `<p class="view-subsection-label">Canopy</p><div class="view-grid">${viewField("Canopy cover (%)", sub["Estimated_Canopy_Cover_"] || null)}${viewGridPad(1)}</div>`;
 
-  const firstTree = trees[0] || {};
-  const faunaFields = [
-    viewField("Mollusk species name", koboTreeField(firstTree, "Mollusk_Species_Name") || koboTreeField(firstTree, "Mollusk_species_name") || null),
-    viewField("Mollusk count", koboTreeField(firstTree, "Mollusk_Count") ?? koboTreeField(firstTree, "Mollusk_count")),
-  ];
-  const faunaHtml = `<div class="view-grid">${faunaFields.join("")}${viewGridPad(faunaFields.length)}${viewField("Observed threats", sub["Observed_Threats"] ? prettifyNotifValue(sub["Observed_Threats"]) : null, { full: true })}</div>${viewNotesField("Additional notes", sub["Additional_Notes"] || null)}${viewPhotoField(sub["Photo_Documentation"] || null)}`;
+  const realTrees = trees.filter(t => koboTreeField(t, "Species_Name") || koboTreeField(t, "Species"));
+  const speciesTableHtml = realTrees.length
+    ? `<div class="view-table-wrap"><table class="view-species-table">
+        <thead><tr><th>Species</th><th>Trees</th><th>Saplings</th><th>Seedlings</th></tr></thead>
+        <tbody>${realTrees.map(t => `<tr><td>${escapeHtml(koboTreeField(t, "Species_Name") || koboTreeField(t, "Species") || "—")}</td><td>${escapeHtml(koboTreeField(t, "Tree_Count") ?? "—")}</td><td>${escapeHtml(koboTreeField(t, "Sapling_Count") ?? koboTreeField(t, "Sapling_count") ?? "—")}</td><td>${escapeHtml(koboTreeField(t, "Seedling_Count") ?? koboTreeField(t, "Seedling_count") ?? "—")}</td></tr>`).join("")}</tbody>
+      </table></div>`
+    : viewEmptyNote("No species recorded.");
+  const speciesSectionHtml = `<p class="view-subsection-label">Species Found in Plot</p>${speciesTableHtml}`;
 
+  const healthRaw = (sub["Overall_Health_Assessment"] || "").toLowerCase();
+  const healthBadgeCls = HEALTH_BADGE_CLS[healthRaw];
+  const healthFieldHtml = healthBadgeCls
+    ? viewFieldHtml("Overall health assessment", `<span class="view-badge ${healthBadgeCls}">${escapeHtml(healthAssessmentLabel(sub["Overall_Health_Assessment"]))}</span>`)
+    : viewField("Overall health assessment", null);
+  const healthHtml = `<p class="view-subsection-label">Overall Health</p><div class="view-grid">${healthFieldHtml}${viewGridPad(1)}</div>`;
+
+  const vegetationHtml = `${canopyHtml}${speciesSectionHtml}${healthHtml}`;
+
+  // Mirrors the ranger's own Fauna groups (Mollusks Found / Observed
+  // Threats / Additional Notes / Photos).
+  const mollusks = koboExtractMollusks(sub);
+  const molluskTableHtml = mollusks.length
+    ? `<div class="view-table-wrap"><table class="view-species-table">
+        <thead><tr><th>Species</th></tr></thead>
+        <tbody>${mollusks.map(m => `<tr><td>${escapeHtml(koboTreeField(m, "Mollusk_Species_Name") || koboTreeField(m, "Mollusk_species_name") || "—")}</td></tr>`).join("")}</tbody>
+      </table></div>`
+    : viewEmptyNote("No mollusks recorded.");
+  const molluskSectionHtml = `<p class="view-subsection-label">Mollusks Found</p>${molluskTableHtml}`;
+
+  const threatsHtml = `<p class="view-subsection-label">Observed Threats</p><div class="view-grid">${viewField("Observed threats", observedThreatsDisplay(sub["Observed_Threats"], sub["Observed_Threats_Other"]), { full: true })}</div>`;
+
+  const notesHtml = `<p class="view-subsection-label">Additional Notes</p>${sub["Additional_Notes"] ? `<div class="view-notes">${escapeHtml(sub["Additional_Notes"])}</div>` : viewEmptyNote("No additional notes.")}`;
+
+  const photosHtml = `<p class="view-subsection-label">Photos</p>${sub["Photo_Documentation"] ? `<div class="view-photos"><a href="${escapeHtml(sub["Photo_Documentation"])}" target="_blank" rel="noopener"><img class="view-photo-thumb" src="${escapeHtml(sub["Photo_Documentation"])}" alt="Field photo" /></a></div>` : viewEmptyNote("No photos attached.")}`;
+
+  const faunaHtml = `${molluskSectionHtml}${threatsHtml}${notesHtml}${photosHtml}`;
+
+  // Mirrors the ranger's own Water Quality groups (Observations / Aquafarm /
+  // Instrument Readings / Notes).
   const aquafarmRaw = sub["Nearby_Aquafarm_Activity"] || sub["Nearby_aquafarm_activity"] || "";
-  const waterFields = [
+  const dischargeRawWQ = sub["Discharge_Toward_Mangroves"] || sub["Discharge_toward_mangroves"] || "";
+  const observationsFields = [
+    viewField("Water clarity", sub["Water_Clarity"] ? prettifyNotifValue(sub["Water_Clarity"]) : null),
     viewField("Water color", sub["Water_Color"] ? prettifyNotifValue(sub["Water_Color"]) : null),
     viewField("Odor", sub["Odor"] ? prettifyNotifValue(sub["Odor"]) : null),
     viewField("Visible foam or discharge", sub["Visible_Foam_or_Discharge"] ? prettifyNotifValue(sub["Visible_Foam_or_Discharge"]) : null),
-    viewField("Nearby aquafarm activity", aquafarmRaw ? prettifyNotifValue(aquafarmRaw) : null),
-    viewField("Aquafarm name (if discharge observed)", aquafarmRaw.toLowerCase() === "active___discharge_observed" ? (sub["Aquafarm_Name_if_Discharge_Observed"] || null) : null),
   ];
-  const waterHtml = `<div class="view-grid">${waterFields.join("")}${viewGridPad(waterFields.length)}</div>${viewNotesField("Water quality notes", sub["Water_Quality_Notes"] || null)}`;
+  const observationsHtml = `<p class="view-subsection-label">Observations</p><div class="view-grid">${observationsFields.join("")}${viewGridPad(observationsFields.length)}</div>`;
+
+  const aquafarmFields = [viewField("Nearby aquafarm activity", aquafarmRaw ? prettifyNotifValue(aquafarmRaw) : null)];
+  if (aquafarmRaw.toLowerCase() === "yes") {
+    const aqLat = sub["Aquafarm_Location_Lat"];
+    const aqLng = sub["Aquafarm_Location_Lng"];
+    aquafarmFields.push(
+      viewField("Aquafarm name", sub["Aquafarm_Name"] || null),
+      viewField("Aquafarm location", (aqLat && aqLng) ? `${parseFloat(aqLat).toFixed(5)}, ${parseFloat(aqLng).toFixed(5)}` : null),
+      viewField("Distance to mangroves (m)", sub["Aquafarm_Distance_m"] || null),
+      viewField("Discharge flowing toward mangroves?", dischargeRawWQ ? prettifyNotifValue(dischargeRawWQ) : null)
+    );
+  }
+  const aquafarmHtml = `<p class="view-subsection-label">Aquafarm</p><div class="view-grid">${aquafarmFields.join("")}${viewGridPad(aquafarmFields.length)}</div>`;
+
+  const hasInstrumentValues = sub["Salinity_ppt"] || sub["PH"] || sub["Water_Temperature_C"] || sub["Secchi_Depth_cm"];
+  const instrumentHtml = hasInstrumentValues
+    ? `<p class="view-subsection-label">Instrument Readings</p><div class="view-grid">${[
+        viewField("Salinity (ppt)", sub["Salinity_ppt"] || null),
+        viewField("pH", sub["PH"] || null),
+        viewField("Water temperature (°C)", sub["Water_Temperature_C"] || null),
+        viewField("Secchi depth (cm)", sub["Secchi_Depth_cm"] || null),
+      ].join("")}${viewGridPad(4)}</div>`
+    : "";
+
+  const waterNotesHtml = `<p class="view-subsection-label">Notes</p>${sub["Water_Quality_Notes"] ? `<div class="view-notes">${escapeHtml(sub["Water_Quality_Notes"])}</div>` : viewEmptyNote("No water quality notes.")}`;
+
+  const waterHtml = `${observationsHtml}${aquafarmHtml}${instrumentHtml}${waterNotesHtml}`;
 
   bodyEl.innerHTML =
     viewSection("site", "Site Information", `<div class="view-grid">${siteFields}</div>`) +
@@ -1013,31 +1064,32 @@ function bindRangersSection() {
   }
 }
 
-const THREAT_ALERT_LABELS = {
-  minor_encroachment: "Minor encroachment",
-  illegal_cutting: "Illegal cutting",
-  "debris___waste_dumping": "Debris / waste dumping",
-  storm_damage: "Storm damage",
-  other: "Other threat",
-};
-
-// Everything worth MENRO's attention from one submission: an observed
-// threat the ranger flagged, visible foam/discharge in the water, or an
-// aquafarm actively discharging nearby. A clean submission returns [].
+// Everything worth MENRO's attention from one submission: any observed
+// threat the ranger checked off (besides "None observed"), visible
+// foam/discharge in the water, or an aquafarm actually discharging nearby.
+// A clean submission returns [].
 function submissionAlerts(sub) {
   const alerts = [];
 
-  const threatRaw = (sub["Observed_Threats"] || "").toLowerCase();
-  if (threatRaw && threatRaw !== "none_observed") {
-    alerts.push(THREAT_ALERT_LABELS[threatRaw] || prettifyNotifValue(sub["Observed_Threats"]));
+  const threatValues = (sub["Observed_Threats"] || "").toLowerCase().split(",")
+    .map(s => s.trim()).filter(v => v && v !== "none_observed");
+  if (threatValues.length > 0) {
+    alerts.push(observedThreatsDisplay(threatValues.join(","), sub["Observed_Threats_Other"]));
   }
 
   const dischargeRaw = (sub["Visible_Foam_or_Discharge"] || "").toLowerCase();
-  if (dischargeRaw === "discharge_visible") alerts.push("Discharge visible");
-  if (dischargeRaw === "heavy_discharge") alerts.push("Heavy discharge");
+  if (dischargeRaw === "visible_discharge_flow") alerts.push("Discharge visible");
+  else if (dischargeRaw === "oily_film") alerts.push("Oily film observed");
+  // Legacy values, for submissions from before the Water Quality step asked
+  // this question this way.
+  else if (dischargeRaw === "discharge_visible") alerts.push("Discharge visible");
+  else if (dischargeRaw === "heavy_discharge") alerts.push("Heavy discharge");
 
   const aquafarmRaw = (sub["Nearby_Aquafarm_Activity"] || sub["Nearby_aquafarm_activity"] || "").toLowerCase();
-  if (aquafarmRaw === "active___discharge_observed") alerts.push("Aquafarm discharge observed");
+  const aquafarmDischargeRaw = (sub["Discharge_Toward_Mangroves"] || sub["Discharge_toward_mangroves"] || "").toLowerCase();
+  if (aquafarmRaw === "active___discharge_observed" || (aquafarmRaw === "yes" && aquafarmDischargeRaw === "yes")) {
+    alerts.push("Aquafarm discharge observed");
+  }
 
   return alerts;
 }
@@ -1118,9 +1170,9 @@ function bindAlertsSection() {
 // see the dataviz skill's reference palette) — a 6th threat type would fold
 // into "Other" rather than get a new hue.
 const THREAT_SERIES_CONFIG = [
-  { key: "illegal_cutting",           label: "Illegal cutting",         color: "#2a78d6" },
-  { key: "minor_encroachment",        label: "Minor encroachment",      color: "#eb6834" },
-  { key: "debris___waste_dumping",    label: "Debris / waste dumping",  color: "#1baf7a" },
+  { key: "cutting",                   label: "Cutting",                 color: "#2a78d6" },
+  { key: "encroachment",              label: "Encroachment",            color: "#eb6834" },
+  { key: "garbage",                   label: "Garbage",                 color: "#1baf7a" },
   { key: "storm_damage",              label: "Storm damage",            color: "#eda100" },
   { key: "other",                     label: "Other",                  color: "#e87ba4" },
 ];
@@ -1133,17 +1185,24 @@ function computeThreatsOverTime() {
   const monthCounts = THREAT_SERIES_CONFIG.map(() => Array(12).fill(0));
 
   ALL_SUBMISSIONS.forEach(sub => {
-    const raw = (sub["Observed_Threats"] || "").toLowerCase().trim();
-    if (!raw || raw === "none_observed") return;
+    // A submission can now have several threats checked at once (comma-
+    // joined), not just one — each counted toward its own series instead of
+    // the whole list being treated as a single unmatched value.
+    const values = (sub["Observed_Threats"] || "").toLowerCase().split(",")
+      .map(s => s.trim()).filter(v => v && v !== "none_observed");
+    if (values.length === 0) return;
 
     const dateStr = koboSubmissionDate(sub);
     if (!dateStr || dateStr.length < 7) return;
     const month = parseInt(dateStr.slice(5, 7), 10) - 1;
     if (month < 0 || month > 11) return;
 
-    let seriesIndex = THREAT_SERIES_CONFIG.findIndex(s => s.key === raw);
-    if (seriesIndex === -1) seriesIndex = THREAT_SERIES_CONFIG.length - 1; // a typed "Other" threat, or the literal "other" slug
-    monthCounts[seriesIndex][month] += 1;
+    values.forEach(v => {
+      const key = v === "__other__" ? "other" : v;
+      let seriesIndex = THREAT_SERIES_CONFIG.findIndex(s => s.key === key);
+      if (seriesIndex === -1) seriesIndex = THREAT_SERIES_CONFIG.length - 1; // any threat type without its own series folds into "Other"
+      monthCounts[seriesIndex][month] += 1;
+    });
   });
 
   return THREAT_SERIES_CONFIG.map((cfg, i) => ({
@@ -1452,17 +1511,23 @@ function surveysZoneName(sub) {
   return zone ? zone.name : (sub["_zone_name"] || areaRaw || "Unknown zone").replace(/_/g, " ");
 }
 
+function surveysBarangayName(sub) {
+  const raw = sub["_zone_barangay"] || sub["Barangay"] || "";
+  return raw ? String(raw).replace(/_/g, " ") : "";
+}
+
 function renderSurveysRow(sub) {
   const zoneName = surveysZoneName(sub);
   const aquafarmRaw = (sub["Nearby_aquafarm_activity"] || sub["Nearby_Aquafarm_Activity"] || "").toLowerCase();
-  const aquafarmInfo = aquafarmTag(aquafarmRaw);
+  const dischargeRaw = (sub["Discharge_Toward_Mangroves"] || sub["Discharge_toward_mangroves"] || "").toLowerCase();
+  const aquafarmInfo = aquafarmTag(aquafarmRaw, dischargeRaw);
   const approvalStatus = sub["_approval_status"] || "pending";
   const statusTag = APPROVAL_STATUS_TAG[approvalStatus] || APPROVAL_STATUS_TAG.pending;
 
   return `
     <tr class="row-clickable" data-kobo-id="${escapeHtml(String(sub["_id"] || ""))}">
       <td>${formatDate(koboSubmissionDate(sub))}</td>
-      <td class="survey-log-zone-cell">${escapeHtml(zoneName)}</td>
+      <td class="survey-log-zone-cell" title="${escapeHtml(zoneName)}">${escapeHtml(zoneName)}</td>
       <td>${escapeHtml(sub["Ranger_Name"] || "—")}</td>
       <td class="cell-center"><span class="threat-tag ${aquafarmInfo.cls}">${escapeHtml(aquafarmInfo.label)}</span></td>
       <td class="cell-center"><span class="threat-tag ${statusTag.cls}">${statusTag.label}</span></td>
@@ -1496,6 +1561,36 @@ function renderSurveysRow(sub) {
 // History table.
 const surveysSortState = { key: "date", dir: "desc" };
 let surveysSearchQuery = "";
+const surveysFilterState = { barangay: "", zone: "", status: "" };
+const SURVEYS_PAGE_SIZE = 10;
+let surveysCurrentPage = 1;
+
+function isSurveysFilterActive() {
+  return !!(surveysSearchQuery || surveysFilterState.barangay || surveysFilterState.zone || surveysFilterState.status);
+}
+
+// Rebuilds the barangay/zone dropdown options from whatever submissions
+// actually exist, same as the ranger's own filter bar — keeping whatever
+// was already selected if it's still a valid option.
+function populateSurveysFilterOptions() {
+  const barangaySelect = document.getElementById("surveysFilterBarangay");
+  const zoneSelect = document.getElementById("surveysFilterZone");
+  if (!barangaySelect || !zoneSelect) return;
+
+  const barangays = [...new Set(ALL_SUBMISSIONS.map(surveysBarangayName).filter(Boolean))].sort();
+  const zones = [...new Set(ALL_SUBMISSIONS.map(surveysZoneName).filter(z => z && z !== "Unknown zone"))].sort();
+
+  const prevBarangay = barangaySelect.value;
+  const prevZone = zoneSelect.value;
+
+  barangaySelect.innerHTML = '<option value="">All barangays</option>' +
+    barangays.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join("");
+  zoneSelect.innerHTML = '<option value="">All mangroves</option>' +
+    zones.map(z => `<option value="${escapeHtml(z)}">${escapeHtml(z)}</option>`).join("");
+
+  if (barangays.includes(prevBarangay)) barangaySelect.value = prevBarangay;
+  if (zones.includes(prevZone)) zoneSelect.value = prevZone;
+}
 
 const SURVEYS_STATUS_RANK = { pending: 0, rejected: 1, approved: 2 };
 
@@ -1504,7 +1599,10 @@ function surveysSortValue(sub, key) {
     case "date":     return koboSubmissionDate(sub) || "";
     case "zone":     return surveysZoneName(sub) || "";
     case "ranger":   return sub["Ranger_Name"] || "";
-    case "aquafarm": return aquafarmTag((sub["Nearby_aquafarm_activity"] || sub["Nearby_Aquafarm_Activity"] || "").toLowerCase()).label;
+    case "aquafarm": return aquafarmTag(
+      (sub["Nearby_aquafarm_activity"] || sub["Nearby_Aquafarm_Activity"] || "").toLowerCase(),
+      (sub["Discharge_Toward_Mangroves"] || sub["Discharge_toward_mangroves"] || "").toLowerCase()
+    ).label;
     case "status":   return SURVEYS_STATUS_RANK[sub["_approval_status"] || "pending"] ?? 99;
     default:         return 0;
   }
@@ -1531,17 +1629,26 @@ function renderSurveysView() {
   setCount("surveysTabCountApproved", counts.approved);
   setCount("surveysTabCountRejected", counts.rejected);
 
+  populateSurveysFilterOptions();
+
   const filtered = activeSurveysTab === "all"
     ? ALL_SUBMISSIONS
     : ALL_SUBMISSIONS.filter(sub => (sub["_approval_status"] || "pending") === activeSurveysTab);
 
   const query = surveysSearchQuery.trim().toLowerCase();
-  const searched = query
-    ? filtered.filter(sub =>
-        surveysZoneName(sub).toLowerCase().includes(query) ||
-        (sub["Ranger_Name"] || "").toLowerCase().includes(query)
-      )
-    : filtered;
+  const searched = filtered.filter(sub => {
+    if (surveysFilterState.barangay && surveysBarangayName(sub) !== surveysFilterState.barangay) return false;
+    if (surveysFilterState.zone && surveysZoneName(sub) !== surveysFilterState.zone) return false;
+    if (surveysFilterState.status && (sub["_approval_status"] || "pending") !== surveysFilterState.status) return false;
+    if (query) {
+      const haystack = `${surveysZoneName(sub)} ${sub["Ranger_Name"] || ""} ${surveysBarangayName(sub)}`.toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    return true;
+  });
+
+  const clearBtn = document.getElementById("surveysFilterClear");
+  if (clearBtn) clearBtn.classList.toggle("is-inactive", !isSurveysFilterActive());
 
   const sorted = [...searched].sort((a, b) => {
     const av = surveysSortValue(a, surveysSortState.key);
@@ -1553,12 +1660,36 @@ function renderSurveysView() {
   updateSurveysSortHeaderIndicators();
 
   if (sorted.length > 0) {
-    bodyEl.innerHTML = sorted.map(renderSurveysRow).join("");
+    const totalPages = Math.max(1, Math.ceil(sorted.length / SURVEYS_PAGE_SIZE));
+    surveysCurrentPage = Math.min(surveysCurrentPage, totalPages);
+    const start = (surveysCurrentPage - 1) * SURVEYS_PAGE_SIZE;
+    bodyEl.innerHTML = sorted.slice(start, start + SURVEYS_PAGE_SIZE).map(renderSurveysRow).join("");
     emptyEl.hidden = true;
+    renderSurveysPagination(sorted.length, totalPages);
   } else {
     bodyEl.innerHTML = "";
     emptyEl.hidden = false;
+    renderSurveysPagination(0, 1);
   }
+}
+
+function renderSurveysPagination(totalCount, totalPages) {
+  const pagination = document.getElementById("surveysPagination");
+  const text = document.getElementById("surveysPaginationText");
+  if (!pagination || !text) return;
+
+  if (totalCount <= SURVEYS_PAGE_SIZE) {
+    pagination.hidden = true;
+    return;
+  }
+
+  pagination.hidden = false;
+  text.textContent = `Page ${surveysCurrentPage} of ${totalPages}`;
+
+  const prev = document.getElementById("surveysPrevPage");
+  const next = document.getElementById("surveysNextPage");
+  if (prev) prev.disabled = surveysCurrentPage <= 1;
+  if (next) next.disabled = surveysCurrentPage >= totalPages;
 }
 
 function bindSurveysSection() {
@@ -1570,6 +1701,7 @@ function bindSurveysSection() {
       if (!btn) return;
       activeSurveysTab = btn.dataset.surveysTab;
       tabsEl.querySelectorAll(".approval-tab").forEach(t => t.classList.toggle("active", t === btn));
+      surveysCurrentPage = 1;
       renderSurveysView();
     });
   }
@@ -1579,6 +1711,54 @@ function bindSurveysSection() {
     searchEl.dataset.bound = "true";
     searchEl.addEventListener("input", () => {
       surveysSearchQuery = searchEl.value;
+      surveysCurrentPage = 1;
+      renderSurveysView();
+    });
+  }
+
+  const barangaySelect = document.getElementById("surveysFilterBarangay");
+  if (barangaySelect && !barangaySelect.dataset.bound) {
+    barangaySelect.dataset.bound = "true";
+    barangaySelect.addEventListener("change", () => {
+      surveysFilterState.barangay = barangaySelect.value;
+      surveysCurrentPage = 1;
+      renderSurveysView();
+    });
+  }
+
+  const zoneSelect = document.getElementById("surveysFilterZone");
+  if (zoneSelect && !zoneSelect.dataset.bound) {
+    zoneSelect.dataset.bound = "true";
+    zoneSelect.addEventListener("change", () => {
+      surveysFilterState.zone = zoneSelect.value;
+      surveysCurrentPage = 1;
+      renderSurveysView();
+    });
+  }
+
+  const statusSelect = document.getElementById("surveysFilterStatus");
+  if (statusSelect && !statusSelect.dataset.bound) {
+    statusSelect.dataset.bound = "true";
+    statusSelect.addEventListener("change", () => {
+      surveysFilterState.status = statusSelect.value;
+      surveysCurrentPage = 1;
+      renderSurveysView();
+    });
+  }
+
+  const clearBtn = document.getElementById("surveysFilterClear");
+  if (clearBtn && !clearBtn.dataset.bound) {
+    clearBtn.dataset.bound = "true";
+    clearBtn.addEventListener("click", () => {
+      surveysSearchQuery = "";
+      surveysFilterState.barangay = "";
+      surveysFilterState.zone = "";
+      surveysFilterState.status = "";
+      surveysCurrentPage = 1;
+      if (searchEl) searchEl.value = "";
+      if (barangaySelect) barangaySelect.value = "";
+      if (zoneSelect) zoneSelect.value = "";
+      if (statusSelect) statusSelect.value = "";
       renderSurveysView();
     });
   }
@@ -1596,9 +1776,28 @@ function bindSurveysSection() {
         surveysSortState.key = key;
         surveysSortState.dir = "asc";
       }
+      surveysCurrentPage = 1;
       renderSurveysView();
     });
   });
+
+  const surveysPrevBtn = document.getElementById("surveysPrevPage");
+  if (surveysPrevBtn && !surveysPrevBtn.dataset.bound) {
+    surveysPrevBtn.dataset.bound = "true";
+    surveysPrevBtn.addEventListener("click", () => {
+      surveysCurrentPage = Math.max(1, surveysCurrentPage - 1);
+      renderSurveysView();
+    });
+  }
+
+  const surveysNextBtn = document.getElementById("surveysNextPage");
+  if (surveysNextBtn && !surveysNextBtn.dataset.bound) {
+    surveysNextBtn.dataset.bound = "true";
+    surveysNextBtn.addEventListener("click", () => {
+      surveysCurrentPage += 1;
+      renderSurveysView();
+    });
+  }
 
   // Approve/Reject act on the row directly and must be checked first, since
   // the click still bubbles up to the row — everything else on the row

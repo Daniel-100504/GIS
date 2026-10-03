@@ -125,8 +125,12 @@ function applyMangroveLayerVisibility(layer) {
   if (el) el.style.pointerEvents = visible ? "" : "none";
 }
 
+const legendAreaTypeEl = document.getElementById("legendAreaType");
+if (legendAreaTypeEl) legendAreaTypeEl.hidden = !(!layerFieldMangrovesEl || layerFieldMangrovesEl.checked);
+
 function refreshMangroveLayersVisibility() {
   mangroveDrawnItems.eachLayer(applyMangroveLayerVisibility);
+  if (legendAreaTypeEl) legendAreaTypeEl.hidden = !(!layerFieldMangrovesEl || layerFieldMangrovesEl.checked);
 }
 
 function bindMangrovePopup(layer, name, barangay, category) {

@@ -182,6 +182,7 @@ const ndviOverlayLayer = L.tileLayer.wms(`${SENTINEL_PROXY_URL}?mode=wms`, {
 });
 
 const layerNdviOverlayEl = document.getElementById("layerNdviOverlay");
+const legendNdviEl = document.getElementById("legendNdvi");
 if (layerNdviOverlayEl) {
     layerNdviOverlayEl.addEventListener("change", function () {
         if (this.checked) {
@@ -189,8 +190,10 @@ if (layerNdviOverlayEl) {
         } else {
             map.removeLayer(ndviOverlayLayer);
         }
+        if (legendNdviEl) legendNdviEl.hidden = !this.checked;
     });
     if (layerNdviOverlayEl.checked) ndviOverlayLayer.addTo(map);
+    if (legendNdviEl) legendNdviEl.hidden = !layerNdviOverlayEl.checked;
 }
 
 // Real mangrove boundary shapes for Calatagan, clipped from the Global Mangrove

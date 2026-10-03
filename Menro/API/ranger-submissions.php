@@ -1,6 +1,6 @@
 <?php
 
-session_start();
+require_once __DIR__ . '/../../Login/Database/session-init.php';
 
 header('Content-Type: application/json');
 
@@ -30,6 +30,27 @@ function deleteFromSupabase(int $localId) {
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         'apikey: ' . SUPABASE_SECRET_KEY,
         'Authorization: Bearer ' . SUPABASE_SECRET_KEY,
+    ]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+    curl_exec($ch);
+    curl_close($ch);
+}
+
+// Keeps the Supabase backup copy's raw_json in step with an edit made here —
+// without this, Supabase would keep showing the submission exactly as it was
+// first submitted, forever missing anything changed later. Best-effort, same
+// as deleteFromSupabase: the local save already succeeded by the time this
+// runs, so a Supabase hiccup here doesn't fail the edit the user asked for.
+function updateSupabaseRecord(int $localId, array $record) {
+    $ch = curl_init(SUPABASE_URL . '/rest/v1/ranger_submissions?local_id=eq.' . $localId);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['raw_json' => $record]));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'apikey: ' . SUPABASE_SECRET_KEY,
+        'Authorization: Bearer ' . SUPABASE_SECRET_KEY,
+        'Content-Type: application/json',
+        'Prefer: return=minimal',
     ]);
     curl_setopt($ch, CURLOPT_TIMEOUT, 8);
     curl_exec($ch);
@@ -104,13 +125,25 @@ if ($action === 'updateFields') {
     // fixed, since changing those would mean the record belongs somewhere else.
     $editableFields = [
         'Nearby_Aquafarm_Activity'                => $_POST['aquafarm']         ?? null,
-        'Aquafarm_Name_if_Discharge_Observed'      => $_POST['aquafarmName']     ?? null,
+        'Aquafarm_Name'                             => $_POST['aquafarmName']     ?? null,
+        'Aquafarm_Location_Lat'                     => $_POST['aquafarmLat']      ?? null,
+        'Aquafarm_Location_Lng'                     => $_POST['aquafarmLng']      ?? null,
+        'Aquafarm_Distance_m'                       => $_POST['aquafarmDistance'] ?? null,
+        'Discharge_Toward_Mangroves'                => $_POST['dischargeTowardMangroves'] ?? null,
         'Water_Quality_Notes'                      => $_POST['waterNotes']       ?? null,
         'Observed_Threats'                         => $_POST['observedThreats'] ?? null,
+        'Observed_Threats_Other'                    => $_POST['observedThreatsOther'] ?? null,
         'Additional_Notes'                         => $_POST['additionalNotes'] ?? null,
+        'Water_Clarity'                              => $_POST['waterClarity']    ?? null,
         'Water_Color'                              => $_POST['waterColor']      ?? null,
         'Odor'                                     => $_POST['odor']            ?? null,
         'Visible_Foam_or_Discharge'                => $_POST['foamDischarge']   ?? null,
+        'Salinity_ppt'                               => $_POST['salinity']        ?? null,
+        'PH'                                         => $_POST['ph']             ?? null,
+        'Water_Temperature_C'                        => $_POST['waterTemp']       ?? null,
+        'Secchi_Depth_cm'                            => $_POST['secchiDepth']     ?? null,
+        'Estimated_Canopy_Cover_'                  => $_POST['canopyCover']      ?? null,
+        'Overall_Health_Assessment'                => $_POST['healthAssessment'] ?? null,
     ];
 
     $pdo = getDbConnection();
@@ -178,78 +211,63 @@ if ($action === 'updateFields') {
         }
     }
 
-    // An empty aquafarm name is normally skipped above (empty usually just
-    // means "leave this field alone"), but when the ranger sets aquafarm
-    // activity to a non-active state an empty name is deliberate — clear out
-    // any name left over from when it was previously active, instead of
-    // leaving it stale.
+    // An empty aquafarm follow-up field is normally skipped above (empty
+    // usually just means "leave this field alone"), but when the ranger
+    // switches the answer back to No, any name/location/distance/discharge
+    // left over from when it was Yes is now stale and gets cleared instead
+    // of lingering.
     $aquafarmVal = (string) ($_POST['aquafarm'] ?? '');
-    if ($aquafarmVal !== '' && strpos($aquafarmVal, 'active') !== 0) {
-        $record['Aquafarm_Name_if_Discharge_Observed'] = '';
+    if ($aquafarmVal !== '' && $aquafarmVal !== 'yes') {
+        $record['Aquafarm_Name'] = '';
+        $record['Aquafarm_Location_Lat'] = '';
+        $record['Aquafarm_Location_Lng'] = '';
+        $record['Aquafarm_Distance_m'] = '';
+        $record['Discharge_Toward_Mangroves'] = '';
     }
 
-    // Tree Measurements can arrive two ways: as a real repeat-group array
-    // (once "Repeat this group" is on) or as flat top-level fields (a single
-    // tree, repeat not triggered). Both are handled generically here instead
-    // of assuming one shape, since the form can be in either state.
-    $treesInput = json_decode($_POST['trees'] ?? '[]', true);
-    if (is_array($treesInput) && count($treesInput) > 0) {
-        $fieldMap = [
-            'species'         => 'Species_Name',
-            'height'          => 'Average_Tree_Height_m',
-            'gbh'             => 'GBH_Girth_at_Breast_Height_cm',
-            'canopyLength'    => 'Canopy_Length_m',
-            'canopyWidth'     => 'Canopy_Width_m',
-            'canopyCover'     => 'Estimated_Canopy_Cover_',
-            'treeCount'       => 'Tree_Count',
-            'healthAssessment' => 'Overall_Health_Assessment',
-            'molluskSpecies'  => 'Mollusk_Species_Name',
-            'molluskCount'    => 'Mollusk_Count',
-            'seedlingSpecies' => 'Seedling_Species',
-            'seedlingCount'   => 'Seedling_Count',
-            'saplingSpecies'  => 'Sapling_Species',
-            'saplingCount'    => 'Sapling_Count',
-        ];
+    // Rebuilds one of this record's repeat-group arrays (Species_Records or
+    // Mollusk_Records) from the wizard's row data. Named explicitly rather
+    // than found by a generic "first array of objects" scan, since a record
+    // can now hold both arrays at once and a generic scan could easily grab
+    // the wrong one.
+    function rebuildRepeatGroup(array &$record, string $arrayKey, array $rowsInput, array $fieldMap) {
+        if (!is_array($rowsInput) || count($rowsInput) === 0) return;
 
-        // Find the repeat-group array, if this record has one, by the same
-        // generic "array of objects" test used elsewhere in the codebase.
-        $arrayKey = null;
-        foreach ($record as $k => $v) {
-            if (is_array($v) && count($v) > 0 && is_array($v[0] ?? null)) {
-                $arrayKey = $k;
-                break;
-            }
-        }
-
-        if ($arrayKey !== null) {
-            // Preserve whatever key-prefix style the original entries used
-            // (e.g. "GroupName/Tree_code" vs plain "Tree_code").
-            $prefix = '';
+        // Preserve whatever key-prefix style the original entries used
+        // (e.g. "GroupName/Species_Name" vs plain "Species_Name"), and fall
+        // back to this exact key name for a record that doesn't have it yet
+        // (a brand new array, or a legacy record predating this feature).
+        $prefix = '';
+        if (!empty($record[$arrayKey][0])) {
             foreach (array_keys($record[$arrayKey][0]) as $sampleKey) {
                 if (strpos($sampleKey, '/') !== false) {
                     $prefix = substr($sampleKey, 0, strrpos($sampleKey, '/') + 1);
                     break;
                 }
             }
-            $newArray = [];
-            foreach ($treesInput as $t) {
-                $entry = [];
-                foreach ($fieldMap as $inKey => $koboKey) {
-                    $entry[$prefix . $koboKey] = $t[$inKey] ?? '';
-                }
-                $newArray[] = $entry;
-            }
-            $record[$arrayKey] = $newArray;
-        } else {
-            // No repeat array on this record — it's a flat single tree.
-            $t = $treesInput[0];
-            foreach ($fieldMap as $inKey => $koboKey) {
-                if (isset($t[$inKey]) && $t[$inKey] !== '') {
-                    $record[$koboKey] = $t[$inKey];
-                }
-            }
         }
+        $newArray = [];
+        foreach ($rowsInput as $row) {
+            if (empty($row['species'])) continue;
+            $entry = [];
+            foreach ($fieldMap as $inKey => $koboKey) {
+                $entry[$prefix . $koboKey] = $row[$inKey] ?? '';
+            }
+            $newArray[] = $entry;
+        }
+        $record[$arrayKey] = $newArray;
     }
+
+    rebuildRepeatGroup($record, 'Species_Records', json_decode($_POST['trees'] ?? '[]', true), [
+        'species'       => 'Species_Name',
+        'treeCount'     => 'Tree_Count',
+        'saplingCount'  => 'Sapling_Count',
+        'seedlingCount' => 'Seedling_Count',
+    ]);
+
+    rebuildRepeatGroup($record, 'Mollusk_Records', json_decode($_POST['molluskRows'] ?? '[]', true), [
+        'species' => 'Mollusk_Species_Name',
+    ]);
 
     // A resubmitted revision needs a fresh look from MENRO, same as a
     // resent government form or a pull request pushed after "changes
@@ -267,6 +285,8 @@ if ($action === 'updateFields') {
         'raw_json' => json_encode($record),
         'id'       => $submissionId,
     ]);
+
+    updateSupabaseRecord((int) $submissionId, $record);
 
     echo json_encode([
         'success'         => true,

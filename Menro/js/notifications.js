@@ -182,4 +182,4 @@ renderNotificationsWhenReady();
 setInterval(async () => {
   if (typeof fetchKoboData === "function") await fetchKoboData();
   renderNotifications();
-}, 30 * 1000);
+}, 15 * 1000);

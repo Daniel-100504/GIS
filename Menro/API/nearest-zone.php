@@ -1,6 +1,6 @@
 <?php
 
-session_start();
+require_once __DIR__ . '/../../Login/Database/session-init.php';
 
 header('Content-Type: application/json');
 

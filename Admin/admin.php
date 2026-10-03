@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once __DIR__ . '/../Login/Database/session-init.php';
 if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
     header('Location: ../Login/Login.php');
     exit;
@@ -281,6 +281,13 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
             </tbody>
           </table>
         </div>
+        <div class="account-pagination" id="timeLogPagination" hidden>
+          <span class="account-pagination-text" id="timeLogPaginationText"></span>
+          <div class="account-pagination-controls">
+            <button type="button" class="btn-row-action" id="timeLogPrevPage">Prev</button>
+            <button type="button" class="btn-row-action" id="timeLogNextPage">Next</button>
+          </div>
+        </div>
       </div>
 
     </section>
@@ -300,6 +307,13 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
               <tr><td colspan="4" class="account-empty">Loading…</td></tr>
             </tbody>
           </table>
+        </div>
+        <div class="account-pagination" id="activityLogPagination" hidden>
+          <span class="account-pagination-text" id="activityLogPaginationText"></span>
+          <div class="account-pagination-controls">
+            <button type="button" class="btn-row-action" id="activityLogPrevPage">Prev</button>
+            <button type="button" class="btn-row-action" id="activityLogNextPage">Next</button>
+          </div>
         </div>
       </div>
 
@@ -477,6 +491,6 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
 </div>
 
 <script src="../assets/utils.js?v=2"></script>
-<script src="admin.js?v=33"></script>
+<script src="admin.js?v=38"></script>
 </body>
 </html>

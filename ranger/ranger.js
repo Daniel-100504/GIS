@@ -81,6 +81,7 @@ const AUTH_API = '../Login/Database/api.php';
   confirmBtn.addEventListener('click', signOutRanger);
 
   initIdleLogout(15, signOutRanger, { overlayClass: "confirm-overlay" });
+  initAccountStatusWatch(AUTH_API, signOutRanger);
 })();
 
 function openGuide() {
@@ -426,10 +427,17 @@ function switchView(viewName, btn) {
     active___discharge_observed:      { label: 'Active — discharge observed', cls: 'wq-discharge' },
   };
 
-  function aquafarmInfo(raw) {
+  // "Nearby aquafarm activity" alone no longer implies discharge — that's
+  // now its own separate follow-up question (Discharge_Toward_Mangroves), so
+  // an aquafarm being present only counts as the red "discharge" color once
+  // that follow-up actually confirms discharge flowing toward the mangroves.
+  function aquafarmInfo(raw, dischargeRaw) {
     const v = (raw || '').toString().toLowerCase();
     if (AQUAFARM_STATUS[v]) return AQUAFARM_STATUS[v];
-    if (v === 'yes') return { label: 'Yes', cls: 'wq-discharge' };
+    if (v === 'yes') {
+      const d = (dischargeRaw || '').toString().toLowerCase();
+      return d === 'yes' ? { label: 'Yes', cls: 'wq-discharge' } : { label: 'Yes', cls: 'wq-pending' };
+    }
     if (v === 'no')  return { label: 'No',  cls: 'wq-clear' };
     if (!v) return { label: 'No data', cls: 'wq-pending' };
     return { label: prettifyLabel(v) || v, cls: 'wq-pending' };
@@ -440,12 +448,42 @@ function switchView(viewName, btn) {
     return v === 'yes' || v.startsWith('active');
   }
 
+  // Mirrors extractTrees, but for the Fauna step's separate mollusk table —
+  // its own named array (Mollusk_Records) checked first, falling back to a
+  // single implicit row for a legacy record that only ever had one flat
+  // mollusk species/count pair (with no array at all).
+  function extractMollusks(record) {
+    if (Array.isArray(record['Mollusk_Records']) && record['Mollusk_Records'].length > 0) {
+      return record['Mollusk_Records'];
+    }
+    const flat = flattenKeys(record);
+    const species = flat['mollusk_species_name'];
+    if (species) {
+      return [{ Mollusk_Species_Name: species, Mollusk_Count: flat['mollusk_count'] }];
+    }
+    return [];
+  }
+
+  function normalizeMollusk(molluskRecord) {
+    const t = flattenKeys(molluskRecord);
+    return { species: t['mollusk_species_name'] || '—' };
+  }
+
   // Kobo repeat groups come back as an array of objects under whatever key
   // the group was given — found generically here instead of hardcoding an
   // exact group name, since that name depends on how the form was built.
+  // A native submission can also carry a second repeat-group array for
+  // mollusks (Mollusk_Records) alongside this one, so Species_Records is
+  // checked by its exact name first — a generic "first array of objects on
+  // the record" scan could otherwise grab the wrong array depending on key
+  // order.
   function extractTrees(record) {
+    if (Array.isArray(record['Species_Records']) && record['Species_Records'].length > 0) {
+      return record['Species_Records'];
+    }
     for (const key in record) {
       if (!Object.prototype.hasOwnProperty.call(record, key)) continue;
+      if (key === 'Mollusk_Records') continue;
       const value = record[key];
       // typeof null === "object" in JS, so a plain check would misread a
       // no-GPS submission's "_geolocation":[null,null] as the tree list.
@@ -473,7 +511,8 @@ function switchView(viewName, btn) {
       gbh: parseCanopyValue(t['gbh_girth_at_breast_height_cm'] || t['gbh_cm']),
       canopyLength: parseCanopyValue(t['canopy_length_m']),
       canopyWidth: parseCanopyValue(t['canopy_width_m']),
-      canopyCoverDirect: parseCanopyValue(t['estimated_canopy_cover_']),
+      canopyCoverDirect: parseCanopyValue(t['estimated_canopy_cover_'] || t['canopy_cover']),
+      treeCount: parseCanopyValue(t['tree_count']),
       molluskSpecies: t['mollusk_species_name'] || '',
       molluskCount: parseCanopyValue(t['mollusk_count']),
       seedlingSpecies: t['seedling_species'] || t['seedling_species_name'] || '',
@@ -531,15 +570,6 @@ function switchView(viewName, btn) {
     return 'degraded';
   }
 
-  function healthAssessmentLabel(raw) {
-    switch ((raw || '').toString().toLowerCase()) {
-      case 'healthy':  return 'Good';
-      case 'moderate': return 'Fair';
-      case 'degraded': return 'Poor';
-      default:         return prettifyLabel(raw);
-    }
-  }
-
   function statusBadge(status) {
     switch (status) {
       case 'healthy':  return { label: 'Good',  badgeCls: 'badge-healthy',  dotCls: 'dot-healthy' };
@@ -559,18 +589,32 @@ function switchView(viewName, btn) {
     const zoneName = flat['_zone_name'] || null;
     const zoneBarangay = flat['_zone_barangay'] || null;
     const aquafarmRaw = flat['nearby_aquafarm_activity'] || null;
-    const aquafarmName = flat['aquafarm_name_if_discharge_observed'] || flat['name_of_aquafarm_if_yes'] || '';
+    const aquafarmName = flat['aquafarm_name'] || flat['aquafarm_name_if_discharge_observed'] || flat['name_of_aquafarm_if_yes'] || '';
+    const aquafarmLat = flat['aquafarm_location_lat'] || '';
+    const aquafarmLng = flat['aquafarm_location_lng'] || '';
+    const aquafarmDistance = flat['aquafarm_distance_m'] || '';
+    const dischargeTowardMangroves = flat['discharge_toward_mangroves'] || '';
     const waterNotes = flat['water_quality_notes'] || '';
     const additionalNotes = flat['additional_notes'] || '';
     const healthAssessmentRaw = flat['overall_health_assessment'] || null;
+    // A flat field on the record itself, not inside a Species_Records row —
+    // canopy cover applies to the whole plot, not to any one species.
+    const canopyCover = flat['estimated_canopy_cover_'] || '';
     const observedThreats = flat['observed_threats'] || '';
+    const observedThreatsOther = flat['observed_threats_other'] || '';
+    const waterClarity = flat['water_clarity'] || '';
     const waterColor = flat['water_color'] || '';
     const odor = flat['odor'] || '';
     const foamOrDischarge = flat['visible_foam_or_discharge'] || '';
+    const salinity = flat['salinity_ppt'] || '';
+    const ph = flat['ph'] || '';
+    const waterTemp = flat['water_temperature_c'] || '';
+    const secchiDepth = flat['secchi_depth_cm'] || '';
     const treeCount = parseCanopyValue(flat['tree_count']);
 
     const trees = extractTrees(record).map(normalizeTree);
     const summary = summarizeTrees(trees);
+    const mollusks = extractMollusks(record).map(normalizeMollusk);
 
     return {
       id: flat['_id'] || flat['_uuid'] || Math.random().toString(36).slice(2),
@@ -592,7 +636,19 @@ function switchView(viewName, btn) {
       foamOrDischarge,
       treeCount,
       healthAssessmentRaw,
-      water: aquafarmInfo(aquafarmRaw),
+      canopyCover,
+      mollusks,
+      observedThreatsOther,
+      waterClarity,
+      aquafarmLat,
+      aquafarmLng,
+      aquafarmDistance,
+      dischargeTowardMangroves,
+      salinity,
+      ph,
+      waterTemp,
+      secchiDepth,
+      water: aquafarmInfo(aquafarmRaw, dischargeTowardMangroves),
       status: deriveStatus(summary, healthAssessmentRaw),
       submittedBy: findField(flat, FIELD_CANDIDATES.rangerName) || '—',
       photos: collectPhotos(flat, record),
@@ -651,7 +707,7 @@ function switchView(viewName, btn) {
     const top = sorted.slice(0, 5);
     container.innerHTML = top.map(s => {
       const badge = statusBadge(s.status);
-      const canopyText = `Trees recorded: ${s.summary.count}`;
+      const canopyText = `Species recorded: ${s.summary.count}`;
       const deleteBtn = s.koboId
         ? `<button class="submission-delete-btn" data-delete-id="${escapeHtml(String(s.koboId))}" aria-label="Delete submission">
              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -683,6 +739,7 @@ function switchView(viewName, btn) {
     if (total === 0) {
       tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--ink-400); padding:20px;">No submissions yet.</td></tr>`;
       if (note) note.textContent = 'Showing 0 of 0 submissions. Records will appear here after each field inspection.';
+      renderHistoryPagination(0, 1);
       return;
     }
 
@@ -692,6 +749,7 @@ function switchView(viewName, btn) {
       if (note) note.textContent = `Showing 0 of ${total} submissions.`;
       const clearLink = document.getElementById('filter-empty-clear');
       if (clearLink) clearLink.addEventListener('click', clearFilters);
+      renderHistoryPagination(0, 1);
       return;
     }
 
@@ -704,34 +762,30 @@ function switchView(viewName, btn) {
 
     updateSortHeaderIndicators();
 
-    tbody.innerHTML = sorted.map(s => {
+    const totalPages = Math.max(1, Math.ceil(sorted.length / HISTORY_PAGE_SIZE));
+    historyCurrentPage = Math.min(historyCurrentPage, totalPages);
+    const pageStart = (historyCurrentPage - 1) * HISTORY_PAGE_SIZE;
+    const pageItems = sorted.slice(pageStart, pageStart + HISTORY_PAGE_SIZE);
+    renderHistoryPagination(sorted.length, totalPages);
+
+    tbody.innerHTML = pageItems.map(s => {
       const badge = statusBadge(s.status);
-      const threatsText = s.observedThreats ? prettifyLabel(s.observedThreats) : 'None';
+      const threatsText = observedThreatsDisplay(s.observedThreats, s.observedThreatsOther) || 'None';
       const isLocked = s.approvalStatus === 'approved';
-      const editBtn = !s.koboId
+      // An approved submission is locked from editing/deleting on MENRO's
+      // side too, so there's genuinely nothing to do here — no button at
+      // all (not even a disabled one) rather than a lock icon that just
+      // explains itself away.
+      const editBtn = !s.koboId || isLocked
         ? ''
-        : isLocked
-        ? `<button class="row-edit-btn row-edit-btn-locked" disabled aria-label="Approved submissions can't be edited" title="Approved submissions can't be edited. Contact MENRO if a correction is needed.">
-             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-             </svg>
-           </button>`
         : `<button class="row-edit-btn" data-edit-id="${escapeHtml(String(s.koboId))}" aria-label="Edit submission">
              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
              </svg>
            </button>`;
-      const deleteBtn = !s.koboId
+      const deleteBtn = !s.koboId || isLocked
         ? '—'
-        : isLocked
-        ? `<button class="row-delete-btn row-delete-btn-locked" disabled aria-label="Approved submissions can't be deleted" title="Approved submissions can't be deleted. Contact MENRO if a correction is needed.">
-             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-               <polyline points="3 6 5 6 21 6" />
-               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-             </svg>
-           </button>`
         : `<button class="row-delete-btn" data-delete-id="${escapeHtml(String(s.koboId))}" aria-label="Delete submission">
              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                <polyline points="3 6 5 6 21 6" />
@@ -751,6 +805,25 @@ function switchView(viewName, btn) {
     }).join('');
 
     if (note) note.textContent = `Showing ${sorted.length} of ${total} submissions.`;
+  }
+
+  function renderHistoryPagination(totalCount, totalPages) {
+    const pagination = document.getElementById('historyPagination');
+    const text = document.getElementById('historyPaginationText');
+    if (!pagination || !text) return;
+
+    if (totalCount <= HISTORY_PAGE_SIZE) {
+      pagination.hidden = true;
+      return;
+    }
+
+    pagination.hidden = false;
+    text.textContent = `Page ${historyCurrentPage} of ${totalPages}`;
+
+    const prev = document.getElementById('historyPrevPage');
+    const next = document.getElementById('historyNextPage');
+    if (prev) prev.disabled = historyCurrentPage <= 1;
+    if (next) next.disabled = historyCurrentPage >= totalPages;
   }
 
   function showError(message) {
@@ -776,6 +849,8 @@ function switchView(viewName, btn) {
   // Newest-first by default, same as before this became sortable.
   const sortState = { key: 'date', dir: 'desc' };
   const SORT_STATUS_RANK = { healthy: 0, moderate: 1, degraded: 2, pending: 3 };
+  const HISTORY_PAGE_SIZE = 10;
+  let historyCurrentPage = 1;
 
   function sortValue(s, key) {
     switch (key) {
@@ -810,10 +885,30 @@ function switchView(viewName, btn) {
           sortState.key = key;
           sortState.dir = 'asc';
         }
+        historyCurrentPage = 1;
         renderHistoryTable(getFilteredSubmissions(), currentSubmissions.length);
       });
     });
     updateSortHeaderIndicators();
+  }
+
+  function bindHistoryPagination() {
+    const prev = document.getElementById('historyPrevPage');
+    const next = document.getElementById('historyNextPage');
+    if (prev && !prev.dataset.bound) {
+      prev.dataset.bound = 'true';
+      prev.addEventListener('click', () => {
+        historyCurrentPage = Math.max(1, historyCurrentPage - 1);
+        renderHistoryTable(getFilteredSubmissions(), currentSubmissions.length);
+      });
+    }
+    if (next && !next.dataset.bound) {
+      next.dataset.bound = 'true';
+      next.addEventListener('click', () => {
+        historyCurrentPage += 1;
+        renderHistoryTable(getFilteredSubmissions(), currentSubmissions.length);
+      });
+    }
   }
 
   const filterState = {
@@ -874,6 +969,7 @@ function switchView(viewName, btn) {
 
   function applyFilters() {
     updateClearButtonState();
+    historyCurrentPage = 1;
     renderHistoryTable(getFilteredSubmissions(), currentSubmissions.length);
   }
 
@@ -1020,6 +1116,47 @@ function switchView(viewName, btn) {
     return `<div class="${cls}"><span class="view-label">${escapeHtml(label)}</span><span class="view-value${isEmpty ? ' muted' : ''}">${display}</span></div>`;
   }
 
+  // Same shape as viewField, but for a value that's already-built HTML (a
+  // colored status badge) instead of plain text that needs escaping.
+  function viewFieldHtml(label, html, opts = {}) {
+    const cls = `view-field${opts.full ? ' view-field-full' : ''}`;
+    return `<div class="${cls}"><span class="view-label">${escapeHtml(label)}</span><span class="view-value">${html}</span></div>`;
+  }
+
+  function viewEmptyNote(text) {
+    return `<p class="view-empty-note">${escapeHtml(text)}</p>`;
+  }
+
+  // Observed Threats are checked off from a fixed set of plain slugs — this
+  // is the same label lookup the Submit Field Data wizard's own Review step
+  // uses, so a submission reads identically whichever place it's seen from.
+  const OBSERVED_THREAT_LABELS = {
+    none_observed: 'None observed',
+    charcoal_making: 'Charcoal making',
+    cutting: 'Cutting',
+    dieback: 'Dieback',
+    pests: 'Pests',
+    garbage: 'Garbage',
+    erosion: 'Erosion',
+    land_conversion: 'Land conversion',
+    encroachment: 'Encroachment',
+    illegal_fishing: 'Illegal fishing',
+    sand_gravel_extraction: 'Sand / gravel extraction',
+    siltation: 'Siltation',
+    storm_damage: 'Storm damage',
+    fire: 'Fire',
+    'pollution___oil_spill': 'Pollution / oil spill',
+  };
+  function observedThreatsDisplay(raw, otherText) {
+    if (!raw) return null;
+    const values = String(raw).split(',').map(s => s.trim()).filter(Boolean);
+    if (values.length === 0) return null;
+    return values.map((v) => {
+      if (v === '__other__') return otherText || 'Other';
+      return OBSERVED_THREAT_LABELS[v] || prettifyLabel(v) || v;
+    }).join(', ');
+  }
+
   // .view-grid is a 3-column grid — a row left with only 1 or 2 real fields
   // in it (e.g. right before a full-width field, or at the end of the list)
   // has no element in its last column(s), so nothing paints a border or
@@ -1030,20 +1167,6 @@ function switchView(viewName, btn) {
     const remainder = fieldCount % 3;
     if (remainder === 0) return '';
     return '<div class="view-field view-field-blank"></div>'.repeat(3 - remainder);
-  }
-
-  function viewNotesField(label, value) {
-    if (value === null || value === undefined || value === '') return viewField(label, null, { full: true });
-    return `<div class="view-field view-field-full"><span class="view-label">${escapeHtml(label)}</span><div class="view-notes">${escapeHtml(String(value))}</div></div>`;
-  }
-
-  function viewPhotoField(photos) {
-    if (!photos || photos.length === 0) return viewField('Photo documentation', null, { full: true });
-    const thumbs = photos.map(p => `
-      <a href="${escapeHtml(p.full)}" target="_blank" rel="noopener">
-        <img class="view-photo-thumb" src="${escapeHtml(p.thumb)}" alt="Field photo" />
-      </a>`).join('');
-    return `<div class="view-field view-field-full"><span class="view-label">Photo documentation</span><div class="view-photos">${thumbs}</div></div>`;
   }
 
   // Same icon glyphs as the matching step in the Submit Field Data wizard,
@@ -1061,11 +1184,19 @@ function switchView(viewName, btn) {
     return `<div class="view-section"><div class="view-section-title"><span class="view-section-icon">${iconSvg}</span>${escapeHtml(title)}</div><div class="view-section-body">${innerHtml}</div></div>`;
   }
 
-  function gpsDisplayFromRaw(raw) {
-    const gpsRaw = raw['Record_your_current_location'] || raw['GPS_location'];
-    if (!gpsRaw) return null;
-    const parts = String(gpsRaw).trim().split(/\s+/);
-    return parts.length >= 2 ? `${parts[0]}, ${parts[1]}` : null;
+  // Every zone in AquaGuard is already a designated mangrove area, so a
+  // plain "protected or not" label would say the same thing for all of
+  // them. What actually varies is the kind of designation named right in
+  // the zone's own title — a Conservation Park, a Rehabilitation Project,
+  // an explicitly named Protected Area, or (for the numbered zones with no
+  // special designation yet) a plain Mangrove Area.
+  function zoneTypeLabel(zoneName) {
+    if (!zoneName) return null;
+    const n = zoneName.toLowerCase();
+    if (n.includes('conservation park')) return 'Conservation Park';
+    if (n.includes('rehabilitation')) return 'Rehabilitation Project';
+    if (n.includes('protected area')) return 'Protected Area';
+    return 'Mangrove Area';
   }
 
   function openViewModal(submission) {
@@ -1095,50 +1226,90 @@ function switchView(viewName, btn) {
     const siteFields = [
       viewField('Date of visit', formatDate(submission.date)),
       viewField('Nearest mangrove zone', submission.area !== '—' ? submission.area : null),
-      viewField('GPS location', gpsDisplayFromRaw(submission.raw || {})),
+      viewField('Zone type', zoneTypeLabel(submission.area !== '—' ? submission.area : null)),
     ].join('');
 
-    let vegetationHtml = '';
-    if (submission.trees && submission.trees.length > 0) {
-      submission.trees.forEach((t, i) => {
-        if (submission.trees.length > 1) vegetationHtml += `<div class="view-tree-heading">Tree ${i + 1}</div>`;
-        const treeFields = [
-          viewField('Species name', t.species !== '—' ? t.species : null),
-          viewField('Average tree height (m)', t.height),
-          viewField('GBH (cm)', t.gbh),
-          viewField('Canopy length (m)', t.canopyLength),
-          viewField('Canopy width (m)', t.canopyWidth),
-          viewField('Estimated canopy cover (%)', t.canopyCoverDirect),
-          viewField('Seedling species', t.seedlingSpecies || null),
-          viewField('Seedling count', t.seedlingCount),
-          viewField('Sapling species', t.saplingSpecies || null),
-          viewField('Sapling count', t.saplingCount),
-        ];
-        vegetationHtml += `<div class="view-grid">${treeFields.join('')}${viewGridPad(treeFields.length)}</div>`;
-      });
-    } else {
-      vegetationHtml = `<div class="view-empty-note">No trees recorded for this visit.</div>`;
-    }
-    const summaryFields = [
-      viewField('Tree count', submission.treeCount),
-      viewField('Overall health assessment', submission.healthAssessmentRaw ? healthAssessmentLabel(submission.healthAssessmentRaw) : null),
-    ];
-    vegetationHtml += `<div class="view-tree-heading">Summary</div><div class="view-grid">${summaryFields.join('')}${viewGridPad(summaryFields.length)}</div>`;
+    // Mirrors the Submit Field Data wizard's own Review step — same 3
+    // numbered Vegetation groups (Canopy / Species Found in Plot / Overall
+    // Health), so a submission reads identically here as it does there.
+    const canopyHtml = `<p class="view-subsection-label">Canopy</p><div class="view-grid">${viewField('Canopy cover (%)', submission.canopyCover || null)}${viewGridPad(1)}</div>`;
 
-    const faunaFields = [
-      viewField('Mollusk species name', submission.trees[0] ? submission.trees[0].molluskSpecies || null : null),
-      viewField('Mollusk count', submission.trees[0] ? submission.trees[0].molluskCount : null),
-    ];
-    const faunaHtml = `<div class="view-grid">${faunaFields.join('')}${viewGridPad(faunaFields.length)}${viewField('Observed threats', submission.observedThreats ? prettifyLabel(submission.observedThreats) : null, { full: true })}</div>${viewNotesField('Additional notes', submission.additionalNotes || null)}${viewPhotoField(submission.photos)}`;
+    const realTrees = submission.trees.filter(t => t.species && t.species !== '—');
+    const speciesTableHtml = realTrees.length
+      ? `<div class="view-table-wrap"><table class="view-species-table">
+          <thead><tr><th>Species</th><th>Trees</th><th>Saplings</th><th>Seedlings</th></tr></thead>
+          <tbody>${realTrees.map(t => `<tr><td>${escapeHtml(t.species)}</td><td>${escapeHtml(t.treeCount ?? '—')}</td><td>${escapeHtml(t.saplingCount ?? '—')}</td><td>${escapeHtml(t.seedlingCount ?? '—')}</td></tr>`).join('')}</tbody>
+        </table></div>`
+      : viewEmptyNote('No species recorded.');
+    const speciesSectionHtml = `<p class="view-subsection-label">Species Found in Plot</p>${speciesTableHtml}`;
 
-    const waterFields = [
+    const healthBadge = statusBadge(submission.healthAssessmentRaw);
+    const healthFieldHtml = submission.healthAssessmentRaw
+      ? viewFieldHtml('Overall health assessment', `<span class="view-badge ${healthBadge.badgeCls}">${escapeHtml(healthBadge.label)}</span>`)
+      : viewField('Overall health assessment', null);
+    const healthHtml = `<p class="view-subsection-label">Overall Health</p><div class="view-grid">${healthFieldHtml}${viewGridPad(1)}</div>`;
+
+    const vegetationHtml = `${canopyHtml}${speciesSectionHtml}${healthHtml}`;
+
+    // Mirrors the wizard's Fauna groups (Mollusks Found / Observed Threats /
+    // Additional Notes / Photos).
+    const molluskTableHtml = submission.mollusks.length
+      ? `<div class="view-table-wrap"><table class="view-species-table">
+          <thead><tr><th>Species</th></tr></thead>
+          <tbody>${submission.mollusks.map(m => `<tr><td>${escapeHtml(m.species)}</td></tr>`).join('')}</tbody>
+        </table></div>`
+      : viewEmptyNote('No mollusks recorded.');
+    const molluskSectionHtml = `<p class="view-subsection-label">Mollusks Found</p>${molluskTableHtml}`;
+
+    const threatsHtml = `<p class="view-subsection-label">Observed Threats</p><div class="view-grid">${viewField('Observed threats', observedThreatsDisplay(submission.observedThreats, submission.observedThreatsOther), { full: true })}</div>`;
+
+    const notesHtml = `<p class="view-subsection-label">Additional Notes</p>${submission.additionalNotes ? `<div class="view-notes">${escapeHtml(submission.additionalNotes)}</div>` : viewEmptyNote('No additional notes.')}`;
+
+    const photoThumbsHtml = (submission.photos || []).map(p => `
+      <a href="${escapeHtml(p.full)}" target="_blank" rel="noopener">
+        <img class="view-photo-thumb" src="${escapeHtml(p.thumb)}" alt="Field photo" />
+      </a>`).join('');
+    const photosHtml = `<p class="view-subsection-label">Photos</p>${photoThumbsHtml ? `<div class="view-photos">${photoThumbsHtml}</div>` : viewEmptyNote('No photos attached.')}`;
+
+    const faunaHtml = `${molluskSectionHtml}${threatsHtml}${notesHtml}${photosHtml}`;
+
+    // Mirrors the wizard's Water Quality groups (Observations / Aquafarm /
+    // Instrument Readings / Notes).
+    const observationsFields = [
+      viewField('Water clarity', submission.waterClarity ? prettifyLabel(submission.waterClarity) : null),
       viewField('Water color', submission.waterColor ? prettifyLabel(submission.waterColor) : null),
       viewField('Odor', submission.odor ? prettifyLabel(submission.odor) : null),
       viewField('Visible foam or discharge', submission.foamOrDischarge ? prettifyLabel(submission.foamOrDischarge) : null),
-      viewField('Nearby aquafarm activity', submission.water.label !== 'No data' ? submission.water.label : null),
-      viewField('Aquafarm name (if discharge observed)', isAquafarmActive(submission.aquafarmRaw) ? (submission.aquafarmName || null) : null),
     ];
-    const waterHtml = `<div class="view-grid">${waterFields.join('')}${viewGridPad(waterFields.length)}</div>${viewNotesField('Water quality notes', submission.waterNotes || null)}`;
+    const observationsHtml = `<p class="view-subsection-label">Observations</p><div class="view-grid">${observationsFields.join('')}${viewGridPad(observationsFields.length)}</div>`;
+
+    const aquafarmFields = [viewField('Nearby aquafarm activity', submission.water.label !== 'No data' ? submission.water.label : null)];
+    if (isAquafarmActive(submission.aquafarmRaw)) {
+      const aquafarmLocationText = (submission.aquafarmLat && submission.aquafarmLng)
+        ? `${parseFloat(submission.aquafarmLat).toFixed(5)}, ${parseFloat(submission.aquafarmLng).toFixed(5)}`
+        : null;
+      aquafarmFields.push(
+        viewField('Aquafarm name', submission.aquafarmName || null),
+        viewField('Aquafarm location', aquafarmLocationText),
+        viewField('Distance to mangroves (m)', submission.aquafarmDistance || null),
+        viewField('Discharge flowing toward mangroves?', submission.dischargeTowardMangroves ? prettifyLabel(submission.dischargeTowardMangroves) : null)
+      );
+    }
+    const aquafarmHtml = `<p class="view-subsection-label">Aquafarm</p><div class="view-grid">${aquafarmFields.join('')}${viewGridPad(aquafarmFields.length)}</div>`;
+
+    const hasInstrumentValues = submission.salinity || submission.ph || submission.waterTemp || submission.secchiDepth;
+    const instrumentHtml = hasInstrumentValues
+      ? `<p class="view-subsection-label">Instrument Readings</p><div class="view-grid">${[
+          viewField('Salinity (ppt)', submission.salinity || null),
+          viewField('pH', submission.ph || null),
+          viewField('Water temperature (°C)', submission.waterTemp || null),
+          viewField('Secchi depth (cm)', submission.secchiDepth || null),
+        ].join('')}${viewGridPad(4)}</div>`
+      : '';
+
+    const waterNotesHtml = `<p class="view-subsection-label">Notes</p>${submission.waterNotes ? `<div class="view-notes">${escapeHtml(submission.waterNotes)}</div>` : viewEmptyNote('No water quality notes.')}`;
+
+    const waterHtml = `${observationsHtml}${aquafarmHtml}${instrumentHtml}${waterNotesHtml}`;
 
     // MENRO's rejection reason is otherwise invisible on this side — it only
     // ever showed up once, briefly, in the notification dropdown — so a
@@ -1314,10 +1485,11 @@ function switchView(viewName, btn) {
   bindSortableHeaders();
   bindApprovalTabs();
   bindApprovalSummaryCards();
+  bindHistoryPagination();
   loadSubmissions();
 
   window.refreshAquaGuardSubmissions = loadSubmissions;
-  setInterval(loadSubmissions, 20000);
+  setInterval(loadSubmissions, 15000);
 
   // Lets a notification (which only knows a submission's kobo id) jump
   // straight to that submission's detail popup on Submission History,

@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once __DIR__ . '/../Login/Database/session-init.php';
 if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'ranger') {
     header('Location: ../Login/Login.php');
     exit;
@@ -10,51 +10,51 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'ranger') {
 // the Municipality of Calatagan Forest Land Use Plan 2023-2027 (Table 5.2.3.1,
 // Flora Species stated by the Stakeholders during the Workshop).
 $mangroveSpeciesList = [
-    'Bakawan babae (Rhizophora mucronata)',
-    'Bakawan lalaki (Rhizophora apiculata)',
-    'Bakawan bato (Rhizophora stylosa)',
-    'Kalapinay (Avicennia marina)',
-    'Pagatpat (Sonneratia alba)',
-    'Bayabas (Psidium guajava)',
+    'Anonang (Cordia dichotoma)',
+    'Antipolo (Artocarpus blancoi)',
     'Aroma (Acacia farnesiana)',
-    'Bignay (Antidesma bunius)',
-    'Nipa / Sasa (Nypa fruticans)',
-    'Lato / seaweed (Caulerpa lentillifera)',
-    'Kasoy (Anacardium occidentale)',
-    'Narra (Pterocarpus indicus)',
+    'Bakawan babae (Rhizophora mucronata)',
+    'Bakawan bato (Rhizophora stylosa)',
+    'Bakawan lalaki (Rhizophora apiculata)',
+    'Bamboo species',
+    'Bangkal (Nauclea orientalis)',
     'Bangkoro (Morinda citrifolia)',
-    'Duhat (Syzygium cumini)',
-    'Kamatsili (Pithecellobium dulce)',
-    'Kalumpit (Terminalia microcarpa)',
-    'Ligas (Semecarpus cuneiformis)',
-    'Saga (Adenanthera pavonina)',
+    'Bayabas (Psidium guajava)',
+    'Bignay (Antidesma bunius)',
+    'Buboi-gubat (Ceiba pentandra)',
     'Buli (Corypha elata)',
-    'Dapo',
-    'Kampupot (Tabernaemontana pandacaqui)',
-    'Pakpak-lawin (Drynaria quercifolia)',
+    'Caballero (Caesalpinia pulcherrima)',
     'Calachuchi (Plumeria sp.)',
-    'Pong-apong (Amorphophallus paeoniifolius)',
-    'Molawin (Vitex parviflora)',
-    'Rain tree (Samanea saman)',
-    'Rubber tree (Hevea brasiliensis)',
-    'Talisay (Terminalia catappa)',
+    'Dapo',
+    'Dayumaka',
+    'Duhat (Syzygium cumini)',
+    'Himbabao (Broussonetia luzonica)',
     'Ipil-ipil (Leucaena leucocephala)',
     'Kakawate (Gliricidia sepium)',
-    'Antipolo (Artocarpus blancoi)',
-    'Mahogany (Swietenia macrophylla)',
-    'Bangkal (Nauclea orientalis)',
-    'Bamboo species',
-    'Usiw',
-    'Saging-saging (Aegiceras corniculatum)',
-    'Himbabao (Broussonetia luzonica)',
-    'Paper tree / mulberry (Broussonetia papyrifera)',
-    'Buboi-gubat (Ceiba pentandra)',
+    'Kalapinay (Avicennia marina)',
     'Kalumpang (Sterculia foetida)',
-    'Anonang (Cordia dichotoma)',
-    'Taluto (Pterocybium tinctorium)',
-    'Caballero (Caesalpinia pulcherrima)',
-    'Dayumaka',
+    'Kalumpit (Terminalia microcarpa)',
+    'Kamatsili (Pithecellobium dulce)',
+    'Kampupot (Tabernaemontana pandacaqui)',
+    'Kasoy (Anacardium occidentale)',
+    'Lato / seaweed (Caulerpa lentillifera)',
+    'Ligas (Semecarpus cuneiformis)',
+    'Mahogany (Swietenia macrophylla)',
+    'Molawin (Vitex parviflora)',
+    'Narra (Pterocarpus indicus)',
+    'Nipa / Sasa (Nypa fruticans)',
+    'Pagatpat (Sonneratia alba)',
+    'Pakpak-lawin (Drynaria quercifolia)',
+    'Paper tree / mulberry (Broussonetia papyrifera)',
+    'Pong-apong (Amorphophallus paeoniifolius)',
+    'Rain tree (Samanea saman)',
+    'Rubber tree (Hevea brasiliensis)',
+    'Saga (Adenanthera pavonina)',
+    'Saging-saging (Aegiceras corniculatum)',
     'Susong-kalabaw (Uvaria rufa)',
+    'Talisay (Terminalia catappa)',
+    'Taluto (Pterocybium tinctorium)',
+    'Usiw',
 ];
 $mangroveSpeciesOptions = '<option value="">Select…</option>';
 foreach ($mangroveSpeciesList as $sp) {
@@ -67,7 +67,14 @@ $mangroveSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
 // that's actually a mollusk/shell; the rest of that table is birds, reptiles,
 // and mammals and doesn't belong under this field).
 $molluskSpeciesList = [
+    'Bakuku / Mangrove mud creeper (Terebralia palustris)',
+    'Kapis / Windowpane oyster (Placuna placenta)',
+    'Kuhol-dagat / Mangrove snail (Cerithidea cingulata)',
+    'Lokan / Mud clam (Polymesoda erosa)',
     'Sihi / Halaan (Lajonkairia lajonkairii)',
+    'Suso / Nerite (Nerita spp.)',
+    'Talaba / Mangrove oyster (Crassostrea iredalei)',
+    'Tulya / Asian clam (Corbicula fluminea)',
 ];
 $molluskSpeciesOptions = '<option value="">Select…</option>';
 foreach ($molluskSpeciesList as $sp) {
@@ -93,7 +100,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
     rel="stylesheet">
   <link rel="stylesheet" href="../assets/theme.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="ranger.css?v=60" />
+  <link rel="stylesheet" href="ranger.css?v=74" />
 </head>
 
 <body>
@@ -390,69 +397,45 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                 </span>
                 <span class="survey-section-text">
                   <span class="survey-section-name">Vegetation</span>
-                  <span class="survey-section-desc">Canopy, tree measurements, and regeneration</span>
+                  <span class="survey-section-desc">Canopy, species counts, and health</span>
                 </span>
               </div>
-              <p class="survey-group-label">Canopy &amp; Cover</p>
+
+              <p class="survey-group-label">1 &middot; Canopy</p>
               <div class="edit-panel active">
-                <label class="edit-field">
-                  <span>Canopy length (m)</span>
-                  <input type="number" step="0.1" min="0" id="fs-canopy-length" />
-                </label>
-                <label class="edit-field">
-                  <span>Canopy width (m)</span>
-                  <input type="number" step="0.1" min="0" id="fs-canopy-width" />
-                </label>
-                <label class="edit-field">
-                  <span>Estimated canopy cover (%)</span>
-                  <input type="number" step="1" min="0" max="100" id="fs-canopy-cover" />
-                </label>
-                <label class="edit-field">
-                  <span>Species name</span>
-                  <select id="fs-species-name-select"><?= $mangroveSpeciesOptions ?></select>
-                  <input type="text" id="fs-species-name" placeholder="Enter species name" hidden />
+                <label class="edit-field edit-field-full">
+                  <span>Canopy cover (%) <em>*</em></span>
+                  <input type="number" step="1" min="0" max="100" id="fs-canopy-cover" placeholder="e.g. 75" />
+                  <span class="field-helper-text">Estimate how much of the sky above the plot is covered by mangrove leaves.</span>
                 </label>
               </div>
 
-              <p class="survey-group-label">Tree &amp; Regeneration Counts</p>
+              <p class="survey-group-label">2 &middot; Species Found in Plot</p>
+              <div class="species-table-wrap">
+                <div class="species-table-header">
+                  <span>Species <em>*</em></span>
+                  <span>Trees</span>
+                  <span>Saplings</span>
+                  <span>Seedlings</span>
+                  <span></span>
+                </div>
+                <div class="species-table-rows" id="speciesTableRows"></div>
+              </div>
+              <button type="button" class="btn-add-species" id="btnAddSpecies">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add species
+              </button>
+              <p class="species-size-limit-note">Seedling: [size limit] &middot; Sapling: [size limit] &middot; Tree: [size limit]</p>
+
+              <p class="survey-group-label">3 &middot; Overall Health</p>
               <div class="edit-panel active">
-                <label class="edit-field">
-                  <span>Tree count</span>
-                  <input type="number" step="1" min="0" id="fs-tree-count" />
-                </label>
-                <label class="edit-field">
-                  <span>Average tree height (m)</span>
-                  <input type="number" step="0.1" min="0" id="fs-avg-height" />
-                </label>
-                <label class="edit-field edit-field-full">
-                  <span>GBH — Girth at Breast Height (cm)</span>
-                  <input type="number" step="0.1" min="0" id="fs-gbh" />
-                </label>
-                <label class="edit-field">
-                  <span>Seedling species</span>
-                  <select id="fs-seedling-species-select"><?= $mangroveSpeciesOptions ?></select>
-                  <input type="text" id="fs-seedling-species" placeholder="Enter species name" hidden />
-                </label>
-                <label class="edit-field">
-                  <span>Seedling count</span>
-                  <input type="number" step="1" min="0" id="fs-seedling-count" disabled placeholder="Select a species first" />
-                </label>
-                <label class="edit-field">
-                  <span>Sapling species</span>
-                  <select id="fs-sapling-species-select"><?= $mangroveSpeciesOptions ?></select>
-                  <input type="text" id="fs-sapling-species" placeholder="Enter species name" hidden />
-                </label>
-                <label class="edit-field">
-                  <span>Sapling count</span>
-                  <input type="number" step="1" min="0" id="fs-sapling-count" disabled placeholder="Select a species first" />
-                </label>
                 <label class="edit-field edit-field-full">
                   <span>Overall health assessment <em>*</em></span>
                   <select id="fs-health-assessment" required>
                     <option value="">Select…</option>
-                    <option value="healthy">Good</option>
-                    <option value="moderate">Fair</option>
-                    <option value="degraded">Poor</option>
+                    <option value="healthy">Good &mdash; mostly green leaves, little or no damage</option>
+                    <option value="moderate">Fair &mdash; some yellowing, leaf loss, or damage</option>
+                    <option value="degraded">Poor &mdash; widespread dieback or many dead trees</option>
                   </select>
                 </label>
               </div>
@@ -468,42 +451,60 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                   <span class="survey-section-desc">Wildlife observed and any threats to the site</span>
                 </span>
               </div>
+              <p class="survey-group-label">1 &middot; Mollusks Found</p>
+              <div class="mollusk-table-wrap">
+                <div class="mollusk-table-header" id="molluskTableHeader" hidden>
+                  <span>Species <em>*</em></span>
+                  <span></span>
+                </div>
+                <div class="mollusk-table-rows" id="molluskTableRows"></div>
+              </div>
+              <p class="field-helper-text" id="molluskEmptyNote">No mollusks added. Leave empty if none were found.</p>
+              <button type="button" class="btn-add-species" id="btnAddMollusk">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add mollusk
+              </button>
+
+              <p class="survey-group-label">2 &middot; Observed Threats <em>*</em></p>
+              <div class="threat-checkbox-grid" id="threatCheckboxGrid">
+                <label class="threat-checkbox"><input type="checkbox" class="threat-checkbox-input" value="none_observed" /> None observed</label>
+                <label class="threat-checkbox"><input type="checkbox" class="threat-checkbox-input" value="charcoal_making" /> Charcoal making</label>
+                <label class="threat-checkbox"><input type="checkbox" class="threat-checkbox-input" value="cutting" /> Cutting</label>
+                <label class="threat-checkbox"><input type="checkbox" class="threat-checkbox-input" value="dieback" /> Dieback</label>
+                <label class="threat-checkbox"><input type="checkbox" class="threat-checkbox-input" value="encroachment" /> Encroachment</label>
+                <label class="threat-checkbox"><input type="checkbox" class="threat-checkbox-input" value="erosion" /> Erosion</label>
+                <label class="threat-checkbox"><input type="checkbox" class="threat-checkbox-input" value="fire" /> Fire</label>
+                <label class="threat-checkbox"><input type="checkbox" class="threat-checkbox-input" value="garbage" /> Garbage</label>
+                <label class="threat-checkbox"><input type="checkbox" class="threat-checkbox-input" value="illegal_fishing" /> Illegal fishing</label>
+                <label class="threat-checkbox"><input type="checkbox" class="threat-checkbox-input" value="land_conversion" /> Land conversion</label>
+                <label class="threat-checkbox"><input type="checkbox" class="threat-checkbox-input" value="pests" /> Pests</label>
+                <label class="threat-checkbox"><input type="checkbox" class="threat-checkbox-input" value="pollution___oil_spill" /> Pollution / oil spill</label>
+                <label class="threat-checkbox"><input type="checkbox" class="threat-checkbox-input" value="sand_gravel_extraction" /> Sand / gravel extraction</label>
+                <label class="threat-checkbox"><input type="checkbox" class="threat-checkbox-input" value="siltation" /> Siltation</label>
+                <label class="threat-checkbox"><input type="checkbox" class="threat-checkbox-input" value="storm_damage" /> Storm damage</label>
+                <label class="threat-checkbox"><input type="checkbox" class="threat-checkbox-input" value="__other__" /> Other</label>
+              </div>
+              <label class="edit-field edit-field-full" id="threatOtherField" hidden>
+                <span>Describe the threat</span>
+                <input type="text" id="fs-observed-threats-other" placeholder="Describe the threat" />
+              </label>
+
+              <p class="survey-group-label">3 &middot; Additional Notes</p>
               <div class="edit-panel active">
-                <label class="edit-field">
-                  <span>Mollusk species name</span>
-                  <select id="fs-mollusk-species-select"><?= $molluskSpeciesOptions ?></select>
-                  <input type="text" id="fs-mollusk-species" placeholder="Enter species name" hidden />
-                </label>
-                <label class="edit-field">
-                  <span>Mollusk count</span>
-                  <input type="number" step="1" min="0" id="fs-mollusk-count" disabled placeholder="Select a species first" />
-                </label>
-                <label class="edit-field edit-field-full">
-                  <span>Observed threats</span>
-                  <select id="fs-observed-threats-select">
-                    <option value="">Select…</option>
-                    <option value="none_observed">None observed</option>
-                    <option value="minor_encroachment">Minor encroachment</option>
-                    <option value="illegal_cutting">Illegal cutting</option>
-                    <option value="debris___waste_dumping">Debris / waste dumping</option>
-                    <option value="storm_damage">Storm damage</option>
-                    <option value="__other__">Other</option>
-                  </select>
-                  <input type="text" id="fs-observed-threats" placeholder="Describe the observed threat" hidden />
-                </label>
                 <label class="edit-field edit-field-full">
                   <span>Additional notes</span>
-                  <textarea id="fs-additional-notes" rows="2"></textarea>
+                  <textarea id="fs-additional-notes" rows="2" placeholder="Anything else worth noting about this site"></textarea>
                 </label>
-                <div class="edit-field edit-field-full">
-                  <span>Photo documentation</span>
-                  <label class="survey-photo-picker" id="surveyPhotoPicker" for="fs-photo">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>
-                    <span id="surveyPhotoLabel">Take or choose a photo</span>
-                  </label>
-                  <input type="file" accept="image/*" capture="environment" id="fs-photo" hidden />
-                </div>
               </div>
+
+              <p class="survey-group-label">4 &middot; Photos <em>*</em></p>
+              <div class="survey-photos-list" id="surveyPhotosList"></div>
+              <label class="survey-photo-picker" id="surveyPhotoPicker" for="fs-photo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>
+                <span id="surveyPhotoLabel">Take or choose photos</span>
+              </label>
+              <input type="file" accept="image/*" capture="environment" id="fs-photo" multiple hidden />
+              <p class="field-helper-text">You can add more than one photo.</p>
             </div>
 
             <div class="survey-step" data-step="4" hidden>
@@ -516,54 +517,130 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                   <span class="survey-section-desc">Condition of water near the mangrove area</span>
                 </span>
               </div>
+              <p class="survey-group-label">1 &middot; Observations <em>*</em></p>
               <div class="edit-panel active">
                 <label class="edit-field">
-                  <span>Water color</span>
-                  <select id="fs-water-color">
+                  <span>Water clarity <em>*</em></span>
+                  <select id="fs-water-clarity">
                     <option value="">Select…</option>
-                    <option value="clear">Clear</option>
-                    <option value="slightly_turbid">Slightly turbid</option>
-                    <option value="turbid___murky">Turbid / murky</option>
-                    <option value="dark___discolored">Dark / discolored</option>
+                    <option value="clear">Clear – you can see the bottom</option>
+                    <option value="slightly_cloudy">Slightly cloudy – bottom is hard to see</option>
+                    <option value="cloudy">Cloudy – can't see the bottom</option>
+                    <option value="very_murky">Very murky – can barely see into the water</option>
                   </select>
                 </label>
                 <label class="edit-field">
-                  <span>Odor</span>
+                  <span>Water color <em>*</em></span>
+                  <select id="fs-water-color">
+                    <option value="">Select…</option>
+                    <option value="no_color">No color</option>
+                    <option value="brown">Brown</option>
+                    <option value="green">Green</option>
+                    <option value="dark___black">Dark / black</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+                <label class="edit-field">
+                  <span>Odor <em>*</em></span>
                   <select id="fs-odor">
                     <option value="">Select…</option>
                     <option value="none">None</option>
-                    <option value="mild">Mild</option>
-                    <option value="strong___chemical">Strong / chemical</option>
-                    <option value="sewage_like">Sewage-like</option>
+                    <option value="rotten_egg___sulfur">Rotten egg / sulfur</option>
+                    <option value="fishy">Fishy</option>
+                    <option value="chemical">Chemical</option>
+                    <option value="other">Other</option>
                   </select>
                 </label>
                 <label class="edit-field">
-                  <span>Visible foam or discharge</span>
+                  <span>Visible foam or discharge <em>*</em></span>
                   <select id="fs-foam-discharge">
                     <option value="">Select…</option>
                     <option value="none">None</option>
-                    <option value="minor_foam">Minor foam</option>
-                    <option value="discharge_visible">Discharge visible</option>
-                    <option value="heavy_discharge">Heavy discharge</option>
+                    <option value="foam">Foam</option>
+                    <option value="oily_film">Oily film</option>
+                    <option value="visible_discharge_flow">Visible discharge flow</option>
                   </select>
                 </label>
-                <label class="edit-field">
-                  <span>Nearby aquafarm activity</span>
+              </div>
+
+              <p class="survey-group-label">2 &middot; Aquafarm <em>*</em></p>
+              <div class="edit-panel active">
+                <label class="edit-field edit-field-full">
+                  <span>Nearby aquafarm activity <em>*</em></span>
                   <select id="fs-aquafarm-activity">
                     <option value="">Select…</option>
-                    <option value="none_nearby">None nearby</option>
-                    <option value="active___no_visible_discharge">Active — no visible discharge</option>
-                    <option value="active___discharge_observed">Active — discharge observed</option>
-                    <option value="inactive">Inactive</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
                   </select>
                 </label>
-                <label class="edit-field edit-field-full" id="fs-aquafarm-name-field" hidden>
-                  <span>Aquafarm name (if discharge observed)</span>
-                  <input type="text" id="fs-aquafarm-name" />
+              </div>
+              <div class="aquafarm-box" id="aquafarmBox" hidden>
+                <div class="edit-panel active">
+                  <label class="edit-field edit-field-full">
+                    <span>Aquafarm name <em>*</em></span>
+                    <input type="text" id="fs-aquafarm-name" placeholder="e.g. owner's name or farm name" />
+                    <span class="edit-field-help">So MENRO knows which aquafarm this is, in case of a follow-up.</span>
+                  </label>
+                  <label class="edit-field edit-field-full">
+                    <span>Aquafarm location <em>*</em></span>
+                    <div class="aquafarm-location-row">
+                      <button type="button" class="btn-use-location" id="btnAquafarmLocation">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+                        Use my current location
+                      </button>
+                      <span class="aquafarm-location-out" id="aquafarmLocationOut"></span>
+                    </div>
+                    <span class="edit-field-help">Stand at the edge of the aquafarm before tapping.</span>
+                  </label>
+                  <label class="edit-field">
+                    <span>Distance to mangroves (m)</span>
+                    <input type="number" min="0" step="1" id="fs-aquafarm-distance" placeholder="50" />
+                  </label>
+                  <label class="edit-field">
+                    <span>Discharge flowing toward mangroves? <em>*</em></span>
+                    <select id="fs-discharge-toward-mangroves">
+                      <option value="">Select…</option>
+                      <option value="yes">Yes</option>
+                      <option value="no_visible_discharge">No visible discharge</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              <p class="survey-group-label">3 &middot; Instrument Readings</p>
+              <button type="button" class="btn-add-species" id="btnToggleInstruments">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                <span id="btnToggleInstrumentsLabel">Add instrument readings (optional)</span>
+              </button>
+              <div class="edit-panel" id="instrumentReadingsPanel">
+                <label class="edit-field">
+                  <span>Salinity (ppt)</span>
+                  <input type="number" min="0" step="0.1" id="fs-salinity" />
+                  <span class="edit-field-help">How salty the water is. Full seawater is around 30&ndash;35 ppt; freshwater is close to 0.</span>
                 </label>
+                <label class="edit-field">
+                  <span>pH</span>
+                  <input type="number" min="0" max="14" step="0.1" id="fs-ph" />
+                  <span class="edit-field-help">How acidic or basic the water is. 7 is neutral, below 7 is acidic, above 7 is basic.</span>
+                </label>
+                <label class="edit-field">
+                  <span>Water temperature (&deg;C)</span>
+                  <input type="number" step="0.1" id="fs-water-temp" />
+                  <span class="edit-field-help">The temperature of the water where you're standing.</span>
+                </label>
+                <label class="edit-field">
+                  <span>Secchi depth (cm)</span>
+                  <input type="number" min="0" step="1" id="fs-secchi-depth" />
+                  <span class="edit-field-help">How far down you can still see a lowered disc &mdash; a simple way to measure how clear the water is.</span>
+                </label>
+              </div>
+              <p class="field-helper-text" id="instrumentReadingsHelp" hidden>Leave blank if you don't have the instrument.</p>
+
+              <p class="survey-group-label">4 &middot; Notes</p>
+              <div class="edit-panel active">
                 <label class="edit-field edit-field-full">
                   <span>Water quality notes</span>
-                  <textarea id="fs-water-notes" rows="2"></textarea>
+                  <textarea id="fs-water-notes" rows="2" placeholder="Anything else about the water condition"></textarea>
                 </label>
               </div>
             </div>
@@ -652,8 +729,8 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
           <table class="history-table">
             <colgroup>
               <col style="width:11%;">
-              <col style="width:15%;">
-              <col style="width:26%;">
+              <col style="width:27%;">
+              <col style="width:14%;">
               <col style="width:13%;">
               <col style="width:13%;">
               <col style="width:12%;">
@@ -678,6 +755,13 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
           </table>
           </div>
           <div class="history-note" id="history-note">Loading…</div>
+          <div class="table-pagination" id="historyPagination" hidden>
+            <span class="table-pagination-text" id="historyPaginationText"></span>
+            <div class="table-pagination-controls">
+              <button type="button" class="table-pagination-btn" id="historyPrevPage">Prev</button>
+              <button type="button" class="table-pagination-btn" id="historyNextPage">Next</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -773,7 +857,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </div>
             <div class="guide-text">
               <h3>Section 3: Fauna</h3>
-              <p>Mollusk species and count, any observed threats (e.g. illegal cutting, dumping), additional notes, and an optional photo.</p>
+              <p>Mollusk species observed, any observed threats (e.g. illegal cutting, dumping), additional notes, and an optional photo.</p>
             </div>
           </div>
 
@@ -941,10 +1025,12 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
     </div>
   </div>
 
-  <script src="../assets/utils.js"></script>
+  <script src="../assets/utils.js?v=1"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="ranger.js?v=37"></script>
-  <script src="field-survey.js?v=32"></script>
+  <script>const MANGROVE_SPECIES_LIST = <?= json_encode($mangroveSpeciesList) ?>;</script>
+  <script>const MOLLUSK_SPECIES_LIST = <?= json_encode($molluskSpeciesList) ?>;</script>
+  <script src="ranger.js?v=46"></script>
+  <script src="field-survey.js?v=44"></script>
   <script src="ranger-notifications.js?v=5"></script>
 </body>
 

@@ -461,7 +461,7 @@
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 22px;
   margin-bottom: 22px;
 }
@@ -585,36 +585,156 @@
   padding: 18px 20px 20px;
 }
 
-.surveys-search-wrap {
-  position: relative;
+/* Same filter-bar treatment as the ranger's own Submission History table —
+   search box, barangay/zone/status dropdowns, and a Clear button all in one
+   row, inside the same card as the tabs and table instead of floating
+   loose on the page background. */
+.surveys-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0;
   margin-bottom: 14px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.surveys-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 220px;
+  min-width: 180px;
+  padding: 9px 12px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink-400);
+  box-shadow: 0 1px 2px rgba(10, 49, 40, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.surveys-search-wrap:focus-within {
+  border-color: var(--brand-600);
+  box-shadow: 0 0 0 3px rgba(28, 125, 97, 0.12);
 }
 
 .surveys-search-wrap svg {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
+  flex-shrink: 0;
   color: var(--ink-400);
   pointer-events: none;
 }
 
 .surveys-search-input {
+  flex: 1;
   width: 100%;
-  max-width: 340px;
-  padding: 9px 12px 9px 34px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--ink-900);
-  font-size: 0.82rem;
+  border: none;
+  outline: none;
+  background: none;
   font-family: inherit;
+  font-size: 0.8rem;
+  color: var(--ink-900);
 }
 
-.surveys-search-input:focus {
+.surveys-search-input::placeholder { color: var(--ink-400); }
+
+.surveys-filter-select {
+  flex: 0 1 auto;
+  padding: 9px 30px 9px 12px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: var(--ink-700);
+  cursor: pointer;
+  max-width: 190px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%237c8f88' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+  box-shadow: 0 1px 2px rgba(10, 49, 40, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.surveys-filter-select:focus {
   outline: none;
-  border-color: var(--brand-500);
-  box-shadow: 0 0 0 3px rgba(27, 107, 58, 0.12);
+  border-color: var(--brand-600);
+  box-shadow: 0 0 0 3px rgba(28, 125, 97, 0.12);
+}
+
+.surveys-filter-clear-btn {
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-600);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.surveys-filter-clear-btn:hover {
+  border-color: var(--degraded);
+  color: var(--degraded);
+  background: #fbeae7;
+}
+
+.surveys-filter-clear-btn.is-inactive {
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .surveys-filter-bar { flex-direction: column; align-items: stretch; }
+  .surveys-search-wrap { flex: none; min-width: 0; }
+  .surveys-filter-select { max-width: none; }
+}
+
+.table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 4px 4px;
+}
+
+.table-pagination-text {
+  font-size: 0.78rem;
+  color: var(--ink-400);
+  font-weight: 500;
+}
+
+.table-pagination-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.table-pagination-btn {
+  padding: 7px 14px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-600);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.table-pagination-btn:hover:not(:disabled) {
+  border-color: var(--brand-600);
+  color: var(--brand-600);
+}
+
+.table-pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 @media (max-width: 760px) {
@@ -630,6 +750,17 @@
 
 @media (max-width: 700px) {
   .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Scrolling still works here — only the visible scrollbar track/thumb is
+   hidden, matching the cleaner look asked for on this view specifically. */
+#dashboardView {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#dashboardView::-webkit-scrollbar {
+  display: none;
 }
 
 .dashboard-view::-webkit-scrollbar,
@@ -793,28 +924,35 @@
 .survey-log-table-wrap {
   overflow: hidden;
   overflow-x: auto;
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border-strong);
   border-radius: var(--radius-md);
 }
 
 .survey-log-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
 }
 
+/* Same grid look as the ranger's own Submission History table (vertical
+   dividers between columns, not just horizontal ones between rows), so the
+   two tables read as the same design instead of two different ones. */
 .survey-log-table th {
   text-align: left;
   padding: 12px 16px;
-  background: var(--surface-sunken);
+  background: var(--surface-alt);
   color: var(--ink-500);
   font-size: 0.66rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   white-space: nowrap;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1.5px solid var(--border-strong);
+  border-right: 1px solid var(--border);
 }
+
+.survey-log-table th:last-child { border-right: none; }
 
 .survey-log-table .sort-th-btn {
   display: flex;
@@ -862,11 +1000,17 @@
 }
 
 .survey-log-table td {
-  padding: 12px 16px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--border);
-  color: var(--ink-900);
+  border-right: 1px solid var(--border);
+  color: var(--ink-700);
+  font-weight: 500;
   vertical-align: middle;
+  transition: background 0.1s ease;
 }
+
+.survey-log-table td:last-child { border-right: none; }
+.survey-log-table td:first-child { color: var(--ink-500); font-weight: 500; }
 
 .survey-log-table tbody tr:last-child td { border-bottom: none; }
 .survey-log-table tbody tr:hover td { background: var(--surface-alt); }
@@ -880,7 +1024,6 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 14px;
-  padding: 14px 0 0;
   margin-bottom: 14px;
   border-bottom: 1px solid var(--border-strong);
 }
@@ -981,9 +1124,20 @@
   font-family: var(--font-display);
   font-weight: 700;
   color: var(--brand-800);
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .survey-log-table .cell-center { text-align: center; }
+
+.survey-log-table .cell-truncate {
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .survey-log-notes {
   margin-top: 10px;
@@ -1556,6 +1710,34 @@
   flex-shrink: 0;
 }
 
+/* The submission detail popup reads as a plain, neutral record — same light
+   header as the ranger's own "Field submission details" popup — rather than
+   the bold dark-green header the other dashboard modals (User Guide, a
+   ranger's submission list) use for their own titles. */
+.view-modal-header {
+  background: var(--surface);
+  color: inherit;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.view-modal-header h2 {
+  color: var(--brand-900);
+}
+
+.view-modal-header .dashboard-modal-sub {
+  color: var(--ink-500);
+}
+
+.view-modal-header .dashboard-close {
+  background: transparent;
+  color: var(--ink-500);
+}
+
+.view-modal-header .dashboard-close:hover {
+  background: var(--surface-sunken);
+  color: var(--ink-700);
+}
+
 .view-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -1666,6 +1848,74 @@
 }
 
 .view-tree-heading:not(:first-child) { margin-top: 4px; }
+
+.view-subsection-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--brand-700);
+  margin: 0;
+}
+
+.view-subsection-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.view-section-body > .view-subsection-label:not(:first-child) {
+  padding-top: 14px;
+  border-top: 1px dashed var(--border);
+}
+
+.view-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 11px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.view-badge.badge-healthy { background: #e3f5ee; color: var(--healthy); }
+.view-badge.badge-moderate { background: #fdf1e0; color: var(--moderate); }
+.view-badge.badge-degraded { background: #fbeae7; color: var(--degraded); }
+
+.view-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.view-species-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.view-species-table th,
+.view-species-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.view-species-table tbody tr:last-child td { border-bottom: none; }
+
+.view-species-table th {
+  background: var(--surface-alt);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-500);
+}
 
 .view-photos {
   display: grid;

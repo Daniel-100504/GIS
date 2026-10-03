@@ -1,6 +1,6 @@
 <?php
 
-session_start();
+require_once __DIR__ . '/session-init.php';
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/audit.php';
@@ -162,10 +162,30 @@ try {
     }
 
     if ($action === 'checkSession') {
-        if (isset($_SESSION['user'])) {
-            respond(['success' => true, 'user' => $_SESSION['user']]);
+        if (!isset($_SESSION['user'])) {
+            respond(['success' => false]);
         }
-        respond(['success' => false]);
+
+        $sessionUser = $_SESSION['user'];
+        $role = $sessionUser['role'] ?? '';
+
+        // Deactivating someone's account doesn't touch their existing PHP
+        // session — without this check, a ranger or MENRO officer an admin
+        // just deactivated would stay fully logged in and working until
+        // their session happened to expire on its own.
+        if (isset($tableByRole[$role])) {
+            $stmt = $pdo->prepare("SELECT is_active FROM {$tableByRole[$role]} WHERE username = :username");
+            $stmt->execute(['username' => $sessionUser['username'] ?? '']);
+            $account = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$account || (int) $account['is_active'] === 0) {
+                $_SESSION = [];
+                session_destroy();
+                respond(['success' => false, 'deactivated' => true]);
+            }
+        }
+
+        respond(['success' => true, 'user' => $sessionUser]);
     }
 
     if ($action === 'logout') {
@@ -290,7 +310,7 @@ try {
         $stmt->execute(['hash' => $hash, 'id' => $id]);
 
         if ($requestId !== null && ctype_digit((string) $requestId)) {
-            $stmt = $pdo->prepare("UPDATE password_reset_requests SET status = 'resolved', resolved_at = NOW() WHERE id = :id");
+            $stmt = $pdo->prepare("UPDATE password_reset_requests SET status = 'resolved', resolved_at = NOW(), resolved_via = 'admin' WHERE id = :id");
             $stmt->execute(['id' => $requestId]);
         }
 
@@ -369,6 +389,19 @@ try {
         }
 
         logAudit($pdo, "Changed {$roleLabel[$role]} account \"{$account['username']}\" to {$roleLabel[$newRole]}.");
+
+        // Best-effort — the role change itself already succeeded above, so a
+        // flaky mail server shouldn't turn this into a failed request. An
+        // account with no email on file just quietly skips the notice,
+        // same as the "no email on file" case for sending a reset link.
+        if ($account['email']) {
+            try {
+                sendRoleChangedEmail($account['email'], $account['full_name'], $roleLabel[$role], $roleLabel[$newRole]);
+            } catch (Exception $e) {
+                // Swallowed — see comment above.
+            }
+        }
+
         respond(['success' => true, 'id' => $newId]);
     }
 
@@ -396,7 +429,9 @@ try {
     if ($action === 'listResetRequests') {
         requireRole(['admin']);
         $stmt = $pdo->query(
-            "SELECT id, username, role, account_id, requested_at FROM password_reset_requests
+            "SELECT id, username, role, account_id, requested_at, token_expires_at,
+                    (token_expires_at IS NOT NULL AND token_expires_at <= NOW()) AS is_expired
+             FROM password_reset_requests
              WHERE status = 'pending' ORDER BY requested_at ASC"
         );
         $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -413,6 +448,35 @@ try {
                     $req['email'] = $acc['email'];
                     $req['fullName'] = $acc['full_name'];
                 }
+            }
+        }
+        unset($req);
+
+        respond(['success' => true, 'requests' => $requests]);
+    }
+
+    // Recently self-completed resets — surfaced as their own notification
+    // ("X changed their password") distinct from the "X requested a
+    // password reset" notification, and never includes ones an admin
+    // completed directly via the no-email "Reset Password" fallback, since
+    // that's the admin's own action, not news to them.
+    if ($action === 'listCompletedResets') {
+        requireRole(['admin']);
+        $stmt = $pdo->query(
+            "SELECT id, username, role, account_id, resolved_at FROM password_reset_requests
+             WHERE status = 'resolved' AND resolved_via = 'self'
+             ORDER BY resolved_at DESC LIMIT 20"
+        );
+        $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($requests as &$req) {
+            $req['fullName'] = null;
+            if (isset($tableByRole[$req['role']])) {
+                $table = $tableByRole[$req['role']];
+                $accStmt = $pdo->prepare("SELECT full_name FROM {$table} WHERE id = :id");
+                $accStmt->execute(['id' => $req['account_id']]);
+                $acc = $accStmt->fetch(PDO::FETCH_ASSOC);
+                if ($acc) $req['fullName'] = $acc['full_name'];
             }
         }
         unset($req);
@@ -459,6 +523,15 @@ try {
         } catch (Exception $e) {
             respond(['success' => false, 'error' => 'Couldn\'t send the email. Please try again.'], 500);
         }
+
+        // Stays 'pending' — the request is only actually resolved once the
+        // account holder follows the link and sets a new password (see the
+        // 'setPassword' action below). Marking it resolved here instead
+        // would break the link itself, since the reset page only accepts a
+        // token that still belongs to a 'pending' request. token_expires_at
+        // (just set above) already doubles as "a link was sent, and here's
+        // when it stops working" — the admin list below uses it to tell an
+        // unsent request apart from one that's sent and awaiting the user.
 
         logAudit($pdo, "Sent password reset link to {$roleLabel[$request['role']]} account \"{$request['username']}\".");
         respond(['success' => true]);
@@ -598,9 +671,15 @@ try {
         $stmt->execute(['hash' => $hash, 'id' => $request['account_id']]);
 
         $stmt = $pdo->prepare(
-            "UPDATE password_reset_requests SET status = 'resolved', resolved_at = NOW() WHERE id = :id"
+            "UPDATE password_reset_requests SET status = 'resolved', resolved_at = NOW(), resolved_via = 'self' WHERE id = :id"
         );
         $stmt->execute(['id' => $request['id']]);
+
+        logAudit(
+            $pdo,
+            "{$roleLabel[$request['role']]} account \"{$request['username']}\" changed their own password via a reset link.",
+            ['username' => $request['username'], 'role' => $request['role']]
+        );
 
         respond(['success' => true]);
     }

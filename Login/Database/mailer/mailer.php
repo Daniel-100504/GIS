@@ -6,7 +6,7 @@ require_once __DIR__ . '/PHPMailer/SMTP.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 
-function sendResetPasswordEmail($toEmail, $toName, $resetLink) {
+function createAquaguardMailer($toEmail, $toName) {
     $config = require __DIR__ . '/mail-config.php';
 
     $mail = new PHPMailer(true);
@@ -21,11 +21,17 @@ function sendResetPasswordEmail($toEmail, $toName, $resetLink) {
 
     $mail->setFrom($config['from_email'], $config['from_name']);
     $mail->addAddress($toEmail, $toName ?: '');
+    $mail->isHTML(true);
+
+    return $mail;
+}
+
+function sendResetPasswordEmail($toEmail, $toName, $resetLink) {
+    $mail = createAquaguardMailer($toEmail, $toName);
 
     $safeName = htmlspecialchars($toName ?: 'there');
     $safeLink = htmlspecialchars($resetLink);
 
-    $mail->isHTML(true);
     $mail->Subject = 'AquaGuard Password Reset';
     $mail->Body = <<<HTML
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f9f5;padding:32px 16px;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
@@ -60,6 +66,43 @@ function sendResetPasswordEmail($toEmail, $toName, $resetLink) {
     </table>
     HTML;
     $mail->AltBody = "An administrator approved your password reset request. Open this link to set a new password: {$resetLink} (expires in 30 minutes)";
+
+    $mail->send();
+}
+
+function sendRoleChangedEmail($toEmail, $toName, $oldRoleLabel, $newRoleLabel) {
+    $mail = createAquaguardMailer($toEmail, $toName);
+
+    $safeName    = htmlspecialchars($toName ?: 'there');
+    $safeOldRole = htmlspecialchars($oldRoleLabel);
+    $safeNewRole = htmlspecialchars($newRoleLabel);
+
+    $mail->Subject = 'Your AquaGuard account role has changed';
+    $mail->Body = <<<HTML
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f9f5;padding:32px 16px;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e1ebe6;">
+            <tr>
+              <td style="background:#0a3128;padding:24px 32px;">
+                <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.01em;">AquaGuard</span><br>
+                <span style="color:#8fd6b8;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">Calatagan Mangrove Reserve</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px;">
+                <p style="margin:0 0 16px;color:#12211d;font-size:15px;line-height:1.6;">Hello {$safeName},</p>
+                <p style="margin:0 0 16px;color:#12211d;font-size:15px;line-height:1.6;">An administrator changed your AquaGuard account role from <strong>{$safeOldRole}</strong> to <strong>{$safeNewRole}</strong>.</p>
+                <p style="margin:0;color:#12211d;font-size:15px;line-height:1.6;">Sign in again to see the {$safeNewRole} dashboard. Your username and password stay the same.</p>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:20px 0 0;color:#869790;font-size:11px;">This is an automated message from AquaGuard. Please don't reply to this email.</p>
+        </td>
+      </tr>
+    </table>
+    HTML;
+    $mail->AltBody = "An administrator changed your AquaGuard account role from {$oldRoleLabel} to {$newRoleLabel}. Sign in again to see the {$newRoleLabel} dashboard. Your username and password stay the same.";
 
     $mail->send();
 }

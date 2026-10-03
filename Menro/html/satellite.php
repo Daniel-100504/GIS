@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once __DIR__ . '/../../Login/Database/session-init.php';
 if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     header('Location: ../../Login/Login.php');
     exit;
@@ -19,14 +19,17 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <!-- Used only by the exported PDF's "Annual Monitoring Data Sheet" template,
+       to match the official paper form's own typography. -->
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,700&display=swap" rel="stylesheet"/>
 
   <link rel="icon" href="../../assets/calatagan-seal.png"/>
 
         <link rel="stylesheet" href="../../assets/theme.css"/>
-        <link rel="stylesheet" href="../css/style.css?v=27"/>
-        <link rel="stylesheet" href="../css/right-panel.css?v=2"/>
+        <link rel="stylesheet" href="../css/style.css?v=32"/>
+        <link rel="stylesheet" href="../css/right-panel.css?v=4"/>
         <link rel="stylesheet" href="../css/side-menu.css?v=7"/>
-        <link rel="stylesheet" href="../css/Dashboard.css?v=37"/>
+        <link rel="stylesheet" href="../css/Dashboard.css?v=51"/>
 </head>
 
 <body>
@@ -111,7 +114,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
         <div class="layer-tile-grid">
 
             <label class="layer-tile">
-                <input type="checkbox" id="layerSentinel2" class="layer-tile-input" checked>
+                <input type="checkbox" id="layerSentinel2" class="layer-tile-input">
                 <span class="layer-tile-icon layer-tile-icon-sentinel" aria-hidden="true">
                     <span class="layer-tile-art"></span>
                     <span class="layer-tile-badge">
@@ -150,9 +153,19 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 </div>
 
 <div class="map-legend">
-    <p class="map-legend-title">Area Type</p>
-    <div class="map-legend-row"><span class="map-legend-dot" style="background:#8a2be2;"></span>Mangroves</div>
-    <div class="map-legend-row"><span class="map-legend-dot" style="background:#ffd166;border:1.5px solid #b8860b;"></span>Protected Areas</div>
+    <div id="legendAreaType">
+        <p class="map-legend-title">Area Type</p>
+        <div class="map-legend-row"><span class="map-legend-dot" style="background:#8a2be2;"></span>Mangroves</div>
+        <div class="map-legend-row"><span class="map-legend-dot" style="background:#ffd166;border:1.5px solid #b8860b;"></span>Protected Areas</div>
+    </div>
+
+    <div id="legendNdvi" hidden>
+        <p class="map-legend-title" style="margin-top:8px;">NDVI</p>
+        <div class="map-legend-row"><span class="map-legend-dot" style="background:#bfbfbf;"></span>Bare / No Vegetation</div>
+        <div class="map-legend-row"><span class="map-legend-dot" style="background:#91bf51;"></span>Sparse Vegetation</div>
+        <div class="map-legend-row"><span class="map-legend-dot" style="background:#004400;"></span>Dense Vegetation</div>
+    </div>
+
 </div>
 
 </main>
@@ -396,7 +409,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </div>
           <div class="guide-text">
             <h3>Dashboard</h3>
-            <p>Open <strong>Dashboard</strong> from the menu for a summary of zone health, NDVI, and surveys. The <strong>Overdue for Inspection</strong> card counts zones that have never been surveyed or haven't been checked in the last 30 days.</p>
+            <p>Open <strong>Dashboard</strong> from the menu for a summary of zone health, NDVI, and surveys.</p>
           </div>
         </div>
 
@@ -410,7 +423,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </div>
           <div class="guide-text">
             <h3>Ranger Surveys</h3>
-            <p>Open <strong>Ranger Surveys</strong> from the menu to review every field submission in one place. Use the All / Pending / Approved / Needs Revision tabs to filter, search by zone or ranger name, and click a column header to sort by it. Click a row to open its full details, and Approve or Reject from there. Clicking a survey notification jumps straight to this tab and opens that submission.</p>
+            <p>Open <strong>Ranger Surveys</strong> from the menu to review every field submission in one place. Use the All / Pending / Approved / Needs Revision tabs, the search box, or the Barangay / Mangrove Zone / Status filters to narrow the list, and click a column header to sort by it. Click a row to open its full details, and Approve or Reject from there. Clicking a survey notification jumps straight to this tab and opens that submission.</p>
           </div>
         </div>
 
@@ -534,7 +547,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </div>
           <div class="guide-text">
             <h3>Export Report</h3>
-            <p>Click <strong>Export Report</strong> on the Dashboard to download a PDF. Each field visit is exported as its own Annual Monitoring Data Sheet: Date, Protected Area, Area, and MPA Manager, followed by a tree-by-tree measurement table, matching MENRO's official paper form.</p>
+            <p>Click <strong>Export Report</strong> on the Dashboard to open the PDF right in your browser, use its own toolbar to print or download it from there. Each field visit is exported as its own Monitoring Data Sheet: Date, Protected Area, Area, and MPA Manager, followed by a tree-by-tree measurement table, matching MENRO's official paper form. Pick "This year" or "Last year" as the date range to get a full Annual Monitoring Data Sheet; shorter ranges are labeled with their actual period instead. A visit with a lot of data (many species, mollusks, or notes) automatically continues onto extra pages instead of being cut off.</p>
           </div>
         </div>
 
@@ -573,6 +586,14 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     <div class="dashboard-modal-body">
       <div class="survey-log-table-wrap">
         <table class="survey-log-table">
+          <colgroup>
+            <col style="width:11%;">
+            <col style="width:24%;">
+            <col style="width:12%;">
+            <col style="width:20%;">
+            <col style="width:18%;">
+            <col style="width:15%;">
+          </colgroup>
           <thead>
             <tr>
               <th>Date</th>
@@ -702,6 +723,8 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
         <option value="today">Today</option>
         <option value="7days">Last 7 days</option>
         <option value="30days">Last 30 days</option>
+        <option value="thisyear">This year</option>
+        <option value="lastyear">Last year</option>
         <option value="custom">Custom range</option>
       </select>
       <div class="export-daterange-custom" id="exportDateCustom" hidden>
@@ -881,17 +904,18 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/5.0.8/jspdf.plugin.autotable.min.js"></script>
-<script src="../../assets/utils.js"></script>
-<script src="../API/zones-data.php?v=3"></script>
-<script src="../js/map-core.js?v=14"></script>
-<script src="../js/mangrove-draw.js?v=24"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="../../assets/utils.js?v=1"></script>
+<script src="../API/zones-data.php?v=9"></script>
+<script src="../js/map-core.js?v=20"></script>
+<script src="../js/mangrove-draw.js?v=33"></script>
 <script src="../js/verified-layers-edit.js?v=3"></script>
-<script src="../js/zones-panel.js?v=7"></script>
-<script src="../js/scene-calendar.js?v=4"></script>
-<script src="../js/export-report.js?v=11"></script>
-<script src="../js/ui-chrome.js?v=6"></script>
-<script src="../js/Dashboard.js?v=45"></script>
-<script src="../js/notifications.js?v=10"></script>
+<script src="../js/zones-panel.js?v=9"></script>
+<script src="../js/scene-calendar.js?v=9"></script>
+<script src="../js/export-report.js?v=28"></script>
+<script src="../js/ui-chrome.js?v=9"></script>
+<script src="../js/Dashboard.js?v=59"></script>
+<script src="../js/notifications.js?v=12"></script>
 
 </body>
 </html>

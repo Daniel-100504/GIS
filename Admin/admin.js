@@ -175,6 +175,42 @@ function renderPagination(role, totalCount, totalPages) {
   next.disabled = page >= totalPages;
 }
 
+function renderLogPagination(key, totalCount, totalPages) {
+  const pagination = document.getElementById(`${key}Pagination`);
+  const text = document.getElementById(`${key}PaginationText`);
+
+  if (totalCount <= PAGE_SIZE) {
+    pagination.hidden = true;
+    return;
+  }
+
+  pagination.hidden = false;
+  const page = currentPage[key];
+  text.textContent = `Page ${page} of ${totalPages}`;
+
+  const prev = document.getElementById(`${key}PrevPage`);
+  const next = document.getElementById(`${key}NextPage`);
+  prev.disabled = page <= 1;
+  next.disabled = page >= totalPages;
+}
+
+document.getElementById("timeLogPrevPage").addEventListener("click", () => {
+  currentPage.timeLog = Math.max(1, currentPage.timeLog - 1);
+  renderTimeLogPage();
+});
+document.getElementById("timeLogNextPage").addEventListener("click", () => {
+  currentPage.timeLog += 1;
+  renderTimeLogPage();
+});
+document.getElementById("activityLogPrevPage").addEventListener("click", () => {
+  currentPage.activityLog = Math.max(1, currentPage.activityLog - 1);
+  renderActivityLogPage();
+});
+document.getElementById("activityLogNextPage").addEventListener("click", () => {
+  currentPage.activityLog += 1;
+  renderActivityLogPage();
+});
+
 document.getElementById("menroPrevPage").addEventListener("click", () => {
   currentPage.menro = Math.max(1, currentPage.menro - 1);
   applyAccountFilter("menro");
@@ -307,16 +343,29 @@ function formatTimeOnly(dateStr) {
   return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+let timeLogCache = [];
+currentPage.timeLog = 1;
+
 async function loadTimeLog() {
   const body = document.getElementById("timeLogBody");
   try {
     const res = await fetch(`${ACCOUNTS_API}?action=listTimeLog`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error || "Failed to load time log.");
-    renderTimeLog(data.entries || []);
+    timeLogCache = data.entries || [];
+    currentPage.timeLog = 1;
+    renderTimeLogPage();
   } catch (err) {
     body.innerHTML = `<tr><td colspan="6" class="account-empty">Couldn't load the time log.</td></tr>`;
   }
+}
+
+function renderTimeLogPage() {
+  const totalPages = Math.max(1, Math.ceil(timeLogCache.length / PAGE_SIZE));
+  currentPage.timeLog = Math.min(currentPage.timeLog, totalPages);
+  const start = (currentPage.timeLog - 1) * PAGE_SIZE;
+  renderTimeLog(timeLogCache.slice(start, start + PAGE_SIZE));
+  renderLogPagination("timeLog", timeLogCache.length, totalPages);
 }
 
 function renderTimeLog(entries) {
@@ -345,16 +394,29 @@ function formatDateTime(dateStr) {
   return `${d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}, ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
 }
 
+let activityLogCache = [];
+currentPage.activityLog = 1;
+
 async function loadActivityLog() {
   const body = document.getElementById("activityLogBody");
   try {
     const res = await fetch(`${ACCOUNTS_API}?action=listAuditLog`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error || "Failed to load activity log.");
-    renderActivityLog(data.entries || []);
+    activityLogCache = data.entries || [];
+    currentPage.activityLog = 1;
+    renderActivityLogPage();
   } catch (err) {
     body.innerHTML = `<tr><td colspan="4" class="account-empty">Couldn't load the activity log.</td></tr>`;
   }
+}
+
+function renderActivityLogPage() {
+  const totalPages = Math.max(1, Math.ceil(activityLogCache.length / PAGE_SIZE));
+  currentPage.activityLog = Math.min(currentPage.activityLog, totalPages);
+  const start = (currentPage.activityLog - 1) * PAGE_SIZE;
+  renderActivityLog(activityLogCache.slice(start, start + PAGE_SIZE));
+  renderLogPagination("activityLog", activityLogCache.length, totalPages);
 }
 
 function renderActivityLog(entries) {
@@ -378,6 +440,8 @@ const resetRequestsSection = document.getElementById("resetRequestsSection");
 const resetRequestsHeading = document.getElementById("resetRequestsHeading");
 const resetRequestsBody = document.getElementById("resetRequestsBody");
 
+let latestCompletedResets = [];
+
 async function loadResetRequests() {
   try {
     const res = await fetch(`${ACCOUNTS_API}?action=listResetRequests`);
@@ -389,10 +453,27 @@ async function loadResetRequests() {
   }
 }
 
+// A separate feed from the pending requests above — this is what powers the
+// "X changed their password" notification, which only fires once someone
+// actually finishes their own reset (never for an admin's own direct
+// "Reset Password" action on an account with no email on file).
+async function loadCompletedResets() {
+  try {
+    const res = await fetch(`${ACCOUNTS_API}?action=listCompletedResets`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || "Failed to load completed resets.");
+    latestCompletedResets = data.requests || [];
+    updateNotifBell(latestResetRequests, latestCompletedResets);
+  } catch (err) {
+    // Silent — this only feeds the notification bell, not a visible list,
+    // so a failed poll here shouldn't interrupt the admin with a toast.
+  }
+}
+
 function renderResetRequests(requests) {
   pendingResetCount = requests.length;
   updateAccountStats();
-  updateNotifBell(requests);
+  updateNotifBell(requests, latestCompletedResets);
 
   if (requests.length === 0) {
     resetRequestsSection.hidden = true;
@@ -405,10 +486,18 @@ function renderResetRequests(requests) {
   resetRequestsBody.innerHTML = requests.map(req => {
     const canReset = req.role === "menro" || req.role === "ranger";
     const roleLabel = canReset ? ROLE_LABEL[req.role] : "Unknown account";
+    // A link was already sent once token_expires_at is set — after that,
+    // the button always offers a *fresh* link rather than claiming to send
+    // the first one again.
+    const alreadySent = Boolean(req.token_expires_at);
+    const expiredTag = alreadySent && Number(req.is_expired)
+      ? ` <span class="badge-expired">Expired</span>`
+      : "";
 
     let actionBtn = "";
     if (canReset && req.email) {
-      actionBtn = `<button class="btn-row-action" data-action="approve" data-request-id="${req.id}" data-username="${escapeHtml(req.username)}">Send Reset Link</button>`;
+      const label = alreadySent ? "Resend Link" : "Send Reset Link";
+      actionBtn = `<button class="btn-row-action" data-action="approve" data-request-id="${req.id}" data-username="${escapeHtml(req.username)}">${label}</button>`;
     } else if (canReset) {
       actionBtn = `<button class="btn-row-action" data-action="reset" data-role="${req.role}" data-id="${req.account_id}" data-username="${escapeHtml(req.username)}" data-request-id="${req.id}">Reset Password</button>`;
     }
@@ -417,7 +506,7 @@ function renderResetRequests(requests) {
       <tr>
         <td>${escapeHtml(req.username)}</td>
         <td>${escapeHtml(roleLabel)}</td>
-        <td>${escapeHtml(formatDate(req.requested_at))}</td>
+        <td>${escapeHtml(formatDate(req.requested_at))}${expiredTag}</td>
         <td>
           <div class="account-row-actions">
             ${actionBtn}
@@ -468,10 +557,37 @@ function timeAgo(dateStr) {
 let latestResetRequests = [];
 let lastUnseenCount = null;
 
-function updateNotifBell(requests) {
+// Two different feeds share this one bell — a pending request ("X requested
+// a password reset") and a just-finished one ("X changed their password").
+// They're keyed separately (req-N / done-N) so marking one seen can never
+// accidentally mark the other, even though both can carry the same
+// underlying request id at different points in its life.
+function buildNotifItems(requests, completedRequests) {
+  const requested = requests.map(req => ({
+    notifKey: `req-${req.id}`,
+    requestId: req.id,
+    displayName: req.fullName || req.username,
+    timestamp: req.requested_at,
+    text: "requested a password reset",
+  }));
+  const completed = completedRequests.map(req => ({
+    notifKey: `done-${req.id}`,
+    requestId: req.id,
+    displayName: req.fullName || req.username,
+    timestamp: req.resolved_at,
+    text: "changed their password",
+    done: true,
+  }));
+  return [...requested, ...completed].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+}
+
+function updateNotifBell(requests, completedRequests = []) {
   latestResetRequests = requests;
+  latestCompletedResets = completedRequests;
+  const items = buildNotifItems(requests, completedRequests);
+
   const seen = getSeenNotifIds();
-  const unseenCount = requests.filter(r => !seen.has(r.id)).length;
+  const unseenCount = items.filter(item => !seen.has(item.notifKey)).length;
 
   notifBadge.textContent = unseenCount > 9 ? "9+" : String(unseenCount);
   notifBadge.hidden = unseenCount === 0;
@@ -482,26 +598,28 @@ function updateNotifBell(requests) {
   }
   lastUnseenCount = unseenCount;
 
-  if (requests.length === 0) {
+  if (items.length === 0) {
     notifDropdownBody.innerHTML = `<div class="notif-empty">You're all caught up.</div>`;
     return;
   }
 
-  notifDropdownBody.innerHTML = requests.map(req => {
-    const displayName = req.fullName || req.username;
-    const isNew = !seen.has(req.id);
-    const initial = displayName.charAt(0).toUpperCase();
+  notifDropdownBody.innerHTML = items.map(item => {
+    const isNew = !seen.has(item.notifKey);
+    const initial = item.displayName.charAt(0).toUpperCase();
+    const badgeIcon = item.done
+      ? `<path d="M20 6 9 17l-5-5"/>`
+      : `<circle cx="8" cy="15" r="4"/><path d="M10.5 12.5 19 4M16 6l2 2M19 4l2 2-3 3"/>`;
     return `
-      <button class="notif-item${isNew ? " notif-item-unread" : ""}" type="button" data-action="goToRequests" data-request-id="${req.id}">
+      <button class="notif-item${isNew ? " notif-item-unread" : ""}" type="button" data-action="goToRequests" data-notif-key="${item.notifKey}">
         <div class="notif-item-avatar">
           <span>${escapeHtml(initial)}</span>
-          <span class="notif-item-avatar-badge">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.5 12.5 19 4M16 6l2 2M19 4l2 2-3 3"/></svg>
+          <span class="notif-item-avatar-badge${item.done ? " notif-item-avatar-badge-done" : ""}">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${badgeIcon}</svg>
           </span>
         </div>
         <div class="notif-item-body">
-          <div class="notif-item-title${isNew ? " notif-item-title-unread" : ""}"><strong>${escapeHtml(displayName)}</strong> requested a password reset</div>
-          <div class="notif-item-sub${isNew ? " notif-item-sub-unread" : ""}">${escapeHtml(timeAgo(req.requested_at))}</div>
+          <div class="notif-item-title${isNew ? " notif-item-title-unread" : ""}"><strong>${escapeHtml(item.displayName)}</strong> ${item.text}</div>
+          <div class="notif-item-sub${isNew ? " notif-item-sub-unread" : ""}">${escapeHtml(timeAgo(item.timestamp))}</div>
         </div>
         ${isNew ? '<span class="notif-dot" aria-label="Unread"></span>' : ""}
       </button>
@@ -509,18 +627,18 @@ function updateNotifBell(requests) {
   }).join("");
 }
 
-function markNotifSeen(id) {
+function markNotifSeen(notifKey) {
   const seen = getSeenNotifIds();
-  seen.add(id);
+  seen.add(notifKey);
   saveSeenNotifIds(seen);
-  updateNotifBell(latestResetRequests);
+  updateNotifBell(latestResetRequests, latestCompletedResets);
 }
 
 function markAllNotifsSeen() {
   const seen = getSeenNotifIds();
-  latestResetRequests.forEach(r => seen.add(r.id));
+  buildNotifItems(latestResetRequests, latestCompletedResets).forEach(item => seen.add(item.notifKey));
   saveSeenNotifIds(seen);
-  updateNotifBell(latestResetRequests);
+  updateNotifBell(latestResetRequests, latestCompletedResets);
 }
 
 function closeNotifDropdown() {
@@ -540,7 +658,7 @@ document.getElementById("notifMarkAll").addEventListener("click", (e) => {
 notifDropdown.addEventListener("click", (e) => {
   const item = e.target.closest('[data-action="goToRequests"]');
   if (item) {
-    markNotifSeen(Number(item.dataset.requestId));
+    markNotifSeen(item.dataset.notifKey);
     closeNotifDropdown();
     document.querySelector('.nav-item[data-view="accountsView"]').click();
   }
@@ -554,7 +672,8 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !notifDropdown.hidden) closeNotifDropdown();
 });
 
-setInterval(loadResetRequests, 45000);
+setInterval(loadResetRequests, 5000);
+setInterval(loadCompletedResets, 5000);
 
 async function approveResetRequest(btn, requestId, username) {
   btn.disabled = true;
@@ -1014,3 +1133,4 @@ updateSortHeaders("menro");
 updateSortHeaders("ranger");
 loadAccounts();
 loadResetRequests();
+loadCompletedResets();

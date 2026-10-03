@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once __DIR__ . '/../../Login/Database/session-init.php';
 if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     header('Location: ../../Login/Login.php');
     exit;
@@ -67,15 +67,6 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     <span class="dashboard-stat-label">Poor Zones</span>
     <span class="dashboard-stat-value red" id="statDegradedValue">&mdash;</span>
     <span class="dashboard-stat-hint" id="statDegradedHint"></span>
-  </div>
-
-  <div class="dashboard-stat-card accent-moderate">
-    <div class="dashboard-stat-icon icon-moderate">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-    </div>
-    <span class="dashboard-stat-label">Overdue for Inspection</span>
-    <span class="dashboard-stat-value amber" id="statOverdueValue">&mdash;</span>
-    <span class="dashboard-stat-hint" id="statOverdueHint"></span>
   </div>
 
 </div>

@@ -1,6 +1,6 @@
 <?php
 
-session_start();
+require_once __DIR__ . '/../../Login/Database/session-init.php';
 
 // admin is account-management only — it can't even load the map page this
 // imagery feeds (satellite.php only lets 'menro' in), so it has no business
