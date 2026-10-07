@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Sep 29, 2026 at 05:29 PM
+-- Generation Time: Oct 05, 2026 at 01:39 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -708,7 +708,138 @@ INSERT INTO `audit_log` (`id`, `actor_username`, `actor_role`, `action`, `create
 (653, 'daniel123', 'menro', 'logout', '2026-09-29 13:30:45'),
 (654, 'daniel123', 'menro', 'login', '2026-09-29 13:30:51'),
 (655, 'daniel123', 'menro', 'logout', '2026-09-29 14:37:29'),
-(656, 'daniel123', 'menro', 'login', '2026-09-29 15:07:43');
+(656, 'daniel123', 'menro', 'login', '2026-09-29 15:07:43'),
+(657, 'admin', 'admin', 'login', '2026-09-30 16:22:24'),
+(658, 'admin', 'admin', 'Deactivated MENRO account \"dyanne67\".', '2026-09-30 16:22:40'),
+(659, 'admin', 'admin', 'logout', '2026-09-30 16:30:22'),
+(660, 'admin', 'admin', 'login', '2026-09-30 16:30:30'),
+(661, 'admintest', 'admin', 'Sent password reset link to MENRO account \"daniel123\".', '2026-09-30 16:36:23'),
+(662, 'admintest', 'admin', 'Sent password reset link to MENRO account \"daniel123\".', '2026-09-30 16:36:50'),
+(663, 'admintest', 'admin', 'Sent password reset link to MENRO account \"daniel123\".', '2026-09-30 16:37:09'),
+(664, 'admin', 'admin', 'Sent password reset link to MENRO account \"daniel123\".', '2026-09-30 16:39:44'),
+(665, 'admintest', 'admin', 'Sent password reset link to MENRO account \"daniel123\".', '2026-09-30 16:42:37'),
+(666, 'admin', 'admin', 'logout', '2026-09-30 16:43:24'),
+(667, 'daniel123', 'menro', 'login', '2026-09-30 16:43:31'),
+(668, 'admin', 'admin', 'login', '2026-09-30 16:43:49'),
+(669, 'admin', 'admin', 'Sent password reset link to MENRO account \"daniel123\".', '2026-09-30 16:43:55'),
+(670, 'admin', 'admin', 'logout', '2026-09-30 17:33:30'),
+(671, 'admintest', 'admin', 'Sent password reset link to MENRO account \"daniel123\".', '2026-09-30 17:35:18'),
+(672, 'admin', 'admin', 'login', '2026-09-30 17:36:17'),
+(673, 'admin', 'admin', 'Sent password reset link to MENRO account \"daniel123\".', '2026-09-30 17:36:24'),
+(674, 'admin', 'admin', 'Sent password reset link to MENRO account \"daniel123\".', '2026-09-30 17:36:59'),
+(675, 'dyanne67', 'menro', 'MENRO account \"dyanne67\" changed their own password via a reset link.', '2026-09-30 17:39:09'),
+(676, 'admin', 'admin', 'logout', '2026-09-30 17:39:58'),
+(677, 'daniel123', 'menro', 'login', '2026-09-30 17:40:03'),
+(678, 'daniel123', 'menro', 'logout', '2026-09-30 17:41:49'),
+(679, 'rome123', 'ranger', 'login', '2026-09-30 17:41:59'),
+(680, 'rome123', 'ranger', 'logout', '2026-09-30 17:42:29'),
+(681, 'daniel123', 'menro', 'login', '2026-09-30 17:42:37'),
+(682, 'daniel123', 'menro', 'logout', '2026-09-30 17:57:53'),
+(683, 'kaye123', 'ranger', 'login', '2026-09-30 17:57:57'),
+(684, 'kaye123', 'ranger', 'logout', '2026-09-30 18:01:30'),
+(685, 'daniel123', 'menro', 'login', '2026-09-30 18:01:34'),
+(686, 'daniel123', 'menro', 'logout', '2026-09-30 18:03:19'),
+(687, 'kaye123', 'ranger', 'login', '2026-09-30 18:03:30'),
+(688, 'kaye123', 'ranger', 'login', '2026-09-30 18:04:12'),
+(689, 'kaye123', 'ranger', 'logout', '2026-09-30 18:04:15'),
+(690, 'kaye123', 'ranger', 'login', '2026-09-30 18:04:40'),
+(691, 'admin', 'admin', 'login', '2026-09-30 18:04:43'),
+(692, 'admin', 'admin', 'Deactivated Ranger account \"kaye123\".', '2026-09-30 18:04:52'),
+(693, 'admin', 'admin', 'Activated Ranger account \"kaye123\".', '2026-09-30 18:05:18'),
+(694, 'kaye123', 'ranger', 'login', '2026-09-30 18:05:27'),
+(695, 'admin', 'admin', 'login', '2026-09-30 18:06:02'),
+(696, 'admin', 'admin', 'Deactivated Ranger account \"kaye123\".', '2026-09-30 18:06:06'),
+(697, 'admin', 'admin', 'Activated Ranger account \"kaye123\".', '2026-09-30 18:06:16'),
+(698, 'admin', 'admin', 'logout', '2026-09-30 18:06:23'),
+(699, 'daniel123', 'menro', 'login', '2026-09-30 18:06:27'),
+(700, 'daniel123', 'menro', 'logout', '2026-09-30 18:06:30'),
+(701, 'admin', 'admin', 'login', '2026-09-30 18:07:37'),
+(702, 'admin', 'admin', 'logout', '2026-09-30 18:07:43'),
+(703, 'admintest', 'admin', 'Changed MENRO account \"dyanne67\" to Ranger.', '2026-10-01 15:15:42'),
+(704, 'admintest', 'admin', 'Changed Ranger account \"dyanne67\" to MENRO.', '2026-10-01 15:16:48'),
+(705, 'kaye123', 'ranger', 'login', '2026-10-01 15:18:07'),
+(706, 'kaye123', 'ranger', 'logout', '2026-10-01 15:18:45'),
+(707, 'daniel123', 'menro', 'login', '2026-10-01 15:18:51'),
+(708, 'daniel123', 'menro', 'logout', '2026-10-01 15:20:52'),
+(709, 'admin', 'admin', 'login', '2026-10-01 15:21:13'),
+(710, 'admin', 'admin', 'logout', '2026-10-01 15:21:21'),
+(711, 'kaye123', 'ranger', 'login', '2026-10-01 15:21:24'),
+(712, 'kaye123', 'ranger', 'logout', '2026-10-01 15:21:41'),
+(713, 'daniel123', 'menro', 'login', '2026-10-01 15:22:55'),
+(714, 'daniel123', 'menro', 'login', '2026-10-01 15:23:04'),
+(715, 'daniel123', 'menro', 'logout', '2026-10-01 15:23:09'),
+(716, 'admin', 'admin', 'login', '2026-10-01 15:23:13'),
+(717, 'admin', 'admin', 'Deactivated MENRO account \"daniel123\".', '2026-10-01 15:23:16'),
+(718, 'admin', 'admin', 'Activated MENRO account \"daniel123\".', '2026-10-01 15:23:45'),
+(719, 'daniel123', 'menro', 'login', '2026-10-01 15:24:31'),
+(720, 'admin', 'admin', 'login', '2026-10-01 15:27:12'),
+(721, 'admin', 'admin', 'Deactivated MENRO account \"daniel123\".', '2026-10-01 15:27:15'),
+(722, 'admin', 'admin', 'logout', '2026-10-01 15:28:05'),
+(723, 'admin', 'admin', 'login', '2026-10-01 15:28:20'),
+(724, 'admin', 'admin', 'login', '2026-10-01 15:33:12'),
+(725, 'admin', 'admin', 'Activated MENRO account \"daniel123\".', '2026-10-01 15:33:15'),
+(726, 'admin', 'admin', 'logout', '2026-10-01 15:33:22'),
+(727, 'daniel123', 'menro', 'login', '2026-10-01 15:33:32'),
+(728, 'daniel123', 'menro', 'logout', '2026-10-01 15:34:09'),
+(729, 'kaye123', 'ranger', 'login', '2026-10-01 15:34:15'),
+(730, 'daniel123', 'menro', 'login', '2026-10-01 15:40:44'),
+(731, 'kaye123', 'ranger', 'login', '2026-10-01 15:43:33'),
+(732, 'daniel123', 'menro', 'login', '2026-10-01 15:55:42'),
+(733, 'kaye123', 'ranger', 'login', '2026-10-01 16:05:38'),
+(734, 'daniel123', 'menro', 'login', '2026-10-01 16:05:55'),
+(735, 'daniel123', 'menro', 'login', '2026-10-02 03:33:48'),
+(736, 'daniel123', 'menro', 'logout', '2026-10-02 04:10:15'),
+(737, 'kaye123', 'ranger', 'login', '2026-10-02 04:10:18'),
+(738, 'kaye123', 'ranger', 'logout', '2026-10-02 04:11:02'),
+(739, 'daniel123', 'menro', 'login', '2026-10-02 04:11:08'),
+(740, 'daniel123', 'menro', 'logout', '2026-10-02 04:12:49'),
+(741, 'admin', 'admin', 'login', '2026-10-02 04:12:53'),
+(742, 'admin', 'admin', 'logout', '2026-10-02 06:44:33'),
+(743, 'kaye123', 'ranger', 'login', '2026-10-02 06:44:37'),
+(744, 'kaye123', 'ranger', 'logout', '2026-10-02 07:13:08'),
+(745, 'daniel123', 'menro', 'login', '2026-10-02 07:13:12'),
+(746, 'daniel123', 'menro', 'logout', '2026-10-02 12:16:56'),
+(747, 'daniel123', 'menro', 'login', '2026-10-03 10:44:56'),
+(748, 'daniel123', 'menro', 'login', '2026-10-03 12:01:10'),
+(749, 'daniel123', 'menro', 'logout', '2026-10-03 12:28:23'),
+(750, 'kaye123', 'ranger', 'login', '2026-10-03 12:28:27'),
+(751, 'kaye123', 'ranger', 'logout', '2026-10-03 12:28:38'),
+(752, 'admin', 'admin', 'login', '2026-10-03 12:28:41'),
+(753, 'admin', 'admin', 'logout', '2026-10-03 12:28:53'),
+(754, 'admin', 'admin', 'login', '2026-10-03 12:28:57'),
+(755, 'admin', 'admin', 'logout', '2026-10-03 12:28:59'),
+(756, 'daniel123', 'menro', 'login', '2026-10-03 12:29:02'),
+(757, 'daniel123', 'menro', 'logout', '2026-10-03 12:29:22'),
+(758, 'kaye123', 'ranger', 'login', '2026-10-03 12:29:30'),
+(759, 'daniel123', 'menro', 'login', '2026-10-03 12:29:45'),
+(760, 'daniel123', 'menro', 'logout', '2026-10-03 12:29:52'),
+(761, 'rome123', 'ranger', 'login', '2026-10-03 12:29:57'),
+(762, 'daniel123', 'menro', 'login', '2026-10-03 12:32:43'),
+(763, 'daniel123', 'menro', 'login', '2026-10-03 12:45:17'),
+(764, 'daniel123', 'menro', 'login', '2026-10-03 15:10:50'),
+(765, 'daniel123', 'menro', 'logout', '2026-10-03 15:11:15'),
+(766, 'kaye123', 'ranger', 'login', '2026-10-03 15:11:19'),
+(767, 'kaye123', 'ranger', 'logout', '2026-10-03 15:11:31'),
+(768, 'rome123', 'ranger', 'login', '2026-10-03 15:11:37'),
+(769, 'rome123', 'ranger', 'logout', '2026-10-03 15:18:55'),
+(770, 'daniel123', 'menro', 'login', '2026-10-03 15:19:00'),
+(771, 'daniel123', 'menro', 'logout', '2026-10-03 16:10:15'),
+(772, 'admin', 'admin', 'login', '2026-10-03 16:10:57'),
+(773, 'admin', 'admin', 'logout', '2026-10-03 16:12:34'),
+(774, 'daniel123', 'menro', 'login', '2026-10-03 16:12:39'),
+(775, 'daniel123', 'menro', 'logout', '2026-10-03 16:28:05'),
+(776, 'daniel123', 'menro', 'login', '2026-10-03 16:28:43'),
+(777, 'daniel123', 'menro', 'login', '2026-10-04 14:04:24'),
+(778, 'daniel123', 'menro', 'logout', '2026-10-04 15:07:44'),
+(779, 'kaye123', 'ranger', 'login', '2026-10-04 15:07:50'),
+(780, 'kaye123', 'ranger', 'logout', '2026-10-04 15:13:42'),
+(781, 'daniel123', 'menro', 'login', '2026-10-04 15:14:09'),
+(782, 'daniel123', 'menro', 'logout', '2026-10-04 15:18:39'),
+(783, 'rome123', 'ranger', 'login', '2026-10-04 15:18:43'),
+(784, 'rome123', 'ranger', 'logout', '2026-10-04 15:19:12'),
+(785, 'daniel123', 'menro', 'login', '2026-10-04 15:19:19'),
+(786, 'kaye123', 'ranger', 'login', '2026-10-04 15:22:01'),
+(787, 'daniel123', 'menro', 'login', '2026-10-04 15:22:14');
 
 -- --------------------------------------------------------
 
@@ -772,8 +903,8 @@ CREATE TABLE `menro_accounts` (
 --
 
 INSERT INTO `menro_accounts` (`id`, `full_name`, `username`, `password_hash`, `email`, `created_at`, `is_active`) VALUES
-(5, 'Rome Dyanne Salvid', 'dyanne67', '$2y$10$x39J1LkYDmHinpfZ54Jkmup66w7LzEdIhHgRf24htAqpSlz/GJMyK', 'romesalvid1257@gmail.com', '2026-09-06 14:40:59', 1),
-(8, 'Daniel Magarao', 'daniel123', '$2y$10$gqARRQQjTrdhAzouovICWegJ3W0D010AqzOOXQac7iwukbq5K2KM6', 'danielmagarao002@gmail.com', '2026-09-03 14:21:49', 1);
+(8, 'Daniel Magarao', 'daniel123', '$2y$10$nwerqN0g3Y/fQO1v5ubbvuXpmSgZg3oGT235Gpt/rDbNWRwJJthTS', 'danielmagarao002@gmail.com', '2026-09-03 14:21:49', 1),
+(9, 'Rome Dyanne Salvid', 'dyanne67', '$2y$10$x39J1LkYDmHinpfZ54Jkmup66w7LzEdIhHgRf24htAqpSlz/GJMyK', 'romesalvid1257@gmail.com', '2026-09-06 14:40:59', 0);
 
 -- --------------------------------------------------------
 
@@ -790,23 +921,25 @@ CREATE TABLE `password_reset_requests` (
   `token` varchar(64) DEFAULT NULL,
   `token_expires_at` timestamp NULL DEFAULT NULL,
   `requested_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `resolved_at` timestamp NULL DEFAULT NULL
+  `resolved_at` timestamp NULL DEFAULT NULL,
+  `resolved_via` enum('admin','self') DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `password_reset_requests`
 --
 
-INSERT INTO `password_reset_requests` (`id`, `username`, `role`, `account_id`, `status`, `token`, `token_expires_at`, `requested_at`, `resolved_at`) VALUES
-(1, 'daniel123', 'menro', 2, 'resolved', 'f4bd6d02cea0f6d5682644ceb00fbe40936106892ff2afc4802d4039a76a1075', '2026-09-04 17:42:14', '2026-09-04 17:09:49', '2026-09-04 17:13:58'),
-(2, 'alessandra123', 'menro', 3, 'resolved', NULL, NULL, '2026-09-06 12:37:49', '2026-09-06 12:38:28'),
-(3, 'daniel123', 'menro', 2, 'resolved', '46388408aad7de1df9c5abf5553a7fb7d22a82988057d764700764e402ac9523', '2026-09-06 13:48:18', '2026-09-06 13:15:08', '2026-09-06 13:19:02'),
-(4, 'marklee2026!', 'menro', 4, 'resolved', '8e3016fdb7dffc31b1da2645de3a38d2a1f1ba07246300ada21981c33d17a214', '2026-09-06 14:23:03', '2026-09-06 13:52:50', '2026-09-06 13:53:11'),
-(5, 'rome123', 'ranger', 1, 'resolved', '2354db482f75e733f667e1d70abc81b30c628d9e3e9cd81e98b2db8e7e569476', '2026-09-08 06:01:59', '2026-09-08 05:31:25', '2026-09-08 05:32:49'),
-(6, 'daniel123', 'menro', 2, 'resolved', 'a9ff81dc26bd613216c32c4f152a79f331cc15e21fbd9a2ed7dbdb22a72757fb', '2026-09-08 06:03:37', '2026-09-08 05:33:26', '2026-09-08 05:34:09'),
-(7, 'Janelle05', 'menro', 7, 'resolved', NULL, NULL, '2026-09-08 13:41:13', '2026-09-08 13:41:22'),
-(8, 'rome123', 'ranger', 1, 'resolved', NULL, NULL, '2026-09-08 14:35:01', '2026-09-08 15:27:42'),
-(9, 'rome123', 'ranger', 1, 'resolved', NULL, NULL, '2026-09-08 15:27:50', '2026-09-11 08:43:12');
+INSERT INTO `password_reset_requests` (`id`, `username`, `role`, `account_id`, `status`, `token`, `token_expires_at`, `requested_at`, `resolved_at`, `resolved_via`) VALUES
+(1, 'daniel123', 'menro', 2, 'resolved', 'f4bd6d02cea0f6d5682644ceb00fbe40936106892ff2afc4802d4039a76a1075', '2026-09-04 17:42:14', '2026-09-04 17:09:49', '2026-09-04 17:13:58', NULL),
+(2, 'alessandra123', 'menro', 3, 'resolved', NULL, NULL, '2026-09-06 12:37:49', '2026-09-06 12:38:28', NULL),
+(3, 'daniel123', 'menro', 2, 'resolved', '46388408aad7de1df9c5abf5553a7fb7d22a82988057d764700764e402ac9523', '2026-09-06 13:48:18', '2026-09-06 13:15:08', '2026-09-06 13:19:02', NULL),
+(4, 'marklee2026!', 'menro', 4, 'resolved', '8e3016fdb7dffc31b1da2645de3a38d2a1f1ba07246300ada21981c33d17a214', '2026-09-06 14:23:03', '2026-09-06 13:52:50', '2026-09-06 13:53:11', NULL),
+(5, 'rome123', 'ranger', 1, 'resolved', '2354db482f75e733f667e1d70abc81b30c628d9e3e9cd81e98b2db8e7e569476', '2026-09-08 06:01:59', '2026-09-08 05:31:25', '2026-09-08 05:32:49', NULL),
+(6, 'daniel123', 'menro', 2, 'resolved', 'a9ff81dc26bd613216c32c4f152a79f331cc15e21fbd9a2ed7dbdb22a72757fb', '2026-09-08 06:03:37', '2026-09-08 05:33:26', '2026-09-08 05:34:09', NULL),
+(7, 'Janelle05', 'menro', 7, 'resolved', NULL, NULL, '2026-09-08 13:41:13', '2026-09-08 13:41:22', NULL),
+(8, 'rome123', 'ranger', 1, 'resolved', NULL, NULL, '2026-09-08 14:35:01', '2026-09-08 15:27:42', NULL),
+(9, 'rome123', 'ranger', 1, 'resolved', NULL, NULL, '2026-09-08 15:27:50', '2026-09-11 08:43:12', NULL),
+(11, 'daniel123', 'menro', 8, 'resolved', '91a6a7bfd2d201a17e743a31d2a1ed7c4f623406e75560a34c15dbd3570d2d5c', '2026-09-30 17:13:50', '2026-09-30 16:43:29', '2026-09-30 16:43:55', NULL);
 
 -- --------------------------------------------------------
 
@@ -941,7 +1074,11 @@ INSERT INTO `ranger_notifications` (`id`, `kobo_id`, `ranger_name`, `message`, `
 (70, -1790641184, 'Rome Dyanne Salvid', 'Your survey needs revision', 1, '2026-09-29 04:31:50', 'rejected', 'Calatagan Mangrove Area 29', '2026-08-01', NULL),
 (71, -1790610409, 'Kaye Macalalad', 'Your survey needs revision', 1, '2026-09-29 04:31:52', 'rejected', 'Calatagan Mangrove Area 23', '2026-01-14', NULL),
 (72, -1790643457, 'Kaye Macalalad', 'Your survey was approved', 1, '2026-09-29 12:08:46', 'approved', 'Calatagan Mangrove Area 18', '2026-09-29', NULL),
-(73, -1790686869, 'Kaye Macalalad', 'Your survey was approved', 1, '2026-09-29 13:05:20', 'approved', 'Calatagan Mangrove Rehabilitation and Nursery Project', '2026-09-29', NULL);
+(73, -1790686869, 'Kaye Macalalad', 'Your survey was approved', 1, '2026-09-29 13:05:20', 'approved', 'Calatagan Mangrove Rehabilitation and Nursery Project', '2026-09-29', NULL),
+(74, -1790791247, 'Kaye Macalalad', 'Your survey was approved', 1, '2026-10-02 08:47:56', 'approved', 'Calatagan Mangrove Area 23', '2026-10-01', NULL),
+(75, -1790687533, 'Rome Dyanne Salvid', 'Your survey was approved', 1, '2026-10-02 08:47:57', 'approved', 'Calatagan Mangrove Area 9', '2026-01-21', NULL),
+(76, -1791040501, 'Rome Dyanne Salvid', 'Your survey was approved', 0, '2026-10-03 15:19:13', 'approved', 'Calatagan Mangrove Area 23', '2026-10-03', NULL),
+(77, -1791127323, 'Kaye Macalalad', 'Your survey was approved', 0, '2026-10-04 15:22:29', 'approved', 'Bagong Silang Mangrove Protected Area', '2026-02-04', NULL);
 
 -- --------------------------------------------------------
 
@@ -972,7 +1109,10 @@ CREATE TABLE `ranger_submissions` (
 --
 
 INSERT INTO `ranger_submissions` (`kobo_id`, `uuid`, `barangay`, `inspection_date`, `raw_json`, `synced_at`, `locally_edited`, `edited_at`, `approval_status`, `reviewed_at`, `reviewed_by`, `review_notes`, `alert_reviewed`, `alert_reviewed_at`, `alert_reviewed_by`) VALUES
-(-1790687533, 'e574737d18c851350b7028afa8411bdb', 'Carretunan', '2026-01-21', '{\"Ranger_Name\":\"Rome Dyanne Salvid\",\"Inspection_Date\":\"2026-01-21\",\"Record_your_current_location\":\"13.920471407124 120.62097799959 0 0\",\"Estimated_Canopy_Cover_\":\"80\",\"Overall_Health_Assessment\":\"moderate\",\"Observed_Threats\":\"pests,sand_gravel_extraction\",\"Observed_Threats_Other\":\"\",\"Additional_Notes\":\"\",\"Water_Clarity\":\"very_murky\",\"Water_Color\":\"brown\",\"Odor\":\"fishy\",\"Visible_Foam_or_Discharge\":\"none\",\"Nearby_Aquafarm_Activity\":\"no\",\"Aquafarm_Name\":\"\",\"Aquafarm_Location_Lat\":\"\",\"Aquafarm_Location_Lng\":\"\",\"Aquafarm_Distance_m\":\"\",\"Discharge_Toward_Mangroves\":\"\",\"Salinity_ppt\":\"20\",\"PH\":\"4\",\"Water_Temperature_C\":\"35\",\"Secchi_Depth_cm\":\"12\",\"Water_Quality_Notes\":\"\",\"Species_Records\":[{\"Species_Name\":\"Buboi-gubat (Ceiba pentandra)\",\"Tree_Count\":\"14\",\"Sapling_Count\":\"9\",\"Seedling_Count\":\"4\"},{\"Species_Name\":\"Dapo\",\"Tree_Count\":\"6\",\"Sapling_Count\":\"7\",\"Seedling_Count\":\"8\"},{\"Species_Name\":\"Bakawan babae (Rhizophora mucronata)\",\"Tree_Count\":\"3\",\"Sapling_Count\":\"13\",\"Seedling_Count\":\"23\"}],\"Mollusk_Records\":[],\"Photo_Documentation\":\"http:\\/\\/localhost\\/GIS\\/Menro\\/data\\/uploads\\/photo_d07bdda41af6e275.jpg\",\"_zone_id\":\"field-41\",\"_zone_name\":\"Calatagan Mangrove Area 9\",\"_zone_barangay\":\"Carretunan\",\"_id\":-1790687533,\"_uuid\":\"e574737d18c851350b7028afa8411bdb\",\"_submission_time\":\"2026-09-29T15:12:13+02:00\",\"_status\":\"submitted_natively\"}', '2026-09-29 13:12:13', 0, NULL, 'pending', NULL, NULL, NULL, 0, NULL, NULL),
+(-1791127323, '33917e47effc31dddcb5c2e4600fe149', 'Bagong Silang', '2026-02-04', '{\"Ranger_Name\":\"Kaye Macalalad\",\"Inspection_Date\":\"2026-02-04\",\"Record_your_current_location\":\"13.779568260511 120.6719708315 0 0\",\"Estimated_Canopy_Cover_\":\"100\",\"Overall_Health_Assessment\":\"healthy\",\"Observed_Threats\":\"illegal_fishing\",\"Observed_Threats_Other\":\"\",\"Additional_Notes\":\"\",\"Water_Clarity\":\"clear\",\"Water_Color\":\"no_color\",\"Odor\":\"none\",\"Visible_Foam_or_Discharge\":\"none\",\"Nearby_Aquafarm_Activity\":\"no\",\"Aquafarm_Name\":\"\",\"Aquafarm_Location_Lat\":\"\",\"Aquafarm_Location_Lng\":\"\",\"Aquafarm_Distance_m\":\"\",\"Discharge_Toward_Mangroves\":\"\",\"Salinity_ppt\":\"\",\"PH\":\"\",\"Water_Temperature_C\":\"\",\"Secchi_Depth_cm\":\"\",\"Water_Quality_Notes\":\"\",\"Species_Records\":[{\"Species_Name\":\"Pakpak-lawin (Drynaria quercifolia)\",\"Tree_Count\":\"20\",\"Sapling_Count\":\"\",\"Seedling_Count\":\"\"},{\"Species_Name\":\"Caballero (Caesalpinia pulcherrima)\",\"Tree_Count\":\"19\",\"Sapling_Count\":\"\",\"Seedling_Count\":\"\"}],\"Mollusk_Records\":[],\"Photo_Documentation\":\"http:\\/\\/localhost\\/GIS\\/Menro\\/data\\/uploads\\/photo_49b05cc902773e8f.jpg\",\"_zone_id\":\"field-84\",\"_zone_name\":\"Bagong Silang Mangrove Protected Area\",\"_zone_barangay\":\"Bagong Silang\",\"_id\":-1791127323,\"_uuid\":\"33917e47effc31dddcb5c2e4600fe149\",\"_submission_time\":\"2026-10-04T17:22:03+02:00\",\"_status\":\"submitted_natively\"}', '2026-10-04 15:22:29', 0, NULL, 'approved', '2026-10-04 15:22:29', 'Daniel Magarao', NULL, 0, NULL, NULL),
+(-1791040501, 'ac29e56a426bc120047f2bdb1801a88d', 'Paraiso', '2026-10-03', '{\"Ranger_Name\":\"Rome Dyanne Salvid\",\"Inspection_Date\":\"2026-10-03\",\"Record_your_current_location\":\"14.063195813759 120.71988636411 0 0\",\"Estimated_Canopy_Cover_\":\"100\",\"Overall_Health_Assessment\":\"degraded\",\"Observed_Threats\":\"cutting\",\"Observed_Threats_Other\":\"\",\"Additional_Notes\":\"\",\"Water_Clarity\":\"clear\",\"Water_Color\":\"no_color\",\"Odor\":\"fishy\",\"Visible_Foam_or_Discharge\":\"visible_discharge_flow\",\"Nearby_Aquafarm_Activity\":\"yes\",\"Aquafarm_Name\":\"Daniel\'s Aquafarm\",\"Aquafarm_Location_Lat\":\"14.06321016541077\",\"Aquafarm_Location_Lng\":\"120.71992655100165\",\"Aquafarm_Distance_m\":\"7\",\"Discharge_Toward_Mangroves\":\"yes\",\"Salinity_ppt\":\"\",\"PH\":\"\",\"Water_Temperature_C\":\"\",\"Secchi_Depth_cm\":\"\",\"Water_Quality_Notes\":\"\",\"Species_Records\":[{\"Species_Name\":\"Bayabas (Psidium guajava)\",\"Tree_Count\":\"80\",\"Sapling_Count\":\"\",\"Seedling_Count\":\"\"}],\"Mollusk_Records\":[{\"Mollusk_Species_Name\":\"Lokan \\/ Mud clam (Polymesoda erosa)\"},{\"Mollusk_Species_Name\":\"Suso \\/ Nerite (Nerita spp.)\"},{\"Mollusk_Species_Name\":\"Bakuku \\/ Mangrove mud creeper (Terebralia palustris)\"}],\"Photo_Documentation\":\"http:\\/\\/localhost\\/GIS\\/Menro\\/data\\/uploads\\/photo_ce24c3e9d60c52da.jpeg\",\"_zone_id\":\"field-55\",\"_zone_name\":\"Calatagan Mangrove Area 23\",\"_zone_barangay\":\"Paraiso\",\"_id\":-1791040501,\"_uuid\":\"ac29e56a426bc120047f2bdb1801a88d\",\"_submission_time\":\"2026-10-03T17:15:01+02:00\",\"_status\":\"submitted_natively\"}', '2026-10-03 15:19:13', 0, NULL, 'approved', '2026-10-03 15:19:13', 'Daniel Magarao', NULL, 0, NULL, NULL),
+(-1790791247, '007f820badf116e9a1ffba2c7710b10c', 'Paraiso', '2026-10-01', '{\"Ranger_Name\":\"Kaye Macalalad\",\"Inspection_Date\":\"2026-10-01\",\"Record_your_current_location\":\"14.063202655559 120.7199023679 0 0\",\"Estimated_Canopy_Cover_\":\"100\",\"Overall_Health_Assessment\":\"healthy\",\"Observed_Threats\":\"illegal_fishing\",\"Observed_Threats_Other\":\"\",\"Additional_Notes\":\"\",\"Water_Clarity\":\"clear\",\"Water_Color\":\"no_color\",\"Odor\":\"none\",\"Visible_Foam_or_Discharge\":\"none\",\"Nearby_Aquafarm_Activity\":\"no\",\"Aquafarm_Name\":\"\",\"Aquafarm_Location_Lat\":\"\",\"Aquafarm_Location_Lng\":\"\",\"Aquafarm_Distance_m\":\"\",\"Discharge_Toward_Mangroves\":\"\",\"Salinity_ppt\":\"\",\"PH\":\"\",\"Water_Temperature_C\":\"\",\"Secchi_Depth_cm\":\"\",\"Water_Quality_Notes\":\"\",\"Species_Records\":[{\"Species_Name\":\"Bayabas (Psidium guajava)\",\"Tree_Count\":\"12\",\"Sapling_Count\":\"\",\"Seedling_Count\":\"\"},{\"Species_Name\":\"Duhat (Syzygium cumini)\",\"Tree_Count\":\"14\",\"Sapling_Count\":\"\",\"Seedling_Count\":\"\"}],\"Mollusk_Records\":[{\"Mollusk_Species_Name\":\"Kapis \\/ Windowpane oyster (Placuna placenta)\"},{\"Mollusk_Species_Name\":\"Kuhol-dagat \\/ Mangrove snail (Cerithidea cingulata)\"}],\"Photo_Documentation\":\"http:\\/\\/localhost\\/GIS\\/Menro\\/data\\/uploads\\/photo_2d8e32e463e66b0b.jpg\",\"_zone_id\":\"field-55\",\"_zone_name\":\"Calatagan Mangrove Area 23\",\"_zone_barangay\":\"Paraiso\",\"_id\":-1790791247,\"_uuid\":\"007f820badf116e9a1ffba2c7710b10c\",\"_submission_time\":\"2026-09-30T20:00:47+02:00\",\"_status\":\"submitted_natively\"}', '2026-10-02 08:47:56', 0, NULL, 'approved', '2026-10-02 08:47:56', 'Daniel Magarao', NULL, 0, NULL, NULL),
+(-1790687533, 'e574737d18c851350b7028afa8411bdb', 'Carretunan', '2026-01-21', '{\"Ranger_Name\":\"Rome Dyanne Salvid\",\"Inspection_Date\":\"2026-01-21\",\"Record_your_current_location\":\"13.920471407124 120.62097799959 0 0\",\"Estimated_Canopy_Cover_\":\"80\",\"Overall_Health_Assessment\":\"moderate\",\"Observed_Threats\":\"pests,sand_gravel_extraction\",\"Observed_Threats_Other\":\"\",\"Additional_Notes\":\"\",\"Water_Clarity\":\"very_murky\",\"Water_Color\":\"brown\",\"Odor\":\"fishy\",\"Visible_Foam_or_Discharge\":\"none\",\"Nearby_Aquafarm_Activity\":\"no\",\"Aquafarm_Name\":\"\",\"Aquafarm_Location_Lat\":\"\",\"Aquafarm_Location_Lng\":\"\",\"Aquafarm_Distance_m\":\"\",\"Discharge_Toward_Mangroves\":\"\",\"Salinity_ppt\":\"20\",\"PH\":\"4\",\"Water_Temperature_C\":\"35\",\"Secchi_Depth_cm\":\"12\",\"Water_Quality_Notes\":\"\",\"Species_Records\":[{\"Species_Name\":\"Buboi-gubat (Ceiba pentandra)\",\"Tree_Count\":\"14\",\"Sapling_Count\":\"9\",\"Seedling_Count\":\"4\"},{\"Species_Name\":\"Dapo\",\"Tree_Count\":\"6\",\"Sapling_Count\":\"7\",\"Seedling_Count\":\"8\"},{\"Species_Name\":\"Bakawan babae (Rhizophora mucronata)\",\"Tree_Count\":\"3\",\"Sapling_Count\":\"13\",\"Seedling_Count\":\"23\"}],\"Mollusk_Records\":[],\"Photo_Documentation\":\"http:\\/\\/localhost\\/GIS\\/Menro\\/data\\/uploads\\/photo_d07bdda41af6e275.jpg\",\"_zone_id\":\"field-41\",\"_zone_name\":\"Calatagan Mangrove Area 9\",\"_zone_barangay\":\"Carretunan\",\"_id\":-1790687533,\"_uuid\":\"e574737d18c851350b7028afa8411bdb\",\"_submission_time\":\"2026-09-29T15:12:13+02:00\",\"_status\":\"submitted_natively\"}', '2026-10-02 08:47:57', 0, NULL, 'approved', '2026-10-02 08:47:57', 'Daniel Magarao', NULL, 0, NULL, NULL),
 (-1790686869, 'a036b0fbc71df2ee5f83e764df0bb0fe', 'Balibago', '2026-09-29', '{\"Ranger_Name\":\"Kaye Macalalad\",\"Inspection_Date\":\"2026-09-29\",\"Record_your_current_location\":\"13.924820143573 120.62466817895 0 0\",\"Estimated_Canopy_Cover_\":\"42\",\"Overall_Health_Assessment\":\"healthy\",\"Observed_Threats\":\"none_observed\",\"Observed_Threats_Other\":\"\",\"Additional_Notes\":\"\",\"Water_Clarity\":\"clear\",\"Water_Color\":\"no_color\",\"Odor\":\"none\",\"Visible_Foam_or_Discharge\":\"none\",\"Nearby_Aquafarm_Activity\":\"yes\",\"Aquafarm_Name\":\"SVJD Aquafarm\",\"Aquafarm_Location_Lat\":\"14.063190573625073\",\"Aquafarm_Location_Lng\":\"120.71986346185689\",\"Aquafarm_Distance_m\":\"12\",\"Discharge_Toward_Mangroves\":\"no_visible_discharge\",\"Salinity_ppt\":\"35\",\"PH\":\"2\",\"Water_Temperature_C\":\"22\",\"Secchi_Depth_cm\":\"16\",\"Water_Quality_Notes\":\"\",\"Species_Records\":[{\"Species_Name\":\"Bakawan lalaki (Rhizophora apiculata)\",\"Tree_Count\":\"20\",\"Sapling_Count\":\"5\",\"Seedling_Count\":\"7\"},{\"Species_Name\":\"Caballero (Caesalpinia pulcherrima)\",\"Tree_Count\":\"11\",\"Sapling_Count\":\"8\",\"Seedling_Count\":\"12\"},{\"Species_Name\":\"Buli (Corypha elata)\",\"Tree_Count\":\"9\",\"Sapling_Count\":\"\",\"Seedling_Count\":\"5\"},{\"Species_Name\":\"Kalapinay (Avicennia marina)\",\"Tree_Count\":\"4\",\"Sapling_Count\":\"6\",\"Seedling_Count\":\"\"}],\"Mollusk_Records\":[{\"Mollusk_Species_Name\":\"Sihi \\/ Halaan (Lajonkairia lajonkairii)\",\"Mollusk_Count\":\"1\"},{\"Mollusk_Species_Name\":\"Lokan \\/ Mud clam (Polymesoda erosa)\",\"Mollusk_Count\":\"1\"},{\"Mollusk_Species_Name\":\"Tulya \\/ Asian clam (Corbicula fluminea)\",\"Mollusk_Count\":\"1\"}],\"Photo_Documentation\":\"http:\\/\\/localhost\\/GIS\\/Menro\\/data\\/uploads\\/photo_25ab91d6b1748407.jpg\",\"_zone_id\":\"field-32\",\"_zone_name\":\"Calatagan Mangrove Rehabilitation and Nursery Project\",\"_zone_barangay\":\"Balibago\",\"_id\":-1790686869,\"_uuid\":\"a036b0fbc71df2ee5f83e764df0bb0fe\",\"_submission_time\":\"2026-09-29T15:01:09+02:00\",\"_status\":\"submitted_natively\"}', '2026-09-29 13:05:20', 0, NULL, 'approved', '2026-09-29 13:05:20', 'Daniel Magarao', NULL, 0, NULL, NULL);
 
 --
@@ -1059,7 +1199,7 @@ ALTER TABLE `admin_accounts`
 -- AUTO_INCREMENT for table `audit_log`
 --
 ALTER TABLE `audit_log`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=657;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=788;
 
 --
 -- AUTO_INCREMENT for table `mangrove_extent_shapes`
@@ -1071,13 +1211,13 @@ ALTER TABLE `mangrove_extent_shapes`
 -- AUTO_INCREMENT for table `menro_accounts`
 --
 ALTER TABLE `menro_accounts`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `password_reset_requests`
 --
 ALTER TABLE `password_reset_requests`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
 
 --
 -- AUTO_INCREMENT for table `protected_areas`
@@ -1089,13 +1229,13 @@ ALTER TABLE `protected_areas`
 -- AUTO_INCREMENT for table `ranger_accounts`
 --
 ALTER TABLE `ranger_accounts`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
 
 --
 -- AUTO_INCREMENT for table `ranger_notifications`
 --
 ALTER TABLE `ranger_notifications`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=74;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=78;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

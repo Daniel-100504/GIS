@@ -18,7 +18,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
 
 <link rel="icon" href="../assets/calatagan-seal.png"/>
 <link rel="stylesheet" href="../assets/theme.css"/>
-<link rel="stylesheet" href="admin.css"/>
+<link rel="stylesheet" href="admin.css?v=3"/>
 </head>
 <body>
 

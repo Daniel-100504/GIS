@@ -321,7 +321,7 @@ const MangroveRenameControl = L.Control.extend({
     const container = L.DomUtil.create("div", "leaflet-bar leaflet-control");
     const link = L.DomUtil.create("a", "mangrove-rename-btn", container);
     link.href = "#";
-    link.title = "Edit a mangrove area's boundary or details";
+    link.title = "Edit details (mangrove zones) — or boundary & details (protected areas, mangrove extent)";
     link.innerHTML = "&#9998;";
     L.DomEvent.disableClickPropagation(container);
     L.DomEvent.on(link, "click", function (e) {

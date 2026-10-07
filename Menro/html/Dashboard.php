@@ -30,10 +30,9 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
   </button>
 </div>
 
-<p class="dashboard-section-title">Zone Health Overview</p>
 <div class="dashboard-grid">
 
-  <div class="dashboard-stat-card accent-brand">
+  <div class="dashboard-stat-card dashboard-stat-total accent-brand-solid">
     <div class="dashboard-stat-icon">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
     </div>
@@ -42,7 +41,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     <span class="dashboard-stat-hint" id="statTotalZonesHint"></span>
   </div>
 
-  <div class="dashboard-stat-card accent-healthy">
+  <div class="dashboard-stat-card dashboard-stat-good accent-healthy">
     <div class="dashboard-stat-icon icon-healthy">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c0-4 3-5 3-9a3 3 0 0 0-6 0c0 4 3 5 3 9Z"/><path d="M12 13V3"/><path d="M12 7 8 3"/><path d="M12 9 17 4"/></svg>
     </div>
@@ -51,7 +50,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     <span class="dashboard-stat-hint" id="statHealthyHint"></span>
   </div>
 
-  <div class="dashboard-stat-card accent-moderate">
+  <div class="dashboard-stat-card dashboard-stat-fair accent-moderate">
     <div class="dashboard-stat-icon icon-moderate">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
     </div>
@@ -60,7 +59,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     <span class="dashboard-stat-hint" id="statModerateHint"></span>
   </div>
 
-  <div class="dashboard-stat-card accent-degraded">
+  <div class="dashboard-stat-card dashboard-stat-poor accent-degraded">
     <div class="dashboard-stat-icon icon-degraded">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="14.83" y1="9.17" x2="9.17" y2="14.83"/><line x1="9.17" y1="9.17" x2="14.83" y2="14.83"/></svg>
     </div>
@@ -71,29 +70,32 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 
 </div>
 
-<p class="dashboard-section-title">Threats &amp; Alerts</p>
-<div class="alert-card-list" id="alertsCardList"></div>
-<div class="dashboard-empty" id="alertsEmpty" hidden>No threats or alerts reported.</div>
-
-<div class="dashboard-charts-row dashboard-charts-row-with-date">
+<div class="dashboard-bento-row dashboard-bento-row-tall">
   <div class="chart-card dashboard-date-picker">
     <p class="chart-card-title">Summary Date</p>
     <div id="dashboardDatePicker"></div>
   </div>
-  <div class="chart-card chart-card-narrow">
-    <p class="chart-card-title">Health Distribution</p>
-    <div id="healthDonutChart"></div>
-  </div>
-  <div class="chart-card">
+  <div class="chart-card dashboard-ndvi-card">
     <div class="chart-card-header-row">
       <p class="chart-card-title">NDVI by Zone</p>
       <span class="chart-card-corner-stat">Avg NDVI <strong id="statAvgNdviValue">&mdash;</strong></span>
     </div>
     <div id="ndviBarChart"></div>
   </div>
+  <div class="chart-card dashboard-threats-card">
+    <p class="chart-card-title">Threats Over Time</p>
+    <div id="threatsOverTimeChart"></div>
+  </div>
 </div>
 
-<div class="chart-card">
-  <p class="chart-card-title">Threats Over Time</p>
-  <div id="threatsOverTimeChart"></div>
+<div class="dashboard-bento-row dashboard-bento-row-compact">
+  <div class="chart-card chart-card-narrow dashboard-donut-card">
+    <p class="chart-card-title">Health Distribution</p>
+    <div id="healthDonutChart"></div>
+  </div>
+  <div class="chart-card dashboard-alerts-card">
+    <p class="chart-card-title">Threats &amp; Alerts</p>
+    <div class="alert-card-list" id="alertsCardList"></div>
+    <div class="dashboard-empty" id="alertsEmpty" hidden>No threats or alerts reported.</div>
+  </div>
 </div>

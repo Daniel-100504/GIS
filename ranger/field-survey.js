@@ -175,7 +175,7 @@
         movePin(currentPosition.lat, currentPosition.lng, true);
       },
       (err) => {
-        setGpsStatus('error', 'Could not get your location — check location permission, or pin your location on the map below.');
+        setGpsStatus('error', 'Could not get your location. Check location permission, or pin your location on the map below.');
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
     );
@@ -500,9 +500,18 @@
         <select class="species-row-select" aria-label="Species"></select>
         <input type="text" class="species-row-other" placeholder="Enter species name" hidden />
       </div>
-      <input type="number" class="species-row-count" data-field="tree" step="1" min="0" placeholder="0" aria-label="Trees" />
-      <input type="number" class="species-row-count" data-field="sapling" step="1" min="0" placeholder="0" aria-label="Saplings" />
-      <input type="number" class="species-row-count" data-field="seedling" step="1" min="0" placeholder="0" aria-label="Seedlings" />
+      <div class="species-row-count-group">
+        <span class="species-row-count-label">Trees</span>
+        <input type="number" class="species-row-count" data-field="tree" step="1" min="0" placeholder="0" aria-label="Trees" />
+      </div>
+      <div class="species-row-count-group">
+        <span class="species-row-count-label">Saplings</span>
+        <input type="number" class="species-row-count" data-field="sapling" step="1" min="0" placeholder="0" aria-label="Saplings" />
+      </div>
+      <div class="species-row-count-group">
+        <span class="species-row-count-label">Seedlings</span>
+        <input type="number" class="species-row-count" data-field="seedling" step="1" min="0" placeholder="0" aria-label="Seedlings" />
+      </div>
       <button type="button" class="species-row-remove" aria-label="Remove species row" title="Remove">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
       </button>
@@ -630,7 +639,7 @@
           aquafarmLocationOutEl.textContent = `${aquafarmLocation.lat.toFixed(5)}, ${aquafarmLocation.lng.toFixed(5)}`;
         },
         () => {
-          aquafarmLocationOutEl.textContent = 'Could not get your location — check location permission.';
+          aquafarmLocationOutEl.textContent = 'Could not get your location. Check location permission.';
         },
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
       );
@@ -913,7 +922,7 @@
       item.classList.toggle('active', itemStep === currentStep);
       item.classList.toggle('done', itemStep < currentStep);
     });
-    if (stepCurrentLabel) stepCurrentLabel.textContent = `Step ${currentStep} of ${TOTAL_STEPS} — ${STEP_NAMES[currentStep - 1]}`;
+    if (stepCurrentLabel) stepCurrentLabel.textContent = `Step ${currentStep} of ${TOTAL_STEPS}: ${STEP_NAMES[currentStep - 1]}`;
     if (btnBack) btnBack.hidden = currentStep === editModeMinStep;
     if (btnNext) btnNext.hidden = currentStep === TOTAL_STEPS;
     if (submitBtn) submitBtn.hidden = currentStep !== TOTAL_STEPS;
@@ -941,7 +950,7 @@
       }
       if (!currentPosition) {
         msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Waiting for your GPS location — allow location access, or tap Retry, before continuing.';
+        msgEl.textContent = 'Waiting for your GPS location. Allow location access, or tap Retry, before continuing.';
         return false;
       }
     }
@@ -1232,7 +1241,7 @@
     if (!editSubmissionId) return;
     editSubmissionId = null;
     editModeMinStep = 1;
-    if (submitBtn) submitBtn.textContent = 'Submit field report';
+    if (submitBtn) submitBtn.textContent = 'Submit';
     form.reset();
     todayInput.value = todayStr;
     resetSpeciesFields();
@@ -1451,7 +1460,7 @@
       captureGps();
       resetWizard();
       msgEl.className = 'field-survey-msg offline';
-      msgEl.textContent = 'No connection — saved on this device. It will send automatically once you\'re back online.';
+      msgEl.textContent = 'No connection. Saved on this device. It will send automatically once you\'re back online.';
     } finally {
       submitBtn.disabled = false;
     }
@@ -1478,7 +1487,7 @@
       if (btnConfirmSubmit) btnConfirmSubmit.textContent = 'Save Changes';
     } else {
       if (confirmSubmitTitle) confirmSubmitTitle.textContent = 'Submit This Survey?';
-      if (confirmSubmitText) confirmSubmitText.textContent = "Make sure everything looks correct — you can still edit it afterward from Submission History.";
+      if (confirmSubmitText) confirmSubmitText.textContent = "Make sure everything looks correct. You can still edit it afterward from Submission History.";
       if (btnConfirmSubmit) btnConfirmSubmit.textContent = 'Submit';
     }
     confirmSubmitOverlay.classList.add('open');

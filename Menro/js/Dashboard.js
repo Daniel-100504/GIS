@@ -262,7 +262,6 @@ function renderHealthDonut(healthy, moderate, degraded, pending = 0) {
       </svg>
       <div class="donut-legend">${legend}</div>
     </div>
-    <p class="donut-surveyed-note">${surveyed} of ${total} zones have data</p>
   `;
 }
 
@@ -301,15 +300,11 @@ function renderNDVIBarChart(zones) {
     </div>
   `).join("");
 
-  const footnote = noData.length > 0
-    ? `<div class="hbar-footnote">${noData.length} zone${noData.length !== 1 ? "s" : ""} awaiting a field survey or satellite sync</div>`
-    : "";
-
   if (withData.length === 0 && noData.length === 0) {
     return `<div class="dashboard-empty">No zone data recorded yet.</div>`;
   }
 
-  return `${legend}<div class="hbar-chart">${dataRows}${noDataRows}</div>${footnote}`;
+  return `${legend}<div class="hbar-chart">${dataRows}${noDataRows}</div>`;
 }
 
 const AQUAFARM_RISK_CLASS = { high: "degraded", moderate: "moderate", low: "healthy", none: "pending" };
@@ -1071,11 +1066,18 @@ function bindRangersSection() {
 function submissionAlerts(sub) {
   const alerts = [];
 
+  // Pushed as separate entries (not one comma-joined string) so the alert
+  // card shows each threat as its own short pill — a single long "Pests,
+  // Sand / gravel extraction" pill wraps awkwardly in the card's narrow
+  // layout, while several short ones wrap cleanly like any normal tag list.
   const threatValues = (sub["Observed_Threats"] || "").toLowerCase().split(",")
     .map(s => s.trim()).filter(v => v && v !== "none_observed");
-  if (threatValues.length > 0) {
-    alerts.push(observedThreatsDisplay(threatValues.join(","), sub["Observed_Threats_Other"]));
-  }
+  threatValues.forEach(v => {
+    const label = v === "__other__"
+      ? (sub["Observed_Threats_Other"] || "Other")
+      : (OBSERVED_THREAT_LABELS[v] || prettifyNotifValue(v) || v);
+    alerts.push(label);
+  });
 
   const dischargeRaw = (sub["Visible_Foam_or_Discharge"] || "").toLowerCase();
   if (dischargeRaw === "visible_discharge_flow") alerts.push("Discharge visible");
@@ -1088,7 +1090,11 @@ function submissionAlerts(sub) {
   const aquafarmRaw = (sub["Nearby_Aquafarm_Activity"] || sub["Nearby_aquafarm_activity"] || "").toLowerCase();
   const aquafarmDischargeRaw = (sub["Discharge_Toward_Mangroves"] || sub["Discharge_toward_mangroves"] || "").toLowerCase();
   if (aquafarmRaw === "active___discharge_observed" || (aquafarmRaw === "yes" && aquafarmDischargeRaw === "yes")) {
-    alerts.push("Aquafarm discharge observed");
+    // Names the specific farm when the ranger recorded one (Aquafarm_Name,
+    // captured alongside its real GPS point) — tells MENRO which farm to
+    // follow up on, not just that "an" aquafarm somewhere is discharging.
+    const farmName = (sub["Aquafarm_Name"] || "").trim();
+    alerts.push(farmName ? `Discharge: ${farmName}` : "Aquafarm discharge observed");
   }
 
   return alerts;
@@ -1169,20 +1175,33 @@ function bindAlertsSection() {
 // Fixed order, never cycled (a validated colorblind-safe categorical set —
 // see the dataviz skill's reference palette) — a 6th threat type would fold
 // into "Other" rather than get a new hue.
-const THREAT_SERIES_CONFIG = [
-  { key: "cutting",                   label: "Cutting",                 color: "#2a78d6" },
-  { key: "encroachment",              label: "Encroachment",            color: "#eb6834" },
-  { key: "garbage",                   label: "Garbage",                 color: "#1baf7a" },
-  { key: "storm_damage",              label: "Storm damage",            color: "#eda100" },
-  { key: "other",                     label: "Other",                  color: "#e87ba4" },
+// Fixed color order (same reasoning as before — assigned by position, not
+// generated per-use), but now long enough to cover every real threat type
+// the survey form offers (see OBSERVED_THREAT_LABELS), not just 4 with
+// everything else folded into "Other". A genuine free-text "Other" entry
+// (the ranger typed something not on the list) still gets its own color,
+// listed last.
+const THREAT_COLOR_ORDER = [
+  "#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#8a5fd1", "#d1495b",
+  "#4fb0c6", "#b5891e", "#5c8a3a", "#c98a2c", "#7a5c3e", "#3f5e8a",
+  "#a83279", "#5b7d8c", "#e87ba4",
 ];
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTH_LABELS_FULL = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
 
 // Grouped by calendar month across all years present (Jan–Dec), not a
 // rolling range — with only a handful of submissions so far, splitting by
 // year as well would spread too few points too thin to show a pattern.
 function computeThreatsOverTime() {
-  const monthCounts = THREAT_SERIES_CONFIG.map(() => Array(12).fill(0));
+  // One entry per real threat key actually present in the data (not a fixed
+  // 5-slot list) — a threat type the survey offers but that isn't Cutting/
+  // Encroachment/Garbage/Storm damage used to fold into a generic "Other"
+  // bucket instead of showing its real name (e.g. "Illegal fishing" or
+  // "Sand / gravel extraction" both just read as "Other" in the tooltip).
+  const byKey = {};
 
   ALL_SUBMISSIONS.forEach(sub => {
     // A submission can now have several threats checked at once (comma-
@@ -1198,17 +1217,24 @@ function computeThreatsOverTime() {
     if (month < 0 || month > 11) return;
 
     values.forEach(v => {
-      const key = v === "__other__" ? "other" : v;
-      let seriesIndex = THREAT_SERIES_CONFIG.findIndex(s => s.key === key);
-      if (seriesIndex === -1) seriesIndex = THREAT_SERIES_CONFIG.length - 1; // any threat type without its own series folds into "Other"
-      monthCounts[seriesIndex][month] += 1;
+      const isCustomOther = v === "__other__";
+      const key = isCustomOther ? (sub["Observed_Threats_Other"] || "Other") : v;
+      if (!byKey[key]) {
+        byKey[key] = {
+          key,
+          label: isCustomOther ? key : (OBSERVED_THREAT_LABELS[key] || prettifyNotifValue(key) || key),
+          counts: Array(12).fill(0),
+        };
+      }
+      byKey[key].counts[month] += 1;
     });
   });
 
-  return THREAT_SERIES_CONFIG.map((cfg, i) => ({
-    ...cfg,
-    counts: monthCounts[i],
-    total: monthCounts[i].reduce((a, b) => a + b, 0),
+  const keys = Object.keys(byKey);
+  return keys.map((key, i) => ({
+    ...byKey[key],
+    color: THREAT_COLOR_ORDER[i % THREAT_COLOR_ORDER.length],
+    total: byKey[key].counts.reduce((a, b) => a + b, 0),
   }));
 }
 
@@ -1284,42 +1310,55 @@ function renderThreatsOverTimeChart(container) {
     return;
   }
 
-  const w = 800, h = 260;
-  const padL = 34, padR = 16, padT = 16, padB = 26;
+  const w = 800, h = 340;
+  const padL = 36, padR = 16, padT = 16, padB = 32;
   const innerW = w - padL - padR;
   const innerH = h - padT - padB;
 
-  const maxCount = Math.max(...series.flatMap(s => s.counts), 4);
+  // The line/area drawn is the combined monthly total (not one line per
+  // threat type) — simpler to read at a glance, especially with several
+  // types sitting at 0 most months. The per-type breakdown isn't lost,
+  // though: the legend below still lists each type's total, and hovering a
+  // month still shows the tooltip broken down by type (see showMonth).
+  const totalCounts = Array.from({ length: 12 }, (_, i) => series.reduce((sum, s) => sum + s.counts[i], 0));
+  const combinedColor = "#c1473a";
+
+  const maxCount = Math.max(...totalCounts, 4);
   const x = i => padL + (innerW * i) / 11;
   const y = v => padT + innerH - (v / maxCount) * innerH;
+  const axisY = padT + innerH;
 
   const gridSteps = Math.min(maxCount, 4);
   const gridLines = Array.from({ length: gridSteps + 1 }).map((_, i) => {
     const v = Math.round((maxCount * i) / gridSteps);
     const gy = y(v);
     return `
-      <line x1="${padL}" y1="${gy.toFixed(1)}" x2="${w - padR}" y2="${gy.toFixed(1)}" stroke="#e1e0d9" stroke-width="1"/>
-      <text x="${padL - 8}" y="${(gy + 3).toFixed(1)}" font-size="9.5" fill="#898781" text-anchor="end">${v}</text>
+      <line x1="${padL}" y1="${gy.toFixed(1)}" x2="${w - padR}" y2="${gy.toFixed(1)}" stroke="#eceae2" stroke-width="1" stroke-dasharray="${i === 0 ? "0" : "3,4"}"/>
+      <text x="${padL - 10}" y="${(gy + 3).toFixed(1)}" font-size="11.5" fill="#9a988f" text-anchor="end">${v}</text>
     `;
   }).join("");
 
   const monthLabels = MONTH_LABELS.map((m, i) => `
-    <text x="${x(i).toFixed(1)}" y="${h - 6}" font-size="9.5" fill="#898781" text-anchor="middle">${m}</text>
+    <text x="${x(i).toFixed(1)}" y="${h - 10}" font-size="11.5" fill="#898781" text-anchor="middle">${m}</text>
   `).join("");
 
-  const seriesMarks = series.map(s => {
-    const pts = s.counts.map((v, i) => [x(i), y(v)]);
-    const linePath = smoothLinePath(pts);
-    const areaPath = smoothAreaPath(pts, y(0));
-    const dots = s.counts.map((v, i) => `
-      <circle class="threats-chart-dot" data-series="${s.key}" cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="4" fill="${s.color}" stroke="#fcfcfb" stroke-width="2"/>
-    `).join("");
-    return `
-      <path d="${areaPath}" fill="${s.color}" opacity="0.16"/>
-      <path d="${linePath}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-      ${dots}
-    `;
-  }).join("");
+  const combinedPts = totalCounts.map((v, i) => [x(i), y(v)]);
+  const combinedLinePath = smoothLinePath(combinedPts);
+  const combinedAreaPath = smoothAreaPath(combinedPts, y(0));
+  const combinedDots = totalCounts.map((v, i) => `
+    <circle class="threats-chart-dot" data-month="${i}" cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="5" fill="${combinedColor}" stroke="#fcfcfb" stroke-width="2.2"/>
+  `).join("");
+  const seriesMarks = `
+    <defs>
+      <linearGradient id="threatsAreaGradient" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${combinedColor}" stop-opacity="0.32"/>
+        <stop offset="100%" stop-color="${combinedColor}" stop-opacity="0.02"/>
+      </linearGradient>
+    </defs>
+    <path d="${combinedAreaPath}" fill="url(#threatsAreaGradient)"/>
+    <path d="${combinedLinePath}" fill="none" stroke="${combinedColor}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
+    ${combinedDots}
+  `;
 
   // One invisible full-height hit column per month — bigger than the marks
   // themselves, so the pointer only has to be near a month, not on a dot.
@@ -1328,27 +1367,18 @@ function renderThreatsOverTimeChart(container) {
     return `<rect class="threats-chart-hitcol" data-month="${i}" x="${(padL + colW * i).toFixed(1)}" y="0" width="${colW.toFixed(1)}" height="${h}" fill="transparent"/>`;
   }).join("");
 
-  const legend = series.map(s => `
-    <div class="threats-legend-item">
-      <span class="threats-legend-key" style="background:${s.color}"></span>
-      <span class="threats-legend-label">${escapeHtml(s.label)}</span>
-      <span class="threats-legend-value">${s.total}</span>
-    </div>
-  `).join("");
-
   container.innerHTML = `
     <div class="threats-chart-wrap">
       <svg viewBox="0 0 ${w} ${h}" class="threats-chart-svg" preserveAspectRatio="none">
         ${gridLines}
-        <line x1="${padL}" y1="${(padT + innerH).toFixed(1)}" x2="${w - padR}" y2="${(padT + innerH).toFixed(1)}" stroke="#c3c2b7" stroke-width="1"/>
+        <line x1="${padL}" y1="${axisY.toFixed(1)}" x2="${w - padR}" y2="${axisY.toFixed(1)}" stroke="#c3c2b7" stroke-width="1"/>
         ${seriesMarks}
         ${monthLabels}
-        <line class="threats-chart-crosshair" x1="0" y1="${padT}" x2="0" y2="${padT + innerH}" stroke="#c3c2b7" stroke-width="1" opacity="0"/>
+        <line class="threats-chart-crosshair" x1="0" y1="${padT}" x2="0" y2="${axisY}" stroke="#b7b5aa" stroke-width="1" stroke-dasharray="3,3" opacity="0"/>
         ${hoverColumns}
       </svg>
       <div class="threats-chart-tooltip" hidden></div>
     </div>
-    <div class="threats-legend">${legend}</div>
   `;
 
   const svg = container.querySelector(".threats-chart-svg");
@@ -1373,7 +1403,7 @@ function renderThreatsOverTimeChart(container) {
       `);
     // Series names are fixed config here (not user data), but built via the
     // same textContent-safe pattern the interaction guide asks for anyway.
-    tooltip.innerHTML = `<div class="threats-tooltip-title">${MONTH_LABELS[i]}</div>${rows.join("") || '<div class="threats-tooltip-row threats-tooltip-empty">No threats reported</div>'}`;
+    tooltip.innerHTML = `<div class="threats-tooltip-title">${MONTH_LABELS_FULL[i]}</div>${rows.join("") || '<div class="threats-tooltip-row threats-tooltip-empty">No threats reported</div>'}`;
     tooltip.querySelectorAll(".threats-tooltip-label").forEach((el, idx) => {
       const visible = series.filter(s => s.counts[i] > 0);
       el.textContent = visible[idx] ? visible[idx].label : "";
@@ -1457,7 +1487,36 @@ function renderDashboard() {
   bindDashboardControls();
   bindRangersSection();
   bindAlertsSection();
+  syncTallCardHeights();
 }
+
+// Summary Date's calendar is the natural height for this row — NDVI by Zone
+// and Threats Over Time match it by explicit pixel height instead of CSS
+// grid stretch, since stretch forces the calendar's own box to grow too the
+// moment either chart's content runs long (that's what happened when this
+// was tried with align-items: stretch). Measuring the calendar and copying
+// its height keeps the calendar itself untouched no matter what.
+function syncTallCardHeights() {
+  const dateCard    = document.querySelector(".dashboard-date-picker");
+  const ndviCard    = document.querySelector(".dashboard-ndvi-card");
+  const threatsCard = document.querySelector(".dashboard-threats-card");
+  if (!dateCard || !ndviCard || !threatsCard) return;
+
+  ndviCard.style.height = "";
+  threatsCard.style.height = "";
+
+  const targetHeight = dateCard.offsetHeight;
+  if (targetHeight > 0) {
+    ndviCard.style.height = targetHeight + "px";
+    threatsCard.style.height = targetHeight + "px";
+  }
+}
+
+let tallCardResizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(tallCardResizeTimer);
+  tallCardResizeTimer = setTimeout(syncTallCardHeights, 150);
+});
 
 const mapView       = document.getElementById("mapView");
 const dashboardView = document.getElementById("dashboardView");

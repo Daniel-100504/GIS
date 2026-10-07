@@ -423,8 +423,8 @@ function switchView(viewName, btn) {
   const AQUAFARM_STATUS = {
     none_nearby:                      { label: 'None nearby',                 cls: 'wq-clear' },
     inactive:                         { label: 'Inactive',                    cls: 'wq-clear' },
-    active___no_visible_discharge:    { label: 'Active — no discharge',       cls: 'wq-pending' },
-    active___discharge_observed:      { label: 'Active — discharge observed', cls: 'wq-discharge' },
+    active___no_visible_discharge:    { label: 'Active, no discharge',       cls: 'wq-pending' },
+    active___discharge_observed:      { label: 'Active, discharge observed', cls: 'wq-discharge' },
   };
 
   // "Nearby aquafarm activity" alone no longer implies discharge — that's
@@ -1210,7 +1210,7 @@ function switchView(viewName, btn) {
     if (editFromViewBtn) {
       const isApproved = submission.approvalStatus === 'approved';
       editFromViewBtn.disabled = isApproved;
-      editFromViewBtn.textContent = isApproved ? 'Approved — locked from editing' : 'Edit this submission';
+      editFromViewBtn.textContent = isApproved ? 'Approved, locked from editing' : 'Edit this submission';
       editFromViewBtn.title = isApproved ? 'Approved submissions can\'t be edited. Contact MENRO if a correction is needed.' : '';
     }
 

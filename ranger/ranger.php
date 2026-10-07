@@ -100,7 +100,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
     rel="stylesheet">
   <link rel="stylesheet" href="../assets/theme.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="ranger.css?v=74" />
+  <link rel="stylesheet" href="ranger.css?v=89" />
 </head>
 
 <body>
@@ -317,7 +317,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
           </div>
           <div class="survey-note">
             Complete the form below. Your GPS location is captured automatically, and it's saved on
-            your device first if you're offline — it will send on its own once you're back online.
+            your device first if you're offline. It will send on its own once you're back online.
           </div>
 
           <div class="survey-stepper" id="surveyStepper">
@@ -346,7 +346,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
               <span class="survey-step-label">Review</span>
             </div>
           </div>
-          <div class="survey-step-current-label" id="surveyStepCurrentLabel">Step 1 of 5 — Site Information</div>
+          <div class="survey-step-current-label" id="surveyStepCurrentLabel">Step 1 of 5: Site Information</div>
 
           <form id="fieldSurveyForm" class="field-survey-form">
 
@@ -433,9 +433,9 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                   <span>Overall health assessment <em>*</em></span>
                   <select id="fs-health-assessment" required>
                     <option value="">Select…</option>
-                    <option value="healthy">Good &mdash; mostly green leaves, little or no damage</option>
-                    <option value="moderate">Fair &mdash; some yellowing, leaf loss, or damage</option>
-                    <option value="degraded">Poor &mdash; widespread dieback or many dead trees</option>
+                    <option value="healthy">Good, mostly green leaves, little or no damage</option>
+                    <option value="moderate">Fair, some yellowing, leaf loss, or damage</option>
+                    <option value="degraded">Poor, widespread dieback or many dead trees</option>
                   </select>
                 </label>
               </div>
@@ -537,7 +537,6 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                     <option value="brown">Brown</option>
                     <option value="green">Green</option>
                     <option value="dark___black">Dark / black</option>
-                    <option value="other">Other</option>
                   </select>
                 </label>
                 <label class="edit-field">
@@ -631,7 +630,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                 <label class="edit-field">
                   <span>Secchi depth (cm)</span>
                   <input type="number" min="0" step="1" id="fs-secchi-depth" />
-                  <span class="edit-field-help">How far down you can still see a lowered disc &mdash; a simple way to measure how clear the water is.</span>
+                  <span class="edit-field-help">How far down you can still see a lowered disc, a simple way to measure how clear the water is.</span>
                 </label>
               </div>
               <p class="field-helper-text" id="instrumentReadingsHelp" hidden>Leave blank if you don't have the instrument.</p>
@@ -660,11 +659,11 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
 
             <div class="field-survey-actions">
               <button type="button" class="btn-confirm-cancel" id="btnSurveyCancel">Cancel</button>
+              <span class="field-survey-msg" id="fieldSurveyMsg"></span>
               <div class="field-survey-actions-right">
-                <span class="field-survey-msg" id="fieldSurveyMsg"></span>
                 <button type="button" class="btn-confirm-cancel" id="btnSurveyBack" hidden>Back</button>
                 <button type="button" class="btn-confirm-primary" id="btnSurveyNext">Next</button>
-                <button type="submit" class="btn-confirm-primary" id="btnSubmitSurvey" hidden>Submit field report</button>
+                <button type="submit" class="btn-confirm-primary" id="btnSubmitSurvey" hidden>Submit</button>
               </div>
             </div>
           </form>
@@ -817,7 +816,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </div>
             <div class="guide-text">
               <h3>Submission History</h3>
-              <p>Lists every survey you've submitted. Click a row to view full details, or use the icons to edit or delete it.</p>
+              <p>Lists every survey you've submitted. Click a row to view full details. You can edit or delete a submission until MENRO approves it.</p>
             </div>
           </div>
         </div>
@@ -833,7 +832,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </div>
             <div class="guide-text">
               <h3>Section 1: Site Information</h3>
-              <p>Inspection date and your GPS location. There's no protected area/zone question to fill in — AquaGuard automatically matches your GPS point to the nearest mapped mangrove or protected area.</p>
+              <p>Inspection date and your GPS location. You don't need to pick a zone. AquaGuard matches your GPS point to the nearest mangrove area automatically.</p>
             </div>
           </div>
 
@@ -869,7 +868,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </div>
             <div class="guide-text">
               <h3>Section 4: Water Quality</h3>
-              <p>Water color, odor, visible foam/discharge, and nearby aquafarm activity (with a name if discharge is observed), plus a free-text water quality notes field.</p>
+              <p>Water color, odor, and visible foam or discharge. If there's a nearby aquafarm, you'll also record its name, its location, how far it is from the mangroves, and whether it's discharging toward them, plus a notes field.</p>
             </div>
           </div>
         </div>
@@ -898,7 +897,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </div>
             <div class="guide-text">
               <h3>Editing a Submission</h3>
-              <p>Aquafarm info and water quality notes can be edited directly here, including tree measurements. Changes save back to your submission record.</p>
+              <p>You can edit aquafarm info, water quality notes, and tree measurements here, but only before MENRO approves the submission. After that, it's locked.</p>
             </div>
           </div>
         </div>
@@ -914,7 +913,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </div>
             <div class="guide-text">
               <h3>Auto Sign-Out</h3>
-              <p>For security, you'll be signed out automatically after 15 minutes of inactivity. A warning appears beforehand; click <strong>Stay signed in</strong> to keep working.</p>
+              <p>You'll be signed out after 15 minutes of inactivity, for security. A warning appears first. Click <strong>Stay signed in</strong> to keep working.</p>
             </div>
           </div>
         </div>
@@ -996,7 +995,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
         </svg>
       </div>
       <div class="confirm-modal-title" id="confirmSubmitTitle">Submit This Survey?</div>
-      <div class="confirm-modal-text" id="confirmSubmitText">Make sure everything looks correct — you can still edit it afterward from Submission History.</div>
+      <div class="confirm-modal-text" id="confirmSubmitText">Make sure everything looks correct. You can still edit it afterward from Submission History.</div>
       <div class="confirm-modal-actions">
         <button class="btn-confirm-cancel" id="btnCancelConfirmSubmit">Review Again</button>
         <button class="btn-confirm-primary" id="btnConfirmSubmit">Submit</button>
@@ -1029,8 +1028,8 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>const MANGROVE_SPECIES_LIST = <?= json_encode($mangroveSpeciesList) ?>;</script>
   <script>const MOLLUSK_SPECIES_LIST = <?= json_encode($molluskSpeciesList) ?>;</script>
-  <script src="ranger.js?v=46"></script>
-  <script src="field-survey.js?v=44"></script>
+  <script src="ranger.js?v=47"></script>
+  <script src="field-survey.js?v=48"></script>
   <script src="ranger-notifications.js?v=5"></script>
 </body>
 

@@ -26,10 +26,10 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
   <link rel="icon" href="../../assets/calatagan-seal.png"/>
 
         <link rel="stylesheet" href="../../assets/theme.css"/>
-        <link rel="stylesheet" href="../css/style.css?v=32"/>
+        <link rel="stylesheet" href="../css/style.css?v=33"/>
         <link rel="stylesheet" href="../css/right-panel.css?v=4"/>
         <link rel="stylesheet" href="../css/side-menu.css?v=7"/>
-        <link rel="stylesheet" href="../css/Dashboard.css?v=51"/>
+        <link rel="stylesheet" href="../css/Dashboard.css?v=78"/>
 </head>
 
 <body>
@@ -39,14 +39,14 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     <div class="topbar-left">
 
         <button class="map-menu-btn" id="btnMapMenu" aria-label="Open menu">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
             <line x1="3" y1="6" x2="21" y2="6"/>
             <line x1="3" y1="12" x2="21" y2="12"/>
             <line x1="3" y1="18" x2="21" y2="18"/>
           </svg>
         </button>
 
-        <img src="../../assets/calatagan-seal.png" width="26" height="26" alt="Calatagan Seal" class="topbar-logo">
+        <img src="../../assets/calatagan-seal.png" width="34" height="34" alt="Calatagan Seal" class="topbar-logo">
 
         <span class="topbar-brand">
             AquaGuard
@@ -57,7 +57,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     <div class="topbar-right">
 
         <button type="button" class="notif-btn" id="btnHelpGuide" aria-label="Open user guide">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="10" />
                 <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
                 <line x1="12" y1="17" x2="12.01" y2="17" />
@@ -66,7 +66,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 
         <div class="notif-wrap" id="notifWrap">
             <button type="button" class="notif-btn" id="notifBtn" aria-label="Notifications" aria-expanded="false">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
                     <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
                 </svg>
@@ -409,7 +409,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </div>
           <div class="guide-text">
             <h3>Dashboard</h3>
-            <p>Open <strong>Dashboard</strong> from the menu for a summary of zone health, NDVI, and surveys.</p>
+            <p>Open <strong>Dashboard</strong> to see a summary of zone health, NDVI, and surveys.</p>
           </div>
         </div>
 
@@ -423,7 +423,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </div>
           <div class="guide-text">
             <h3>Ranger Surveys</h3>
-            <p>Open <strong>Ranger Surveys</strong> from the menu to review every field submission in one place. Use the All / Pending / Approved / Needs Revision tabs, the search box, or the Barangay / Mangrove Zone / Status filters to narrow the list, and click a column header to sort by it. Click a row to open its full details, and Approve or Reject from there. Clicking a survey notification jumps straight to this tab and opens that submission.</p>
+            <p>Open <strong>Ranger Surveys</strong> to see every field submission in one place. Use the tabs, search box, or filters to narrow the list. Click a row to open its full details and Approve or Reject it. Clicking a survey notification takes you straight to that submission.</p>
           </div>
         </div>
 
@@ -468,7 +468,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </div>
           <div class="guide-text">
             <h3>Layers</h3>
-            <p>Hover over the <strong>Layers</strong> button (bottom-left of the map) to toggle Sentinel-2 imagery, a colorized NDVI overlay, and Mangroves on or off independently. Click the button itself to switch the base map between <strong>Map</strong> and <strong>Satellite</strong> view.</p>
+            <p>Hover over the <strong>Layers</strong> button (bottom-left of the map) to turn Sentinel-2 imagery, the NDVI overlay, and Mangroves on or off. Click the button itself to switch between <strong>Map</strong> and <strong>Satellite</strong> view.</p>
           </div>
         </div>
 
@@ -497,7 +497,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </div>
           <div class="guide-text">
             <h3>Satellite NDVI</h3>
-            <p>Picking a Scene Date automatically syncs each zone's satellite NDVI in the background, which can take a moment.</p>
+            <p>Picking a Scene Date updates each zone's satellite NDVI in the background. This can take a moment.</p>
           </div>
         </div>
 
@@ -514,7 +514,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </div>
           <div class="guide-text">
             <h3>Available Imagery Dates</h3>
-            <p>In the Scene Date calendar, dates with any Sentinel-2 imagery are shaded green. Clicking a highlighted date automatically turns on the Sentinel-2 layer so the imagery shows right away.</p>
+            <p>Dates with satellite imagery are shaded green in the calendar. Click one to turn on the imagery right away.</p>
           </div>
         </div>
 
@@ -547,7 +547,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </div>
           <div class="guide-text">
             <h3>Export Report</h3>
-            <p>Click <strong>Export Report</strong> on the Dashboard to open the PDF right in your browser, use its own toolbar to print or download it from there. Each field visit is exported as its own Monitoring Data Sheet: Date, Protected Area, Area, and MPA Manager, followed by a tree-by-tree measurement table, matching MENRO's official paper form. Pick "This year" or "Last year" as the date range to get a full Annual Monitoring Data Sheet; shorter ranges are labeled with their actual period instead. A visit with a lot of data (many species, mollusks, or notes) automatically continues onto extra pages instead of being cut off.</p>
+            <p>Click <strong>Export Report</strong> on the Dashboard to open the PDF in your browser, then print or download it from there. Each field visit becomes its own Monitoring Data Sheet, matching MENRO's official paper form. Pick "This year" or "Last year" for a full Annual report. A visit with a lot of data automatically continues onto extra pages instead of being cut off.</p>
           </div>
         </div>
 
@@ -560,7 +560,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </div>
           <div class="guide-text">
             <h3>Auto Sign-Out</h3>
-            <p>For security, you'll be signed out automatically after 15 minutes of inactivity. A warning appears 30 seconds beforehand; click <strong>Stay signed in</strong> to keep your session active.</p>
+            <p>You'll be signed out after 15 minutes of inactivity, for security. A warning appears 30 seconds before — click <strong>Stay signed in</strong> to continue.</p>
           </div>
         </div>
       </div>
@@ -908,13 +908,13 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 <script src="../../assets/utils.js?v=1"></script>
 <script src="../API/zones-data.php?v=9"></script>
 <script src="../js/map-core.js?v=20"></script>
-<script src="../js/mangrove-draw.js?v=33"></script>
+<script src="../js/mangrove-draw.js?v=34"></script>
 <script src="../js/verified-layers-edit.js?v=3"></script>
 <script src="../js/zones-panel.js?v=9"></script>
 <script src="../js/scene-calendar.js?v=9"></script>
 <script src="../js/export-report.js?v=28"></script>
 <script src="../js/ui-chrome.js?v=9"></script>
-<script src="../js/Dashboard.js?v=59"></script>
+<script src="../js/Dashboard.js?v=78"></script>
 <script src="../js/notifications.js?v=12"></script>
 
 </body>

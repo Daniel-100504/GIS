@@ -41,7 +41,10 @@ function backupToSupabase(array $record, int $localId) {
         'Content-Type: application/json',
         'Prefer: return=minimal',
     ]);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+    // Short timeout on purpose — this is a best-effort backup copy, not the
+    // primary save (that already succeeded by the time this runs), so it's
+    // not worth making the ranger wait long for it if Supabase is slow.
+    curl_setopt($ch, CURLOPT_TIMEOUT, 3);
     curl_exec($ch);
     curl_close($ch);
 }
