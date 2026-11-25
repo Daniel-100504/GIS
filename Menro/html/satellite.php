@@ -1005,7 +1005,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 <script src="../js/verified-layers-edit.js?v=3"></script>
 <script src="../js/zones-panel.js?v=22"></script>
 <script src="../js/scene-calendar.js?v=14"></script>
-<script src="../js/export-report.js?v=77"></script>
+<script src="../js/export-report.js?v=79"></script>
 <script src="../js/ui-chrome.js?v=10"></script>
 <script src="../js/Dashboard.js?v=100"></script>
 <script src="../js/notifications.js?v=12"></script>

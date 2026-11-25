@@ -412,7 +412,23 @@ async function exportFieldSurveyPdf() {
         }
         const breakPoints = collectSafeBreakPoints(sheetEl);
         const totalDomHeight = sheetEl.getBoundingClientRect().height;
-        const canvas = await html2canvas(sheetEl, { scale: CAPTURE_SCALE, useCORS: true, backgroundColor: "#ffffff", logging: false });
+
+        // Hide the Leaflet map and any page-level canvases during capture —
+        // html2canvas composites from the DOM position of the sheet (top:0
+        // left:0) which overlaps the map, and unreadable canvas pixels render
+        // as solid black in the output.
+        const pageCanvases = Array.from(document.querySelectorAll("canvas")).filter(c => !sheetEl.contains(c));
+        const leafletContainer = document.querySelector(".leaflet-container");
+        pageCanvases.forEach(c => { c.style.visibility = "hidden"; });
+        if (leafletContainer) leafletContainer.style.visibility = "hidden";
+
+        let canvas;
+        try {
+            canvas = await html2canvas(sheetEl, { scale: CAPTURE_SCALE, useCORS: true, backgroundColor: "#ffffff", logging: false });
+        } finally {
+            pageCanvases.forEach(c => { c.style.visibility = ""; });
+            if (leafletContainer) leafletContainer.style.visibility = "";
+        }
         const pxPerMM = canvas.width / 297;
         const fullPageDomPx = (210 * pxPerMM) / CAPTURE_SCALE;
         const continuationPageDomPx = ((210 - CONTINUATION_TOP_MARGIN_MM) * pxPerMM) / CAPTURE_SCALE;
@@ -467,7 +483,8 @@ async function exportFieldSurveyPdf() {
     try {
         if (rows.length === 0) {
             root.innerHTML = `<div class="sheet"><p style="margin-top:40mm;text-align:center;font-style:italic;color:var(--pdf-muted)">No field survey submissions found for this date range.</p></div>`;
-            const canvas = await html2canvas(root.querySelector(".sheet"), { scale: CAPTURE_SCALE, useCORS: true, backgroundColor: "#ffffff" });
+            const emptySheet = root.querySelector(".sheet");
+            const canvas = await html2canvas(emptySheet, { scale: CAPTURE_SCALE, useCORS: true, backgroundColor: "#ffffff", ignoreElements: (el) => el.tagName === "CANVAS" && !emptySheet.contains(el) });
             addCanvasAsPage(canvas);
         } else {
             for (let i = 0; i < rows.length; i++) {
