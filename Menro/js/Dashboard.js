@@ -93,11 +93,13 @@ function computeDashboardStats(dateStr) {
   const degraded = zoneSnapshot.filter(z => z.status === "degraded").length;
   const pending  = zoneSnapshot.filter(z => z.status === "pending").length;
 
+  // null (not 0) when nothing has loaded yet — 0.00 reads as a real
+  // reading, not as "no data available right now".
   const avgNdvi = (() => {
     const withNdvi = zoneSnapshot.filter(z => z.ndvi !== null);
     return withNdvi.length > 0
       ? withNdvi.reduce((sum, z) => sum + z.ndvi, 0) / withNdvi.length
-      : 0;
+      : null;
   })();
 
   const treeCountValues = zoneSnapshot.map(z => z.treesMeasured || 0);
@@ -163,6 +165,7 @@ let pendingDetailKoboId = null;
 let dashboardSelectedDate  = null;
 let dashboardCalendarYear  = null;
 let dashboardCalendarMonth = null;
+let dashboardThreatsYear   = null;
 
 function ensureDashboardSelectedDate() {
   // Defaults to today's date rather than the latest survey date, so opening
@@ -217,22 +220,27 @@ function buildMonthGrid(year, month) {
 }
 
 function renderHealthDonut(healthy, moderate, degraded, pending = 0) {
-  const total    = healthy + moderate + degraded + pending;
   const surveyed = healthy + moderate + degraded;
+  const total    = surveyed + pending;
   const r = 50, cx = 64, cy = 64, sw = 19;
   const circumference = 2 * Math.PI * r;
 
+  // Pending used to be a 4th ring segment — with most zones not yet surveyed,
+  // that grey slice routinely filled most of the ring, making monitoring
+  // coverage look mostly empty, and its count (included in the ring/legend)
+  // never matched the center number (surveyed-only), which only ever counted
+  // Good/Fair/Poor. The ring now represents assessed zones alone; pending is
+  // a plain text note below instead, so the two numbers can't disagree.
   const segments = [
     { value: healthy,  color: "#1c7d61", key: "healthy",  label: "Good" },
     { value: moderate, color: "#c98a2c", key: "moderate", label: "Fair" },
     { value: degraded, color: "#c1473a", key: "degraded", label: "Poor" },
   ];
-  if (pending > 0) segments.push({ value: pending, color: "#c3cdc7", key: "pending", label: "Pending" });
 
   const gap = segments.filter(s => s.value > 0).length > 1 ? 2.2 : 0;
   let offset = 0;
   const arcs = segments.map(seg => {
-    const pct  = total > 0 ? seg.value / total : 0;
+    const pct  = surveyed > 0 ? seg.value / surveyed : 0;
     const rawDash = pct * circumference;
     const dash = Math.max(rawDash - gap, 0);
     const circle = pct > 0
@@ -252,6 +260,10 @@ function renderHealthDonut(healthy, moderate, degraded, pending = 0) {
     </div>
   `).join("");
 
+  const pendingNote = pending > 0
+    ? `<div class="donut-surveyed-note">${pending} of ${total} zones still pending assessment</div>`
+    : "";
+
   return `
     <div class="donut-chart-wrap">
       <svg viewBox="0 0 128 128" width="128" height="128" class="donut-svg">
@@ -261,10 +273,16 @@ function renderHealthDonut(healthy, moderate, degraded, pending = 0) {
         <text x="${cx}" y="${cy + 15}" text-anchor="middle" font-size="9" letter-spacing="1.5" fill="#869790" font-weight="600">ZONES</text>
       </svg>
       <div class="donut-legend">${legend}</div>
+      ${pendingNote}
     </div>
   `;
 }
 
+// Same Bare/Sparse/Dense legend, thresholds, and colors as the map's own NDVI
+// legend (ndviVegetationClass in map-core.js) — this used to be its own
+// invented High/Moderate/Low red-orange-green scale with a 0.3/0.6 split,
+// which disagreed with the map right next to it over what the same NDVI
+// number meant.
 function renderNDVIBarChart(zones) {
   const withData = zones.filter(z => z.ndvi !== null).sort((a, b) => b.ndvi - a.ndvi);
   const noData   = zones.filter(z => z.ndvi === null).sort((a, b) => a.name.localeCompare(b.name));
@@ -272,15 +290,15 @@ function renderNDVIBarChart(zones) {
 
   const legend = `
     <div class="hbar-legend">
-      <span><span class="hbar-legend-dot healthy"></span>High</span>
-      <span><span class="hbar-legend-dot moderate"></span>Moderate</span>
-      <span><span class="hbar-legend-dot degraded"></span>Low</span>
+      <span><span class="hbar-legend-dot ndvi-dense"></span>Dense</span>
+      <span><span class="hbar-legend-dot ndvi-sparse"></span>Sparse</span>
+      <span><span class="hbar-legend-dot ndvi-bare"></span>Bare</span>
     </div>
   `;
 
   const dataRows = withData.map(z => {
     const pct = Math.max((z.ndvi / max) * 100, 4);
-    const cls = z.ndvi >= 0.6 ? "healthy" : z.ndvi >= 0.3 ? "moderate" : "degraded";
+    const cls = ndviVegetationClass(z.ndvi);
     return `
       <div class="hbar-row">
         <span class="hbar-label" title="${escapeHtml(z.name)}">${escapeHtml(z.name)}</span>
@@ -292,11 +310,16 @@ function renderNDVIBarChart(zones) {
     `;
   }).join("");
 
+  // "Loading…" while the satellite sync is actually fetching this zone's
+  // reading — "No data" otherwise. Both used to just say "No data", which
+  // read as a settled fact even in the middle of a fetch that was seconds
+  // from finishing.
+  const noDataLabel = dashboardSatelliteSyncInProgress ? "Loading…" : "No data";
   const noDataRows = noData.map(z => `
     <div class="hbar-row no-data">
       <span class="hbar-label" title="${escapeHtml(z.name)}">${escapeHtml(z.name)}</span>
       <div class="hbar-track dashed"><div class="hbar-fill-empty"></div></div>
-      <span class="hbar-value muted">No data</span>
+      <span class="hbar-value muted">${noDataLabel}</span>
     </div>
   `).join("");
 
@@ -546,7 +569,7 @@ const SURVEY_STATUS_TAG = {
 // neutral, informational status instead of a false alarm.
 const AQUAFARM_TAG = {
   active___discharge_observed: { cls: "flagged", label: "Aquafarm discharge observed" },
-  active___no_visible_discharge: { cls: "none", label: "Active — no discharge" },
+  active___no_visible_discharge: { cls: "none", label: "Active, no discharge" },
   inactive:                      { cls: "none", label: "Inactive" },
   none_nearby:                   { cls: "none", label: "No aquafarm nearby" },
   no:                            { cls: "none", label: "No aquafarm nearby" },
@@ -574,7 +597,11 @@ function setText(id, text) {
 }
 
 function renderDashboardHeader(s) {
-  setText("dashboardSummaryDate", `Summary as of ${dashboardSelectedDate ? formatDate(dashboardSelectedDate) : "—"}`);
+  // Picking a date in Summary Date changes every number on the page, but
+  // nothing near the title used to say so — this element already existed in
+  // the JS (setText below) with no matching HTML to write into, so it was
+  // silently doing nothing.
+  setText("dashboardSummaryDate", `Showing data as of ${dashboardSelectedDate ? formatDate(dashboardSelectedDate) : "—"}`);
 
   const dot    = document.getElementById("dashboardLatestDot");
   const latest = document.getElementById("dashboardLatestInspection");
@@ -600,7 +627,9 @@ function renderStatCards(s) {
   setText("statDegradedValue", s.degraded);
   setText("statDegradedHint", `${s.total ? Math.round((s.degraded / s.total) * 100) : 0}% of total`);
 
-  setText("statAvgNdviValue", formatNdvi(s.avgNdvi));
+  setText("statAvgNdviValue", s.avgNdvi !== null
+    ? formatNdvi(s.avgNdvi)
+    : (dashboardSatelliteSyncInProgress ? "Loading…" : "—"));
 
   setText("statLatestInspectionValue", s.latestDate ? formatDate(s.latestDate) : "—");
 }
@@ -669,7 +698,6 @@ function renderRangerSubmissionRow(sub) {
       <td class="survey-log-zone-cell" title="${escapeHtml(zone ? zone.name : (sub["_zone_name"] || areaRaw || "Unknown zone").replace(/_/g, " "))}">${escapeHtml(zone ? zone.name : (sub["_zone_name"] || areaRaw || "Unknown zone").replace(/_/g, " "))}</td>
       <td class="cell-center">${summary.count || "—"}</td>
       <td class="cell-truncate" title="${escapeHtml(summary.speciesList.length ? summary.speciesList.join(", ") : "—")}">${escapeHtml(summary.speciesList.length ? summary.speciesList.join(", ") : "—")}</td>
-      <td class="cell-center"><span class="threat-tag ${aquafarmInfo.cls}">${escapeHtml(aquafarmInfo.label)}</span></td>
       <td class="cell-center"><span class="threat-tag ${statusTag.cls}">${statusTag.label}</span></td>
     </tr>
   `;
@@ -809,7 +837,7 @@ function renderApprovalStatus(sub) {
   const el = document.getElementById("submissionDetailApproval");
   if (!el) return;
   const status = sub["_approval_status"] || "pending";
-  const labels = { pending: "Pending review", approved: "Approved", rejected: "Needs revision" };
+  const labels = { pending: "Pending review", approved: "Verified", rejected: "Needs revision" };
   let text = labels[status] || labels.pending;
   if (status === "rejected" && sub["_review_notes"]) text += `: "${sub["_review_notes"]}"`;
   el.textContent = text;
@@ -840,32 +868,37 @@ function openSubmissionDetailModal(sub) {
 
   if (subEl) subEl.textContent = `${zoneName} · ${formatDate(koboSubmissionDate(sub))}`;
 
-  const statusTag = SURVEY_STATUS_TAG[deriveStatus(sub)] || SURVEY_STATUS_TAG.pending;
+  const approvalTag = APPROVAL_STATUS_TAG[sub["_approval_status"]] || APPROVAL_STATUS_TAG.pending;
   if (badgeEl) {
-    badgeEl.className = `threat-tag ${statusTag.cls}`;
-    badgeEl.textContent = statusTag.label;
+    badgeEl.className = `threat-tag ${approvalTag.cls}`;
+    badgeEl.textContent = approvalTag.label;
   }
 
   const siteFields = [
     viewField("Date of visit", formatDate(koboSubmissionDate(sub))),
     viewField("Nearest mangrove zone", zoneName),
+    viewField("Barangay", surveysBarangayName(sub) || null),
     viewField("Zone type", zoneTypeLabel(zoneName)),
+    viewField("Area", sub["Area_No"] || null),
+    viewField("MPA manager", sub["MPA_Manager"] || null),
   ].join("");
 
-  // Mirrors the ranger's own Submission History "View" popup — same 3
-  // numbered Vegetation groups (Canopy / Species Found in Plot / Overall
-  // Health), so a submission reads identically on both sides.
-  const trees = koboExtractTrees(sub);
-  const canopyHtml = `<p class="view-subsection-label">Canopy</p><div class="view-grid">${viewField("Canopy cover (%)", sub["Estimated_Canopy_Cover_"] || null)}${viewGridPad(1)}</div>`;
-
-  const realTrees = trees.filter(t => koboTreeField(t, "Species_Name") || koboTreeField(t, "Species"));
-  const speciesTableHtml = realTrees.length
-    ? `<div class="view-table-wrap"><table class="view-species-table">
-        <thead><tr><th>Species</th><th>Trees</th><th>Saplings</th><th>Seedlings</th></tr></thead>
-        <tbody>${realTrees.map(t => `<tr><td>${escapeHtml(koboTreeField(t, "Species_Name") || koboTreeField(t, "Species") || "—")}</td><td>${escapeHtml(koboTreeField(t, "Tree_Count") ?? "—")}</td><td>${escapeHtml(koboTreeField(t, "Sapling_Count") ?? koboTreeField(t, "Sapling_count") ?? "—")}</td><td>${escapeHtml(koboTreeField(t, "Seedling_Count") ?? koboTreeField(t, "Seedling_count") ?? "—")}</td></tr>`).join("")}</tbody>
-      </table></div>`
-    : viewEmptyNote("No species recorded.");
-  const speciesSectionHtml = `<p class="view-subsection-label">Species Found in Plot</p>${speciesTableHtml}`;
+  // Mirrors the ranger's own Submission History "View" popup — one section
+  // per plot measured during this visit, each with its own Plot No. and
+  // its own species table, matching the real MENRO sheet.
+  const plots = koboExtractPlots(sub);
+  const speciesSectionHtml = plots.map((p, i) => {
+    const realTrees = (p["Species_Records"] || []).filter(t => koboTreeField(t, "Species_Name") || koboTreeField(t, "Species"));
+    const plotLabel = p["Plot_No"] ? (p["Plot_Size"] ? `${p["Plot_No"]} (${p["Plot_Size"]})` : p["Plot_No"]) : null;
+    const plotFieldHtml = `<div class="view-grid">${viewField("Plot No.", plotLabel)}${viewGridPad(1)}</div>`;
+    const tableHtml = realTrees.length
+      ? `<div class="view-table-wrap"><table class="view-species-table">
+          <thead><tr><th>Code</th><th>Species</th><th>Trees</th><th>Saplings</th><th>Seedlings</th><th>Height (m)</th><th>GBH (cm)</th><th>Canopy L (m)</th><th>Canopy W (m)</th></tr></thead>
+          <tbody>${realTrees.map(t => `<tr><td>${escapeHtml(koboTreeField(t, "Tree_Code") || "—")}</td><td>${escapeHtml(koboTreeField(t, "Species_Name") || koboTreeField(t, "Species") || "—")}</td><td>${escapeHtml(koboTreeField(t, "Tree_Count") ?? "—")}</td><td>${escapeHtml(koboTreeField(t, "Sapling_Count") ?? koboTreeField(t, "Sapling_count") ?? "—")}</td><td>${escapeHtml(koboTreeField(t, "Seedling_Count") ?? koboTreeField(t, "Seedling_count") ?? "—")}</td><td>${escapeHtml(koboTreeField(t, "Average_Tree_Height_m") ?? koboTreeField(t, "Height_m") ?? "—")}</td><td>${escapeHtml(koboTreeField(t, "GBH_Girth_at_Breast_Height_cm") ?? koboTreeField(t, "GBH_cm") ?? "—")}</td><td>${escapeHtml(koboTreeField(t, "Canopy_Length_m") ?? "—")}</td><td>${escapeHtml(koboTreeField(t, "Canopy_Width_m") ?? "—")}</td></tr>`).join("")}</tbody>
+        </table></div>`
+      : viewEmptyNote("No species recorded.");
+    return `<p class="view-subsection-label">Plot ${i + 1}</p>${plotFieldHtml}${tableHtml}`;
+  }).join("");
 
   const healthRaw = (sub["Overall_Health_Assessment"] || "").toLowerCase();
   const healthBadgeCls = HEALTH_BADGE_CLS[healthRaw];
@@ -874,7 +907,7 @@ function openSubmissionDetailModal(sub) {
     : viewField("Overall health assessment", null);
   const healthHtml = `<p class="view-subsection-label">Overall Health</p><div class="view-grid">${healthFieldHtml}${viewGridPad(1)}</div>`;
 
-  const vegetationHtml = `${canopyHtml}${speciesSectionHtml}${healthHtml}`;
+  const vegetationHtml = `${speciesSectionHtml}${healthHtml}`;
 
   // Mirrors the ranger's own Fauna groups (Mollusks Found / Observed
   // Threats / Additional Notes / Photos).
@@ -891,14 +924,16 @@ function openSubmissionDetailModal(sub) {
 
   const notesHtml = `<p class="view-subsection-label">Additional Notes</p>${sub["Additional_Notes"] ? `<div class="view-notes">${escapeHtml(sub["Additional_Notes"])}</div>` : viewEmptyNote("No additional notes.")}`;
 
-  const photosHtml = `<p class="view-subsection-label">Photos</p>${sub["Photo_Documentation"] ? `<div class="view-photos"><a href="${escapeHtml(sub["Photo_Documentation"])}" target="_blank" rel="noopener"><img class="view-photo-thumb" src="${escapeHtml(sub["Photo_Documentation"])}" alt="Field photo" /></a></div>` : viewEmptyNote("No photos attached.")}`;
+  const photoUrls = ["Photo_Documentation", "Photo_Documentation_2", "Photo_Documentation_3", "Photo_Documentation_4", "Photo_Documentation_5"]
+    .map(k => sub[k]).filter(Boolean);
+  const photosHtml = `<p class="view-subsection-label">Photos</p>${photoUrls.length
+    ? `<div class="view-photos">${photoUrls.map(url => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img class="view-photo-thumb" src="${escapeHtml(url)}" alt="Field photo" /></a>`).join("")}</div>`
+    : viewEmptyNote("No photos attached.")}`;
 
-  const faunaHtml = `${molluskSectionHtml}${threatsHtml}${notesHtml}${photosHtml}`;
+  const videoHtml = `<p class="view-subsection-label">Video</p>${sub["Video_Documentation"] ? `<div class="view-photos"><video class="view-photo-thumb" src="${escapeHtml(sub["Video_Documentation"])}" controls></video></div>` : viewEmptyNote("No video attached.")}`;
 
-  // Mirrors the ranger's own Water Quality groups (Observations / Aquafarm /
-  // Instrument Readings / Notes).
-  const aquafarmRaw = sub["Nearby_Aquafarm_Activity"] || sub["Nearby_aquafarm_activity"] || "";
-  const dischargeRawWQ = sub["Discharge_Toward_Mangroves"] || sub["Discharge_toward_mangroves"] || "";
+  const faunaHtml = `${molluskSectionHtml}${threatsHtml}${notesHtml}${photosHtml}${videoHtml}`;
+
   const observationsFields = [
     viewField("Water clarity", sub["Water_Clarity"] ? prettifyNotifValue(sub["Water_Clarity"]) : null),
     viewField("Water color", sub["Water_Color"] ? prettifyNotifValue(sub["Water_Color"]) : null),
@@ -906,19 +941,6 @@ function openSubmissionDetailModal(sub) {
     viewField("Visible foam or discharge", sub["Visible_Foam_or_Discharge"] ? prettifyNotifValue(sub["Visible_Foam_or_Discharge"]) : null),
   ];
   const observationsHtml = `<p class="view-subsection-label">Observations</p><div class="view-grid">${observationsFields.join("")}${viewGridPad(observationsFields.length)}</div>`;
-
-  const aquafarmFields = [viewField("Nearby aquafarm activity", aquafarmRaw ? prettifyNotifValue(aquafarmRaw) : null)];
-  if (aquafarmRaw.toLowerCase() === "yes") {
-    const aqLat = sub["Aquafarm_Location_Lat"];
-    const aqLng = sub["Aquafarm_Location_Lng"];
-    aquafarmFields.push(
-      viewField("Aquafarm name", sub["Aquafarm_Name"] || null),
-      viewField("Aquafarm location", (aqLat && aqLng) ? `${parseFloat(aqLat).toFixed(5)}, ${parseFloat(aqLng).toFixed(5)}` : null),
-      viewField("Distance to mangroves (m)", sub["Aquafarm_Distance_m"] || null),
-      viewField("Discharge flowing toward mangroves?", dischargeRawWQ ? prettifyNotifValue(dischargeRawWQ) : null)
-    );
-  }
-  const aquafarmHtml = `<p class="view-subsection-label">Aquafarm</p><div class="view-grid">${aquafarmFields.join("")}${viewGridPad(aquafarmFields.length)}</div>`;
 
   const hasInstrumentValues = sub["Salinity_ppt"] || sub["PH"] || sub["Water_Temperature_C"] || sub["Secchi_Depth_cm"];
   const instrumentHtml = hasInstrumentValues
@@ -932,7 +954,7 @@ function openSubmissionDetailModal(sub) {
 
   const waterNotesHtml = `<p class="view-subsection-label">Notes</p>${sub["Water_Quality_Notes"] ? `<div class="view-notes">${escapeHtml(sub["Water_Quality_Notes"])}</div>` : viewEmptyNote("No water quality notes.")}`;
 
-  const waterHtml = `${observationsHtml}${aquafarmHtml}${instrumentHtml}${waterNotesHtml}`;
+  const waterHtml = `${observationsHtml}${instrumentHtml}${waterNotesHtml}`;
 
   bodyEl.innerHTML =
     viewSection("site", "Site Information", `<div class="view-grid">${siteFields}</div>`) +
@@ -946,6 +968,88 @@ function openSubmissionDetailModal(sub) {
 function closeSubmissionDetailModal() {
   const overlay = document.getElementById("submissionDetailOverlay");
   if (overlay) overlay.classList.remove("open");
+}
+
+// One row per past survey for a zone, newest first. Clicking a row opens
+// that year's full submission detail via the same modal "View survey" uses.
+function zoneHistoryRowHtml(sub) {
+  const tag = APPROVAL_STATUS_TAG[sub["_approval_status"]] || APPROVAL_STATUS_TAG.pending;
+  const plots = koboExtractPlots(sub);
+  const allTrees = plots.flatMap(p => p["Species_Records"] || []);
+  const sumField = (names) => allTrees.reduce((sum, t) => {
+    for (const name of names) {
+      const v = koboTreeField(t, name);
+      if (v !== undefined && v !== null && v !== "") return sum + (Number(v) || 0);
+    }
+    return sum;
+  }, 0);
+  const totalTrees     = sumField(["Tree_Count"]);
+  const totalSaplings  = sumField(["Sapling_Count", "Sapling_count"]);
+  const totalSeedlings = sumField(["Seedling_Count", "Seedling_count"]);
+  const speciesSet = new Set(
+    allTrees.map(t => koboTreeField(t, "Species_Name") || koboTreeField(t, "Species")).filter(Boolean)
+  );
+
+  return `
+    <button type="button" class="zone-history-row" data-history-sub-id="${escapeHtml(String(sub["_id"] || ""))}">
+      <div class="zone-history-row-top">
+        <span class="zone-history-date">${escapeHtml(formatDate(koboSubmissionDate(sub)))}</span>
+        <span class="threat-tag ${tag.cls}">${tag.label}</span>
+      </div>
+      <div class="zone-history-row-summary">
+        ${plots.length} plot${plots.length === 1 ? "" : "s"} · ${totalTrees} trees · ${totalSaplings} saplings · ${totalSeedlings} seedlings
+        ${speciesSet.size ? `<br>${escapeHtml(Array.from(speciesSet).join(", "))}` : ""}
+      </div>
+    </button>
+  `;
+}
+
+function openZoneHistoryModal(zone) {
+  bindZoneHistoryModal();
+
+  const overlay = document.getElementById("zoneHistoryOverlay");
+  const nameEl  = document.getElementById("zoneHistoryZoneName");
+  const bodyEl  = document.getElementById("zoneHistoryBody");
+  if (!overlay || !bodyEl) return;
+
+  if (nameEl) nameEl.textContent = zone.name;
+
+  const history = typeof zoneSubmissionHistory === "function" ? zoneSubmissionHistory(zone.id) : [];
+  bodyEl.innerHTML = history.length
+    ? `<div class="zone-history-list">${history.map(zoneHistoryRowHtml).join("")}</div>`
+    : `<p class="zone-history-empty">No surveys recorded yet for this zone.</p>`;
+
+  overlay.classList.add("open");
+}
+
+function closeZoneHistoryModal() {
+  const overlay = document.getElementById("zoneHistoryOverlay");
+  if (overlay) overlay.classList.remove("open");
+}
+
+function bindZoneHistoryModal() {
+  const overlay = document.getElementById("zoneHistoryOverlay");
+  const closeBtn = document.getElementById("btnCloseZoneHistory");
+  if (!overlay || overlay.dataset.bound) return;
+  overlay.dataset.bound = "true";
+
+  if (closeBtn) closeBtn.addEventListener("click", closeZoneHistoryModal);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeZoneHistoryModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && overlay.classList.contains("open")) closeZoneHistoryModal();
+  });
+
+  const bodyEl = document.getElementById("zoneHistoryBody");
+  if (bodyEl) {
+    bodyEl.addEventListener("click", (e) => {
+      const row = e.target.closest(".zone-history-row");
+      if (!row) return;
+      const sub = ALL_SUBMISSIONS.find(s => String(s["_id"]) === row.dataset.historySubId);
+      if (sub) { closeZoneHistoryModal(); openSubmissionDetailModal(sub); }
+    });
+  }
 }
 
 // Approving/rejecting writes to the server (which is also what creates the
@@ -1101,7 +1205,14 @@ function submissionAlerts(sub) {
 }
 
 function computeAlertEntries() {
-  return ALL_SUBMISSIONS
+  // Same "as of" filtering as computeDashboardStats — otherwise an alert
+  // from after the selected Summary Date shows up here while every other
+  // number on the page has already been rolled back to that date.
+  const subsUpToSelectedDate = typeof submissionsUpToDate === "function"
+    ? submissionsUpToDate(dashboardSelectedDate)
+    : ALL_SUBMISSIONS;
+
+  return subsUpToSelectedDate
     .map(sub => ({ sub, alerts: submissionAlerts(sub) }))
     .filter(entry => entry.alerts.length > 0 && !entry.sub["_alert_reviewed"])
     .sort((a, b) => (koboSubmissionDate(b.sub) || "").localeCompare(koboSubmissionDate(a.sub) || ""));
@@ -1113,6 +1224,12 @@ function renderAlertsSection() {
   if (!list || !empty) return;
 
   const entries = computeAlertEntries();
+  // The card only shows ~3 rows before needing a scroll — the count in the
+  // title is what tells MENRO how many actually need attention without
+  // having to scroll through the whole list first.
+  const statEl = document.getElementById("alertsUnreviewedStat");
+  if (statEl) statEl.textContent = entries.length > 0 ? `${entries.length} unreviewed` : "";
+
   if (entries.length === 0) {
     list.innerHTML = "";
     empty.hidden = false;
@@ -1181,10 +1298,14 @@ function bindAlertsSection() {
 // everything else folded into "Other". A genuine free-text "Other" entry
 // (the ranger typed something not on the list) still gets its own color,
 // listed last.
+// Blue/purple/teal/pink only — deliberately avoids green, amber, and red,
+// since those are already this dashboard's Good/Fair/Poor colors elsewhere.
+// A green threat-type bar next to a green "Good" badge invites reading the
+// bar as "good", which is exactly backwards for a threats chart.
 const THREAT_COLOR_ORDER = [
-  "#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#8a5fd1", "#d1495b",
-  "#4fb0c6", "#b5891e", "#5c8a3a", "#c98a2c", "#7a5c3e", "#3f5e8a",
-  "#a83279", "#5b7d8c", "#e87ba4",
+  "#2a6fd6", "#7a4fd6", "#1a9bb8", "#d1569e", "#4a5fb0",
+  "#9a5fc9", "#1a7a8f", "#c23b8a", "#5a7fd1", "#6a3fa0",
+  "#2a8fa8", "#b8468a", "#3a5a9e", "#8a4fc0", "#e06ba8",
 ];
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTH_LABELS_FULL = [
@@ -1192,10 +1313,10 @@ const MONTH_LABELS_FULL = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-// Grouped by calendar month across all years present (Jan–Dec), not a
-// rolling range — with only a handful of submissions so far, splitting by
-// year as well would spread too few points too thin to show a pattern.
-function computeThreatsOverTime() {
+// Grouped by calendar month within a single selected year (see
+// dashboardThreatsYear) — switching the year filters the chart down to just
+// that year's monthly counts instead of folding every year together.
+function computeThreatsOverTime(year) {
   // One entry per real threat key actually present in the data (not a fixed
   // 5-slot list) — a threat type the survey offers but that isn't Cutting/
   // Encroachment/Garbage/Storm damage used to fold into a generic "Other"
@@ -1203,7 +1324,14 @@ function computeThreatsOverTime() {
   // "Sand / gravel extraction" both just read as "Other" in the tooltip).
   const byKey = {};
 
-  ALL_SUBMISSIONS.forEach(sub => {
+  // Same "as of" filtering as the rest of the dashboard (computeDashboardStats)
+  // — this used to read ALL_SUBMISSIONS unfiltered, so it kept showing
+  // reports after the selected Summary Date, contradicting the header.
+  const subsUpToSelectedDate = typeof submissionsUpToDate === "function"
+    ? submissionsUpToDate(dashboardSelectedDate)
+    : ALL_SUBMISSIONS;
+
+  subsUpToSelectedDate.forEach(sub => {
     // A submission can now have several threats checked at once (comma-
     // joined), not just one — each counted toward its own series instead of
     // the whole list being treated as a single unmatched value.
@@ -1213,6 +1341,7 @@ function computeThreatsOverTime() {
 
     const dateStr = koboSubmissionDate(sub);
     if (!dateStr || dateStr.length < 7) return;
+    if (dateStr.slice(0, 4) !== year) return;
     const month = parseInt(dateStr.slice(5, 7), 10) - 1;
     if (month < 0 || month > 11) return;
 
@@ -1238,78 +1367,76 @@ function computeThreatsOverTime() {
   }));
 }
 
+// Every year selectable in the chart's year dropdown — every year that has
+// at least one submission, plus the current real year even if it has none
+// yet, so switching to "this year" before any survey has happened still
+// lands on a valid option instead of the dropdown skipping it entirely.
+function threatsOverTimeAvailableYears() {
+  const subsUpToSelectedDate = typeof submissionsUpToDate === "function"
+    ? submissionsUpToDate(dashboardSelectedDate)
+    : ALL_SUBMISSIONS;
+
+  const years = new Set();
+  subsUpToSelectedDate.forEach(sub => {
+    const dateStr = koboSubmissionDate(sub);
+    if (dateStr && dateStr.length >= 4) years.add(dateStr.slice(0, 4));
+  });
+  years.add(String(new Date().getFullYear()));
+
+  return [...years].sort((a, b) => b.localeCompare(a));
+}
+
+// Keeps dashboardThreatsYear pointing at a real option in the dropdown —
+// defaults to the most recent year (current year, unless the data itself
+// reaches further into the future somehow) the first time the dashboard
+// loads, and falls back the same way if the previously selected year drops
+// out of the list (e.g. the Summary Date moved earlier than it).
+function ensureDashboardThreatsYear() {
+  const years = threatsOverTimeAvailableYears();
+  if (!dashboardThreatsYear || !years.includes(dashboardThreatsYear)) {
+    dashboardThreatsYear = years[0];
+  }
+}
+
 // A hand-built line chart (matching this dashboard's other charts, which are
 // all plain inline SVG rather than a charting library) with its own hover
 // layer — a crosshair snaps to the nearest month and one tooltip lists every
 // series' value there, per the dataviz skill's interaction rules.
-// A smooth curve through every real data point instead of straight segments
-// between them — matches a softer, rounded chart style. Uses a *monotone*
-// cubic Hermite spline (the same technique D3 calls curveMonotoneX), not a
-// plain Catmull-Rom curve — a plain curve overshoots past a flat run of
-// zeros right before a sharp rise (e.g. Jul-Aug both 0, then Sep jumps to
-// 3), dipping visibly below zero, which is a real value that never
-// occurred. The monotone version is constrained to never overshoot beyond
-// the two points it's connecting, so a threat count can never show as
-// negative. The curve still passes exactly through each month's real
-// value; only the path between points is curved.
-function smoothLinePath(points) {
-  const n = points.length;
-  if (n < 2) return "";
-  if (n === 2) {
-    return `M ${points[0][0].toFixed(1)},${points[0][1].toFixed(1)} L ${points[1][0].toFixed(1)},${points[1][1].toFixed(1)}`;
-  }
-
-  const xs = points.map(p => p[0]);
-  const ys = points.map(p => p[1]);
-  const dx = [], slope = [];
-  for (let i = 0; i < n - 1; i++) {
-    dx[i] = xs[i + 1] - xs[i];
-    slope[i] = (ys[i + 1] - ys[i]) / dx[i];
-  }
-
-  const tangent = new Array(n);
-  tangent[0] = slope[0];
-  tangent[n - 1] = slope[n - 2];
-  for (let i = 1; i < n - 1; i++) {
-    // Slope sign changes at a local min/max — tangent must be flat there,
-    // or the curve would bulge past that peak/trough on one side.
-    if (slope[i - 1] * slope[i] <= 0) {
-      tangent[i] = 0;
-    } else {
-      const w1 = 2 * dx[i] + dx[i - 1];
-      const w2 = dx[i] + 2 * dx[i - 1];
-      tangent[i] = (w1 + w2) / (w1 / slope[i - 1] + w2 / slope[i]);
-    }
-  }
-
-  const d = [`M ${xs[0].toFixed(1)},${ys[0].toFixed(1)}`];
-  for (let i = 0; i < n - 1; i++) {
-    const cp1x = xs[i] + dx[i] / 3;
-    const cp1y = ys[i] + tangent[i] * dx[i] / 3;
-    const cp2x = xs[i + 1] - dx[i] / 3;
-    const cp2y = ys[i + 1] - tangent[i + 1] * dx[i] / 3;
-    d.push(`C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${xs[i + 1].toFixed(1)},${ys[i + 1].toFixed(1)}`);
-  }
-  return d.join(" ");
+// Straight segments between points, not a smooth curve — these are whole
+// threat counts, and a curve's in-between dip or bulge between two months
+// reads as a value like 1.5 threats that was never actually observed.
+function straightLinePath(points) {
+  if (points.length === 0) return "";
+  return points.map((p, i) => `${i === 0 ? "M" : "L"} ${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
 }
 
-function smoothAreaPath(points, baselineY) {
-  const line = smoothLinePath(points);
+function straightAreaPath(points, baselineY) {
+  const line = straightLinePath(points);
   if (!line) return "";
   const lastX = points[points.length - 1][0];
   const firstX = points[0][0];
   return `${line} L ${lastX.toFixed(1)},${baselineY.toFixed(1)} L ${firstX.toFixed(1)},${baselineY.toFixed(1)} Z`;
 }
 
+function renderThreatsYearSelect() {
+  const sel = document.getElementById("threatsYearSelect");
+  if (!sel) return;
+
+  ensureDashboardThreatsYear();
+  const years = threatsOverTimeAvailableYears();
+  sel.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join("");
+  sel.value = dashboardThreatsYear;
+}
+
 function renderThreatsOverTimeChart(container) {
-  const series = computeThreatsOverTime();
-  const grandTotal = series.reduce((sum, s) => sum + s.total, 0);
+  ensureDashboardThreatsYear();
+  const year = dashboardThreatsYear;
+  const series = computeThreatsOverTime(year);
 
-  if (grandTotal === 0) {
-    container.innerHTML = `<div class="dashboard-empty">No threats reported yet.</div>`;
-    return;
-  }
-
+  // The chart stays on screen (axes, gridlines, month labels) even for a
+  // year with zero reports — an empty year is still a real answer ("nothing
+  // was reported in 2023"), not a reason to hide the chart and make it look
+  // broken or unselectable.
   const w = 800, h = 340;
   const padL = 36, padR = 16, padT = 16, padB = 32;
   const innerW = w - padL - padR;
@@ -1318,36 +1445,61 @@ function renderThreatsOverTimeChart(container) {
   // The line/area drawn is the combined monthly total (not one line per
   // threat type) — simpler to read at a glance, especially with several
   // types sitting at 0 most months. The per-type breakdown isn't lost,
-  // though: the legend below still lists each type's total, and hovering a
-  // month still shows the tooltip broken down by type (see showMonth).
+  // though: hovering a month still shows the tooltip broken down by type
+  // (see showMonth).
   const totalCounts = Array.from({ length: 12 }, (_, i) => series.reduce((sum, s) => sum + s.counts[i], 0));
   const combinedColor = "#c1473a";
 
-  const maxCount = Math.max(...totalCounts, 4);
+  // A month this far in the future hasn't happened yet, so a 0 there isn't a
+  // real reading — it's just the absence of time having passed. Left out of
+  // the line/dots/area entirely (not drawn as a zero) rather than implying
+  // "zero threats observed" for a month nobody has surveyed yet.
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const selectedYearNum = parseInt(year, 10);
+  // Which month counts as "the last one that could have happened" depends on
+  // which year is selected: a past year has already run its full course, a
+  // future year hasn't started at all, and the current year is capped at
+  // today's month — not always today's real-world month regardless of year,
+  // which used to make December of last year look like it "hadn't happened
+  // yet" whenever viewed before December of the current year.
+  const lastPossibleMonth = selectedYearNum < currentYear ? 11
+    : selectedYearNum > currentYear ? -1
+    : today.getMonth();
+  const isFutureMonth = i => i > lastPossibleMonth && totalCounts[i] === 0;
+
+  // No padding to a fixed floor — the axis used to always reach at least 4
+  // even when the tallest point was 3, leaving the top of the chart empty
+  // for no reason. It now tops out at the real highest value (or 1, just to
+  // keep the scale from collapsing to zero when there's no data at all).
+  const maxCount = Math.max(...totalCounts, 1);
   const x = i => padL + (innerW * i) / 11;
   const y = v => padT + innerH - (v / maxCount) * innerH;
   const axisY = padT + innerH;
 
+  // Whole numbers only — Math.round on each step, never a fractional count.
   const gridSteps = Math.min(maxCount, 4);
   const gridLines = Array.from({ length: gridSteps + 1 }).map((_, i) => {
     const v = Math.round((maxCount * i) / gridSteps);
     const gy = y(v);
     return `
       <line x1="${padL}" y1="${gy.toFixed(1)}" x2="${w - padR}" y2="${gy.toFixed(1)}" stroke="#eceae2" stroke-width="1" stroke-dasharray="${i === 0 ? "0" : "3,4"}"/>
-      <text x="${padL - 10}" y="${(gy + 3).toFixed(1)}" font-size="11.5" fill="#9a988f" text-anchor="end">${v}</text>
+      <text x="${padL - 10}" y="${(gy + 3).toFixed(1)}" font-size="20" fill="#9a988f" text-anchor="end">${v}</text>
     `;
   }).join("");
 
   const monthLabels = MONTH_LABELS.map((m, i) => `
-    <text x="${x(i).toFixed(1)}" y="${h - 10}" font-size="11.5" fill="#898781" text-anchor="middle">${m}</text>
+    <text x="${x(i).toFixed(1)}" y="${h - 10}" font-size="20" fill="#9a988f" text-anchor="middle">${m}</text>
   `).join("");
 
-  const combinedPts = totalCounts.map((v, i) => [x(i), y(v)]);
-  const combinedLinePath = smoothLinePath(combinedPts);
-  const combinedAreaPath = smoothAreaPath(combinedPts, y(0));
-  const combinedDots = totalCounts.map((v, i) => `
+  const combinedPts = totalCounts
+    .map((v, i) => (isFutureMonth(i) ? null : [x(i), y(v)]))
+    .filter(Boolean);
+  const combinedLinePath = straightLinePath(combinedPts);
+  const combinedAreaPath = straightAreaPath(combinedPts, y(0));
+  const combinedDots = totalCounts.map((v, i) => (isFutureMonth(i) ? "" : `
     <circle class="threats-chart-dot" data-month="${i}" cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="5" fill="${combinedColor}" stroke="#fcfcfb" stroke-width="2.2"/>
-  `).join("");
+  `)).join("");
   const seriesMarks = `
     <defs>
       <linearGradient id="threatsAreaGradient" x1="0" y1="0" x2="0" y2="1">
@@ -1362,7 +1514,9 @@ function renderThreatsOverTimeChart(container) {
 
   // One invisible full-height hit column per month — bigger than the marks
   // themselves, so the pointer only has to be near a month, not on a dot.
+  // Skipped for a future month — there's no data point there to hover.
   const hoverColumns = MONTH_LABELS.map((_, i) => {
+    if (isFutureMonth(i)) return "";
     const colW = innerW / 12;
     return `<rect class="threats-chart-hitcol" data-month="${i}" x="${(padL + colW * i).toFixed(1)}" y="0" width="${colW.toFixed(1)}" height="${h}" fill="transparent"/>`;
   }).join("");
@@ -1459,6 +1613,16 @@ function bindDashboardControls() {
       if (typeof openExportReport === "function") openExportReport();
     });
   }
+
+  const threatsYearSelect = document.getElementById("threatsYearSelect");
+  if (threatsYearSelect && !threatsYearSelect.dataset.bound) {
+    threatsYearSelect.dataset.bound = "true";
+    threatsYearSelect.addEventListener("change", () => {
+      dashboardThreatsYear = threatsYearSelect.value;
+      const threatsChartEl = document.getElementById("threatsOverTimeChart");
+      if (threatsChartEl) renderThreatsOverTimeChart(threatsChartEl);
+    });
+  }
 }
 
 function renderDashboard() {
@@ -1480,6 +1644,7 @@ function renderDashboard() {
   renderDatePicker();
   document.getElementById("healthDonutChart").innerHTML = renderHealthDonut(s.healthy, s.moderate, s.degraded, s.pending);
   document.getElementById("ndviBarChart").innerHTML     = renderNDVIBarChart(s.zoneSnapshot);
+  renderThreatsYearSelect();
   const threatsChartEl = document.getElementById("threatsOverTimeChart");
   if (threatsChartEl) renderThreatsOverTimeChart(threatsChartEl);
   renderRangersSection();
@@ -1550,7 +1715,7 @@ let activeSurveysTab = "all";
 
 const APPROVAL_STATUS_TAG = {
   pending:  { cls: "none",    label: "Pending" },
-  approved: { cls: "good",    label: "Approved" },
+  approved: { cls: "good",    label: "Verified" },
   rejected: { cls: "flagged", label: "Needs Revision" },
 };
 
@@ -1577,28 +1742,25 @@ function surveysBarangayName(sub) {
 
 function renderSurveysRow(sub) {
   const zoneName = surveysZoneName(sub);
-  const aquafarmRaw = (sub["Nearby_aquafarm_activity"] || sub["Nearby_Aquafarm_Activity"] || "").toLowerCase();
-  const dischargeRaw = (sub["Discharge_Toward_Mangroves"] || sub["Discharge_toward_mangroves"] || "").toLowerCase();
-  const aquafarmInfo = aquafarmTag(aquafarmRaw, dischargeRaw);
   const approvalStatus = sub["_approval_status"] || "pending";
   const statusTag = APPROVAL_STATUS_TAG[approvalStatus] || APPROVAL_STATUS_TAG.pending;
 
   return `
     <tr class="row-clickable" data-kobo-id="${escapeHtml(String(sub["_id"] || ""))}">
-      <td>${formatDate(koboSubmissionDate(sub))}</td>
-      <td class="survey-log-zone-cell" title="${escapeHtml(zoneName)}">${escapeHtml(zoneName)}</td>
-      <td>${escapeHtml(sub["Ranger_Name"] || "—")}</td>
-      <td class="cell-center"><span class="threat-tag ${aquafarmInfo.cls}">${escapeHtml(aquafarmInfo.label)}</span></td>
-      <td class="cell-center"><span class="threat-tag ${statusTag.cls}">${statusTag.label}</span></td>
-      <td class="cell-center">
+      <td data-label="Date">${formatDate(koboSubmissionDate(sub))}</td>
+      <td class="survey-log-zone-cell" data-label="Zone" title="${escapeHtml(zoneName)}">${escapeHtml(zoneName)}</td>
+      <td data-label="Ranger">${escapeHtml(sub["Ranger_Name"] || "—")}</td>
+      <td class="cell-center" data-label="Health">${(() => { const h = (sub["Overall_Health_Assessment"] || "").toLowerCase(); const cls = HEALTH_BADGE_CLS[h]; return cls ? `<span class="view-badge ${cls}">${escapeHtml(healthAssessmentLabel(sub["Overall_Health_Assessment"]))}</span>` : `<span style="color:#aaa">—</span>`; })()}</td>
+      <td class="cell-center" data-label="Status"><span class="threat-tag ${statusTag.cls}">${statusTag.label}</span></td>
+      <td class="cell-center" data-label="Actions">
         <div class="row-actions">
           ${approvalStatus === "approved"
-            ? `<button type="button" class="row-approve-btn row-approve-btn-locked" disabled aria-label="Already approved" title="Already approved">
+            ? `<button type="button" class="row-approve-btn row-approve-btn-locked" disabled aria-label="Already verified" title="Already verified">
                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                    <path d="M20 6 9 17l-5-5"/>
                  </svg>
                </button>`
-            : `<button type="button" class="row-approve-btn" data-approve-id="${escapeHtml(String(sub["_id"] || ""))}" aria-label="Approve submission" title="Approve">
+            : `<button type="button" class="row-approve-btn" data-approve-id="${escapeHtml(String(sub["_id"] || ""))}" aria-label="Verify submission" title="Verify">
                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                    <path d="M20 6 9 17l-5-5"/>
                  </svg>
@@ -1658,10 +1820,7 @@ function surveysSortValue(sub, key) {
     case "date":     return koboSubmissionDate(sub) || "";
     case "zone":     return surveysZoneName(sub) || "";
     case "ranger":   return sub["Ranger_Name"] || "";
-    case "aquafarm": return aquafarmTag(
-      (sub["Nearby_aquafarm_activity"] || sub["Nearby_Aquafarm_Activity"] || "").toLowerCase(),
-      (sub["Discharge_Toward_Mangroves"] || sub["Discharge_toward_mangroves"] || "").toLowerCase()
-    ).label;
+    case "health":   return { healthy: 0, moderate: 1, degraded: 2 }[(sub["Overall_Health_Assessment"] || "").toLowerCase()] ?? 99;
     case "status":   return SURVEYS_STATUS_RANK[sub["_approval_status"] || "pending"] ?? 99;
     default:         return 0;
   }
@@ -1898,10 +2057,10 @@ const REVIEW_CONFIRM_CONTENT = {
   approve: {
     iconCls: "confirm-modal-icon confirm-modal-icon-positive",
     iconSvg: '<path d="M20 6 9 17l-5-5"/>',
-    title: "Approve this submission?",
-    text: "The ranger will be notified that their survey was approved.",
+    title: "Verify this submission?",
+    text: "The ranger will be notified that their survey was verified.",
     confirmCls: "btn-confirm-primary",
-    confirmLabel: "Approve",
+    confirmLabel: "Verify",
   },
   reject: {
     iconCls: "confirm-modal-icon",
@@ -2039,6 +2198,14 @@ async function switchTab(tab) {
   if (mapView)       mapView.style.display = showMap ? "flex" : "none";
   if (dashboardView) dashboardView.classList.toggle("active", showDashboard);
   if (surveysView)   surveysView.classList.toggle("active", showSurveys);
+
+  // The mobile right-panel toggle only makes sense on the Map tab — the
+  // panel it opens (Scene Calendar, Mangrove Zones) doesn't exist elsewhere.
+  const panelToggleBtn = document.getElementById("btnToggleRightPanel");
+  if (panelToggleBtn) {
+    panelToggleBtn.hidden = !showMap;
+    if (!showMap && typeof closeRightPanel === "function") closeRightPanel();
+  }
 
   const menuMapEl       = document.getElementById("menuMap");
   const menuDashboardEl = document.getElementById("menuDashboard");

@@ -18,7 +18,23 @@ function requireMenro() {
     }
 }
 
-const CATEGORIES = ['mangrove', 'protected_area'];
+// Read-only zone shapes are safe for a ranger to see too — they're the ones
+// standing in the field deciding where to drop their survey pin, and seeing
+// the real zone boundaries on that map is the whole point. Only list() uses
+// this; create/update/delete stay menro-only.
+function requireMenroOrRanger() {
+    $role = $_SESSION['user']['role'] ?? null;
+    if (!isset($_SESSION['user']) || ($role !== 'menro' && $role !== 'ranger')) {
+        respond(['success' => false, 'error' => 'Not authorized.'], 401);
+    }
+}
+
+// 'mangrove' (unprotected mangrove forest area) used to be a second valid
+// category — removed since those shapes were never actually visited or
+// verified by a ranger (only protected areas are), so their data had no way
+// to stay accurate. There were zero in the live database by the time this
+// was restricted; this just stops any new ones being created.
+const CATEGORIES = ['protected_area'];
 
 // Every mangrove/protected area shape now lives in Supabase (Postgres with
 // PostGIS), not the local database — this talks to it over Supabase's REST
@@ -54,20 +70,33 @@ function supabaseRequest($method, $path, $body = null) {
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 if ($action === 'list') {
-    requireMenro();
+    requireMenroOrRanger();
     $result = supabaseRequest('GET', '/rest/v1/mangrove_areas_geojson?select=id,name,barangay,category,created_by,created_at,coordinates&order=created_at.desc');
     if ($result['code'] >= 400) {
         respond(['success' => false, 'error' => 'Could not load mangrove areas.'], 502);
     }
 
-    $features = array_map(function ($row) {
+    // mpa_manager isn't part of the geojson view, so it's fetched separately
+    // from the plain table and merged in by id. Best-effort: if this one
+    // fails, areas still load, just without their MPA manager shown.
+    $mpaManagerById = [];
+    $mpaResult = supabaseRequest('GET', '/rest/v1/mangrove_areas?select=id,mpa_manager');
+    if ($mpaResult['code'] < 400 && is_array($mpaResult['data'])) {
+        foreach ($mpaResult['data'] as $row) {
+            $mpaManagerById[(int) $row['id']] = $row['mpa_manager'] ?? null;
+        }
+    }
+
+    $features = array_map(function ($row) use ($mpaManagerById) {
+        $id = (int) $row['id'];
         return [
             'type' => 'Feature',
             'properties' => [
-                'id'          => (int) $row['id'],
+                'id'          => $id,
                 'name'        => $row['name'],
                 'barangay'    => $row['barangay'],
                 'category'    => $row['category'],
+                'mpa_manager' => $mpaManagerById[$id] ?? null,
                 'created_by'  => $row['created_by'],
                 'created_at'  => $row['created_at'],
             ],
@@ -82,11 +111,12 @@ if ($action === 'create') {
     requireMenro();
     $name = trim($_POST['name'] ?? '');
     $barangay = trim($_POST['barangay'] ?? '');
+    $mpaManager = trim($_POST['mpaManager'] ?? '');
     $category = trim($_POST['category'] ?? '');
     $geometry = $_POST['geometry'] ?? '';
 
-    if ($name === '' || $barangay === '' || $geometry === '' || !in_array($category, CATEGORIES, true)) {
-        respond(['success' => false, 'error' => 'Name, barangay, category, and shape are required.'], 400);
+    if ($name === '' || $barangay === '' || $mpaManager === '' || $geometry === '' || !in_array($category, CATEGORIES, true)) {
+        respond(['success' => false, 'error' => 'Name, barangay, MPA manager, category, and shape are required.'], 400);
     }
     json_decode($geometry);
     if (json_last_error() !== JSON_ERROR_NONE) {
@@ -104,7 +134,16 @@ if ($action === 'create') {
         respond(['success' => false, 'error' => 'Could not save this mangrove area.'], 502);
     }
 
-    respond(['success' => true, 'id' => $result['data']]);
+    $newId = $result['data'];
+    // MPA manager isn't a param the create RPC knows about — set separately
+    // with a direct table update right after. Best-effort: the area itself
+    // is already saved by this point, so a failure here isn't fatal, just
+    // leaves MPA manager blank until edited.
+    if ($newId) {
+        supabaseRequest('PATCH', '/rest/v1/mangrove_areas?id=eq.' . (int) $newId, ['mpa_manager' => $mpaManager]);
+    }
+
+    respond(['success' => true, 'id' => $newId]);
 }
 
 if ($action === 'update') {
@@ -113,6 +152,7 @@ if ($action === 'update') {
     $geometry = $_POST['geometry'] ?? '';
     $name = trim($_POST['name'] ?? '');
     $barangay = trim($_POST['barangay'] ?? '');
+    $mpaManager = trim($_POST['mpaManager'] ?? '');
     $category = trim($_POST['category'] ?? '');
 
     if (!ctype_digit((string) $id) || $geometry === '') {
@@ -133,6 +173,10 @@ if ($action === 'update') {
     if ($result['code'] >= 400) {
         respond(['success' => false, 'error' => 'Could not save changes to this mangrove area.'], 502);
     }
+
+    // Same reasoning as create — MPA manager lives outside the update RPC's
+    // own params, so it's patched directly on the row.
+    supabaseRequest('PATCH', '/rest/v1/mangrove_areas?id=eq.' . (int) $id, ['mpa_manager' => $mpaManager]);
 
     respond(['success' => true]);
 }

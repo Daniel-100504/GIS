@@ -23,16 +23,46 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
        to match the official paper form's own typography. -->
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,700&display=swap" rel="stylesheet"/>
 
-  <link rel="icon" href="../../assets/calatagan-seal.png"/>
+  <link rel="icon" href="../../assets/aquaguard-logo.png"/>
+  <link rel="manifest" href="../../manifest.json" />
+  <meta name="theme-color" content="#1b6b3a" />
+  <link rel="apple-touch-icon" href="../../assets/aquaguard-logo.png" />
 
-        <link rel="stylesheet" href="../../assets/theme.css"/>
-        <link rel="stylesheet" href="../css/style.css?v=33"/>
-        <link rel="stylesheet" href="../css/right-panel.css?v=4"/>
+        <link rel="stylesheet" href="../../assets/theme.css?v=1"/>
+        <link rel="stylesheet" href="../css/style.css?v=42"/>
+        <link rel="stylesheet" href="../css/right-panel.css?v=16"/>
         <link rel="stylesheet" href="../css/side-menu.css?v=7"/>
-        <link rel="stylesheet" href="../css/Dashboard.css?v=78"/>
+        <link rel="stylesheet" href="../css/Dashboard.css?v=101"/>
 </head>
 
 <body>
+
+<!-- Shown only when launched as the installed app (standalone mode) — a
+     plain browser tab visit never sees this. -->
+<div id="appSplash" class="app-splash">
+  <img src="../../assets/aquaguard-logo-app.png" alt="AquaGuard" class="app-splash-logo">
+</div>
+<script>
+  (function () {
+    var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    var splash = document.getElementById('appSplash');
+    if (!isStandalone) {
+      splash.remove();
+      return;
+    }
+    window.addEventListener('load', function () {
+      setTimeout(function () {
+        splash.classList.add('app-splash-hide');
+        setTimeout(function () { splash.remove(); }, 400);
+      }, 500);
+    });
+  })();
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('../../sw.js').catch(function () {});
+    });
+  }
+</script>
 
 <header class="topbar">
 
@@ -46,7 +76,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </svg>
         </button>
 
-        <img src="../../assets/calatagan-seal.png" width="34" height="34" alt="Calatagan Seal" class="topbar-logo">
+        <img src="../../assets/aquaguard-logo.png" width="34" height="34" alt="AquaGuard logo" class="topbar-logo">
 
         <span class="topbar-brand">
             AquaGuard
@@ -92,6 +122,13 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
             <span id="connectionStatusText">Online</span>
         </span>
 
+        <button type="button" class="notif-btn panel-toggle-btn" id="btnToggleRightPanel" aria-label="Open zone panel" aria-expanded="false">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="16" rx="2"/>
+                <line x1="15" y1="4" x2="15" y2="20"/>
+            </svg>
+        </button>
+
     </div>
 
 </header>
@@ -100,16 +137,22 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 
 <main class="map-container">
 
+<div class="map-loading-bar" id="mapLoadingBar"></div>
+
 <div id="map"></div>
 
 <div class="map-layers-control" id="mapLayersControl">
 
-    <button class="layers-toggle-btn" id="layersToggleBtn" aria-label="Switch to satellite view" aria-expanded="false" title="Click to switch map/satellite view">
+    <button class="layers-toggle-btn" id="layersToggleBtn" aria-label="Switch to satellite view" title="Click to switch map/satellite view">
         <span class="layers-toggle-thumb" id="layersToggleThumb"></span>
         <span class="layers-toggle-label" id="layersToggleLabel">Satellite</span>
     </button>
 
-    <div class="layers-popup">
+    <button type="button" class="layers-expand-btn" id="layersExpandBtn" aria-label="Show layer options" aria-expanded="false" aria-controls="layersPopup" title="Show layer options">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+
+    <div class="layers-popup" id="layersPopup">
 
         <div class="layer-tile-grid">
 
@@ -152,18 +195,27 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 
 </div>
 
-<div class="map-legend">
-    <div id="legendAreaType">
-        <p class="map-legend-title">Area Type</p>
-        <div class="map-legend-row"><span class="map-legend-dot" style="background:#8a2be2;"></span>Mangroves</div>
-        <div class="map-legend-row"><span class="map-legend-dot" style="background:#ffd166;border:1.5px solid #b8860b;"></span>Protected Areas</div>
-    </div>
+<div class="map-legend" id="mapLegend">
 
-    <div id="legendNdvi" hidden>
-        <p class="map-legend-title" style="margin-top:8px;">NDVI</p>
-        <div class="map-legend-row"><span class="map-legend-dot" style="background:#bfbfbf;"></span>Bare / No Vegetation</div>
-        <div class="map-legend-row"><span class="map-legend-dot" style="background:#91bf51;"></span>Sparse Vegetation</div>
-        <div class="map-legend-row"><span class="map-legend-dot" style="background:#004400;"></span>Dense Vegetation</div>
+    <button type="button" class="map-legend-toggle" id="mapLegendToggle" aria-expanded="true" aria-controls="mapLegendBody" title="Collapse legend">
+        <span>Legend</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+
+    <div id="mapLegendBody">
+
+        <div id="legendAreaType">
+            <p class="map-legend-title">Area Type</p>
+            <div class="map-legend-row"><span class="map-legend-dot" style="background:#8a2be2;"></span>Mangroves</div>
+        </div>
+
+        <div id="legendNdvi" hidden>
+            <p class="map-legend-title" style="margin-top:8px;">NDVI</p>
+            <div class="map-legend-row"><span class="map-legend-dot" style="background:#bfbfbf;"></span>Bare / No Vegetation (-0.1 to 0.1)</div>
+            <div class="map-legend-row"><span class="map-legend-dot" style="background:#91bf51;"></span>Sparse Vegetation (0.2 to 0.4)</div>
+            <div class="map-legend-row"><span class="map-legend-dot" style="background:#004400;"></span>Dense Vegetation (above 0.4)</div>
+        </div>
+
     </div>
 
 </div>
@@ -171,7 +223,9 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 </main>
 <div class="resizer right-resizer"></div>
 
-<aside class="right-panel">
+<div class="right-panel-backdrop" id="rightPanelBackdrop"></div>
+
+<aside class="right-panel" id="rightPanel">
 
     <p class="section-eyebrow">
 
@@ -189,7 +243,26 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 
 <input type="hidden" id="sceneDate">
 
-    <div class="scene-calendar">
+    <div class="scene-date-bar" id="sceneDateBar">
+        <button type="button" id="sceneDatePrevBtn" class="date-nav-btn" aria-label="Previous day">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+
+        <button type="button" id="sceneDateLabelBtn" class="scene-date-label-btn" aria-expanded="false" aria-controls="sceneCalendarPanel" title="Show full calendar">
+            <span id="sceneDateLabel">—</span>
+            <span id="sceneDateCloudBadge" class="scene-date-cloud-badge" hidden>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11.4 2.1A4 4 0 0 0 6.5 19h11Z"/></svg>
+                <span id="sceneDateCloudPct"></span>
+            </span>
+            <svg id="sceneDateToggleChevron" class="scene-date-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+
+        <button type="button" id="sceneDateNextBtn" class="date-nav-btn" aria-label="Next day">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+    </div>
+
+    <div class="scene-calendar" id="sceneCalendarPanel" hidden>
 
         <div class="scene-calendar-header">
             <button type="button" id="calMonthPrev" class="date-nav-btn" aria-label="Previous month">
@@ -223,11 +296,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 
     <div class="settings-group">
 
-        <p class="section-eyebrow">
-
-            MANGROVE ZONES
-
-        </p>
+        <p class="section-eyebrow">MANGROVE ZONES</p>
 
         <div class="zone-search-wrap">
 
@@ -252,12 +321,11 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 
         <div class="zone-controls-row">
 
-            <select id="zoneStatusFilter" class="zone-control-select" aria-label="Filter by status">
-                <option value="all">All Status</option>
-                <option value="healthy">Good</option>
-                <option value="moderate">Fair</option>
-                <option value="degraded">Poor</option>
-                <option value="pending">Pending</option>
+            <select id="zoneStatusFilter" class="zone-control-select" aria-label="Filter by NDVI">
+                <option value="all">All NDVI</option>
+                <option value="ndvi-dense">Dense</option>
+                <option value="ndvi-sparse">Sparse</option>
+                <option value="ndvi-bare">Bare</option>
             </select>
 
             <select id="zoneSort" class="zone-control-select" aria-label="Sort zones">
@@ -272,7 +340,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
         </div>
 
         <p id="zoneSearchHint" class="zone-search-hint">
-            Type a zone name to filter
+            Type a zone name or barangay to filter
         </p>
 
         <div
@@ -301,16 +369,6 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
       <input type="text" id="mangroveNameInput" class="modal-text-input" placeholder="e.g. Barangay 3 Pob. mangrove patch" autocomplete="off">
     </label>
     <div class="mangrove-field-error" id="mangroveNameFieldError" hidden>This is a required field</div>
-
-    <label class="mangrove-field-label">
-      Category
-    <select id="mangroveCategorySelect" class="modal-text-input">
-      <option value="">Select category…</option>
-      <option value="mangrove">Mangrove Forest Area</option>
-      <option value="protected_area">Protected Area</option>
-    </select>
-    </label>
-    <div class="mangrove-field-error" id="mangroveCategoryFieldError" hidden>This is a required field</div>
 
     <label class="mangrove-field-label">
       Barangay
@@ -344,6 +402,22 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     </select>
     </label>
     <div class="mangrove-field-error" id="mangroveBarangayFieldError" hidden>This is a required field</div>
+
+    <label class="mangrove-field-label">
+      MPA manager
+      <select id="mangroveMpaManagerSelect" class="modal-text-input">
+        <option value="">Select…</option>
+        <option value="Samahan ng Mangingisdang Magpoprotekta sa Bakawan ng Bagong Silang (SAMMABABA)">Samahan ng Mangingisdang Magpoprotekta sa Bakawan ng Bagong Silang (SAMMABABA)</option>
+        <option value="Pro-Mangrove Alliance and Implementing Team and Arm as Kilitisan's Advocates of Nature (PALITAKAN)">Pro-Mangrove Alliance and Implementing Team and Arm as Kilitisan's Advocates of Nature (PALITAKAN)</option>
+        <option value="Samahan ng Mangingisda at Magsasaka sa Sitio Palobandera (SMP)">Samahan ng Mangingisda at Magsasaka sa Sitio Palobandera (SMP)</option>
+        <option value="Calatagan Mangrove Development Alliance (CALMADA)">Calatagan Mangrove Development Alliance (CALMADA)</option>
+        <option value="Samahang ang Adhikain ay Pangalagaan sa Sta Ana ang Pangisdaan (SAPSAP)">Samahang ang Adhikain ay Pangalagaan sa Sta Ana ang Pangisdaan (SAPSAP)</option>
+        <option value="Samahan ng Maliliit na Maglalambat ng Brgy. Encarnacion (SMME)">Samahan ng Maliliit na Maglalambat ng Brgy. Encarnacion (SMME)</option>
+        <option value="__other__">Other (specify)</option>
+      </select>
+      <input type="text" id="mangroveMpaManagerOtherInput" class="modal-text-input" placeholder="Enter MPA manager name" hidden />
+    </label>
+    <div class="mangrove-field-error" id="mangroveMpaManagerFieldError" hidden>This is a required field</div>
 
     <div id="mangroveNameErrorMsg" class="mangrove-form-error" role="alert" aria-live="polite" hidden></div>
 
@@ -423,7 +497,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </div>
           <div class="guide-text">
             <h3>Ranger Surveys</h3>
-            <p>Open <strong>Ranger Surveys</strong> to see every field submission in one place. Use the tabs, search box, or filters to narrow the list. Click a row to open its full details and Approve or Reject it. Clicking a survey notification takes you straight to that submission.</p>
+            <p>Open <strong>Ranger Surveys</strong> to see every field submission in one place. Use the tabs, search box, or filters to narrow the list. Click a row to open its full details and Verify or Reject it. Clicking a survey notification takes you straight to that submission.</p>
           </div>
         </div>
 
@@ -547,7 +621,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </div>
           <div class="guide-text">
             <h3>Export Report</h3>
-            <p>Click <strong>Export Report</strong> on the Dashboard to open the PDF in your browser, then print or download it from there. Each field visit becomes its own Monitoring Data Sheet, matching MENRO's official paper form. Pick "This year" or "Last year" for a full Annual report. A visit with a lot of data automatically continues onto extra pages instead of being cut off.</p>
+            <p>Click <strong>Export Report</strong> on the Dashboard to get a PDF of your field visits, formatted like MENRO's official paper form. Pick "This year" or "Last year" for a full annual report.</p>
           </div>
         </div>
 
@@ -560,7 +634,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           </div>
           <div class="guide-text">
             <h3>Auto Sign-Out</h3>
-            <p>You'll be signed out after 15 minutes of inactivity, for security. A warning appears 30 seconds before — click <strong>Stay signed in</strong> to continue.</p>
+            <p>You'll be logged out after 15 minutes of inactivity, for security. A warning appears 30 seconds before. Click <strong>Stay logged in</strong> to continue.</p>
           </div>
         </div>
       </div>
@@ -600,7 +674,6 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
               <th>Protected Area</th>
               <th class="cell-center">Trees Measured</th>
               <th>Species</th>
-              <th class="cell-center">Aquafarm Nearby</th>
               <th class="cell-center">Status</th>
             </tr>
           </thead>
@@ -639,12 +712,30 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           <button type="button" class="btn-confirm-danger" id="btnConfirmReject">Confirm Rejection</button>
         </div>
       </div>
-      <div class="submission-detail-footer-main" id="submissionDetailFooterMain">
-        <span class="submission-detail-approval" id="submissionDetailApproval">—</span>
-      </div>
+      <div class="submission-detail-footer-main" id="submissionDetailFooterMain"></div>
     </div>
 
   </div>
+</div>
+
+<div class="dashboard-overlay" id="zoneHistoryOverlay">
+
+  <div class="dashboard-modal view-modal">
+
+    <div class="dashboard-modal-header view-modal-header">
+      <div>
+        <h2>Survey history</h2>
+        <p class="dashboard-modal-sub" id="zoneHistoryZoneName">—</p>
+      </div>
+      <div class="view-modal-header-right">
+        <button class="dashboard-close" id="btnCloseZoneHistory" aria-label="Close">&times;</button>
+      </div>
+    </div>
+
+    <div class="dashboard-modal-body view-body" id="zoneHistoryBody"></div>
+
+  </div>
+</div>
 
 </div>
 
@@ -686,12 +777,12 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
       </svg>
     </div>
 
-    <h2 class="confirm-modal-title">Sign out of AquaGuard?</h2>
-    <p class="confirm-modal-text">You'll need to sign in again to access the dashboard and map.</p>
+    <h2 class="confirm-modal-title">Log Out of AquaGuard?</h2>
+    <p class="confirm-modal-text">You'll need to log in again to access the dashboard and map.</p>
 
     <div class="confirm-modal-actions">
       <button type="button" class="btn-confirm-cancel" id="btnCancelSignOut">Cancel</button>
-      <button type="button" class="btn-confirm-danger" id="btnConfirmSignOut">Sign Out</button>
+      <button type="button" class="btn-confirm-danger" id="btnConfirmSignOut">Log Out</button>
     </div>
 
   </div>
@@ -720,9 +811,6 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
       <label for="exportDateRange" class="export-daterange-label">Date range</label>
       <select id="exportDateRange" class="export-daterange-select">
         <option value="all" selected>All time</option>
-        <option value="today">Today</option>
-        <option value="7days">Last 7 days</option>
-        <option value="30days">Last 30 days</option>
         <option value="thisyear">This year</option>
         <option value="lastyear">Last year</option>
         <option value="custom">Custom range</option>
@@ -765,7 +853,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 
   <div class="side-menu-header">
     <div class="side-menu-brand-group">
-      <img src="../../assets/calatagan-seal.png" width="30" height="30" alt="Calatagan Seal" class="side-menu-logo">
+      <img src="../../assets/aquaguard-logo.png" width="30" height="30" alt="AquaGuard logo" class="side-menu-logo">
       <span class="side-menu-brand">AquaGuard</span>
     </div>
     <button class="side-menu-close" id="btnCloseSideMenu" aria-label="Close menu">&times;</button>
@@ -826,7 +914,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
           <line x1="21" y1="12" x2="9" y2="12"/>
         </svg>
       </span>
-      <span>Sign Out</span>
+      <span>Log Out</span>
     </button>
   </div>
 
@@ -845,20 +933,11 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 <div class="dashboard-overlay" id="mangroveQuickEditOverlay">
 <div class="mangrove-edit-panel mangrove-edit-panel-wide mangrove-edit-panel-modal" id="mangroveQuickEditPanel">
   <div class="mangrove-edit-panel-title">Edit mangrove area details</div>
-  <p class="mangrove-edit-panel-hint">Update the name, barangay, or category below.</p>
+  <p class="mangrove-edit-panel-hint">Update the name, barangay, or MPA manager below.</p>
 
   <label class="mangrove-field-label">
     Name
     <input type="text" id="mangroveQuickEditNameInput" class="modal-text-input" autocomplete="off">
-  </label>
-
-  <label class="mangrove-field-label">
-    Category
-    <select id="mangroveQuickEditCategorySelect" class="modal-text-input">
-      <option value="">Select category…</option>
-      <option value="mangrove">Mangrove Forest Area</option>
-      <option value="protected_area">Protected Area</option>
-    </select>
   </label>
 
   <label class="mangrove-field-label">
@@ -893,6 +972,21 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     </select>
   </label>
 
+  <label class="mangrove-field-label">
+    MPA manager
+    <select id="mangroveQuickEditMpaManagerSelect" class="modal-text-input">
+      <option value="">Select…</option>
+      <option value="Samahan ng Mangingisdang Magpoprotekta sa Bakawan ng Bagong Silang (SAMMABABA)">Samahan ng Mangingisdang Magpoprotekta sa Bakawan ng Bagong Silang (SAMMABABA)</option>
+      <option value="Pro-Mangrove Alliance and Implementing Team and Arm as Kilitisan's Advocates of Nature (PALITAKAN)">Pro-Mangrove Alliance and Implementing Team and Arm as Kilitisan's Advocates of Nature (PALITAKAN)</option>
+      <option value="Samahan ng Mangingisda at Magsasaka sa Sitio Palobandera (SMP)">Samahan ng Mangingisda at Magsasaka sa Sitio Palobandera (SMP)</option>
+      <option value="Calatagan Mangrove Development Alliance (CALMADA)">Calatagan Mangrove Development Alliance (CALMADA)</option>
+      <option value="Samahang ang Adhikain ay Pangalagaan sa Sta Ana ang Pangisdaan (SAPSAP)">Samahang ang Adhikain ay Pangalagaan sa Sta Ana ang Pangisdaan (SAPSAP)</option>
+      <option value="Samahan ng Maliliit na Maglalambat ng Brgy. Encarnacion (SMME)">Samahan ng Maliliit na Maglalambat ng Brgy. Encarnacion (SMME)</option>
+      <option value="__other__">Other (specify)</option>
+    </select>
+    <input type="text" id="mangroveQuickEditMpaManagerOtherInput" class="modal-text-input" placeholder="Enter MPA manager name" hidden />
+  </label>
+
   <div class="mangrove-edit-panel-actions">
     <button type="button" class="btn-confirm-cancel" id="btnCancelMangroveQuickEdit">Cancel</button>
     <button type="button" class="btn-confirm-primary" id="btnSaveMangroveQuickEdit">Save</button>
@@ -903,18 +997,17 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/5.0.8/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="../../assets/utils.js?v=1"></script>
-<script src="../API/zones-data.php?v=9"></script>
-<script src="../js/map-core.js?v=20"></script>
-<script src="../js/mangrove-draw.js?v=34"></script>
+<script src="../../assets/utils.js?v=2"></script>
+<script src="../API/zones-data.php?v=18"></script>
+<script src="../js/map-core.js?v=44"></script>
+<script src="../js/mangrove-draw.js?v=54"></script>
 <script src="../js/verified-layers-edit.js?v=3"></script>
-<script src="../js/zones-panel.js?v=9"></script>
-<script src="../js/scene-calendar.js?v=9"></script>
-<script src="../js/export-report.js?v=28"></script>
-<script src="../js/ui-chrome.js?v=9"></script>
-<script src="../js/Dashboard.js?v=78"></script>
+<script src="../js/zones-panel.js?v=22"></script>
+<script src="../js/scene-calendar.js?v=14"></script>
+<script src="../js/export-report.js?v=77"></script>
+<script src="../js/ui-chrome.js?v=10"></script>
+<script src="../js/Dashboard.js?v=100"></script>
 <script src="../js/notifications.js?v=12"></script>
 
 </body>

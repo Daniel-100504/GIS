@@ -1,0 +1,6 @@
+# PHP upload limits for Apache/mod_php setups (XAMPP, etc.)
+# Hostinger (PHP-FPM) reads .user.ini instead — see that file.
+php_value upload_max_filesize 100M
+php_value post_max_size 200M
+php_value max_execution_time 120
+php_value memory_limit 256M

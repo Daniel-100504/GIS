@@ -26,6 +26,7 @@ function syncSceneDateToToday() {
         sceneDate.value = today;
         refreshSentinelLayers(today);
         if (dataReady) applyDataForDate(today);
+        if (typeof updateSceneDateBar === "function") updateSceneDateBar();
     }
 }
 
@@ -38,6 +39,64 @@ sceneDate.addEventListener("change",(e)=>{
 
 });
 
+
+const sceneDatePrevBtn    = document.getElementById("sceneDatePrevBtn");
+const sceneDateNextBtn    = document.getElementById("sceneDateNextBtn");
+const sceneDateLabelBtn   = document.getElementById("sceneDateLabelBtn");
+const sceneDateLabelEl    = document.getElementById("sceneDateLabel");
+const sceneDateCloudBadge = document.getElementById("sceneDateCloudBadge");
+const sceneDateCloudPct   = document.getElementById("sceneDateCloudPct");
+const sceneCalendarPanelEl = document.getElementById("sceneCalendarPanel");
+
+function stepSceneDateByDays(deltaDays) {
+    const [y, m, d] = sceneDate.value.split("-").map(Number);
+    const next = new Date(Date.UTC(y, m - 1, d));
+    next.setUTCDate(next.getUTCDate() + deltaDays);
+    const nextStr = next.toISOString().slice(0, 10);
+    if (sceneDate.max && nextStr > sceneDate.max) return;
+
+    sceneDate.value = nextStr;
+    sceneDate.dispatchEvent(new Event("change"));
+}
+
+if (sceneDatePrevBtn) sceneDatePrevBtn.addEventListener("click", () => stepSceneDateByDays(-1));
+if (sceneDateNextBtn) sceneDateNextBtn.addEventListener("click", () => stepSceneDateByDays(1));
+
+function setSceneCalendarExpanded(expanded) {
+    if (sceneCalendarPanelEl) sceneCalendarPanelEl.hidden = !expanded;
+    if (sceneDateLabelBtn) {
+        sceneDateLabelBtn.setAttribute("aria-expanded", expanded ? "true" : "false");
+        sceneDateLabelBtn.title = expanded ? "Hide full calendar" : "Show full calendar";
+    }
+}
+
+if (sceneDateLabelBtn) {
+    sceneDateLabelBtn.addEventListener("click", () => {
+        const expanded = sceneDateLabelBtn.getAttribute("aria-expanded") === "true";
+        setSceneCalendarExpanded(!expanded);
+    });
+}
+
+// Mirrors the compact date bar (label + cloud-cover badge) to whatever
+// sceneDate currently is — same idea as Copernicus Browser's own collapsed
+// date bar, which shows the date and its cloud coverage without needing the
+// full month grid open.
+async function updateSceneDateBar() {
+    const dateStr = sceneDate.value || todayISO();
+    if (sceneDateLabelEl) sceneDateLabelEl.textContent = dateStr;
+    if (!sceneDateCloudBadge || !sceneDateCloudPct) return;
+
+    const [y, m] = dateStr.split("-").map(Number);
+    const available = await fetchAvailableDatesForMonth(y, m - 1, AVAILABILITY_MAXCC);
+    const cc = available[dateStr];
+
+    if (cc === null || cc === undefined) {
+        sceneDateCloudBadge.hidden = true;
+        return;
+    }
+    sceneDateCloudPct.textContent = `${Math.round(cc)}%`;
+    sceneDateCloudBadge.hidden = false;
+}
 
 const calGridEl       = document.getElementById("calGrid");
 const calMonthSelectEl = document.getElementById("calMonthSelect");
@@ -112,6 +171,37 @@ async function fetchAvailableDatesForMonth(year, month, maxcc) {
         console.warn("Could not load scene availability for", ym, err);
         return {};
     }
+}
+
+// Finds the nearest usable (clear-enough) Sentinel-2 date relative to some
+// date, searching back across month boundaries since a clear scene isn't
+// guaranteed within the same month. Used for the zone list's "change since
+// previous scene" NDVI indicator.
+async function findAdjacentClearDate(fromDateStr, direction, maxMonthsBack = 12) {
+    let [y, m] = fromDateStr.split("-").map(Number);
+    m -= 1;
+
+    for (let i = 0; i < maxMonthsBack; i++) {
+        const available = await fetchAvailableDatesForMonth(y, m, AVAILABILITY_MAXCC);
+
+        const candidates = Object.keys(available)
+            .filter(d => direction < 0 ? d < fromDateStr : d > fromDateStr)
+            .filter(d => {
+                const cc = available[d];
+                return cc === null || cc === undefined || cc <= currentMaxCC;
+            })
+            .sort();
+
+        if (candidates.length) {
+            return direction < 0 ? candidates[candidates.length - 1] : candidates[0];
+        }
+
+        m += direction;
+        if (m < 0) { m = 11; y -= 1; }
+        else if (m > 11) { m = 0; y += 1; }
+    }
+
+    return null;
 }
 
 async function renderSceneCalendar() {
@@ -216,9 +306,11 @@ sceneDate.addEventListener("change", () => {
         calendarView = { year: y, month: m - 1 };
     }
     renderSceneCalendar();
+    updateSceneDateBar();
 });
 
 renderSceneCalendar();
+updateSceneDateBar();
 
 syncSceneDateToToday();
 

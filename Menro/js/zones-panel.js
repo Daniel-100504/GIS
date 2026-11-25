@@ -17,7 +17,7 @@ function updateZoneSearchHint(query, matchCount) {
     if (!zoneSearchHintEl) return;
 
     if (!query) {
-        zoneSearchHintEl.textContent = `Type a zone name to filter`;
+        zoneSearchHintEl.textContent = `Type a zone name or barangay to filter`;
     } else if (matchCount === 0) {
         zoneSearchHintEl.textContent = `No zones match "${query}"`;
     } else {
@@ -66,11 +66,14 @@ function renderZoneList(filterText = "") {
     zoneListEl.innerHTML = "";
 
     let filtered = ZONES.filter(zone =>
-        zone.name.toLowerCase().includes(query)
+        zone.name.toLowerCase().includes(query) ||
+        (zone.partner && zone.partner.toLowerCase().includes(query))
     );
 
     if (statusFilter !== "all") {
-        filtered = filtered.filter(zone => zone.status === statusFilter);
+        filtered = filtered.filter(zone =>
+            zone.satNdvi !== null && zone.satNdvi !== undefined && ndviVegetationClass(zone.satNdvi) === statusFilter
+        );
     }
 
     filtered = sortZones(filtered, sortKey);
@@ -105,14 +108,10 @@ function renderZoneList(filterText = "") {
                     ${zone.name}
                 </span>
 
-                <span class="zone-chip ${zone.status}">
-                    ${STATUS_DISPLAY_LABELS[zone.status] || capitalise(zone.status)}
-                </span>
-
             </div>
 
             <div class="zone-meta">
-                ${zone.area !== null ? zone.area + " ha" : "— ha"} • NDVI ${zone.satNdvi !== null && zone.satNdvi !== undefined ? formatNdvi(zone.satNdvi) : "Pending"}
+                ${zone.area !== null ? zone.area + " ha" : "— ha"} • NDVI ${zone.satNdvi !== null && zone.satNdvi !== undefined ? `<span class="${ndviVegetationClass(zone.satNdvi)}">${formatNdvi(zone.satNdvi)}</span>${ndviDeltaArrowHtml(zone)}` : "Pending"}
             </div>
 
         `;
@@ -178,6 +177,7 @@ if (zoneSortEl) {
 }
 
 function selectZone(zone){
+    if (!zone) return;
 
     if (typeof ensureZoneNdviLoaded === "function") ensureZoneNdviLoaded(zone);
 
@@ -215,7 +215,7 @@ function rebuildMapLayers() {
       fillColor: STATUS_COLOR[zone.status],
       fillOpacity: 0,
     });
-    polygon.bindPopup(() => buildPopup(zone));
+    polygon.bindPopup(() => buildPopup(zone), { minWidth: 300, maxWidth: 360 });
     polygon.on("click", () => selectZone(zone));
     polygon.addTo(markersLayer);
     zoneShapes[zone.id] = polygon;

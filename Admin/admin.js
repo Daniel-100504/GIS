@@ -1,5 +1,33 @@
 const ACCOUNTS_API = "../Login/Database/api.php";
 
+// On a phone the sidebar is an off-canvas drawer (hidden by default, shown
+// via the hamburger button) — on a wide screen the button is hidden by CSS
+// and the sidebar is just always visible, so this only ever matters on
+// mobile widths.
+function closeMobileSidebar() {
+  const sidebar = document.getElementById("sidebar");
+  const backdrop = document.getElementById("sidebarBackdrop");
+  if (sidebar) sidebar.classList.remove("open");
+  if (backdrop) backdrop.classList.remove("open");
+}
+
+(function bindSidebarToggle() {
+  const sidebar = document.getElementById("sidebar");
+  const toggleBtn = document.getElementById("btnToggleSidebar");
+  const backdrop = document.getElementById("sidebarBackdrop");
+  if (!sidebar || !toggleBtn) return;
+
+  toggleBtn.addEventListener("click", () => {
+    sidebar.classList.toggle("open");
+    if (backdrop) backdrop.classList.toggle("open");
+  });
+
+  if (backdrop) backdrop.addEventListener("click", closeMobileSidebar);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMobileSidebar();
+  });
+})();
+
 const ROLE_LABEL = { menro: "MENRO", ranger: "Ranger", admin: "Administrator" };
 
 function formatDate(dateStr) {
@@ -260,19 +288,19 @@ function renderAccounts(role, accounts, isFiltered = false) {
 
   body.innerHTML = accounts.map(acc => `
     <tr class="${Number(acc.is_active) ? "" : "row-inactive"}">
-      <td>${escapeHtml(acc.full_name || "—")}</td>
-      <td>${escapeHtml(acc.username)}</td>
-      <td>${escapeHtml(acc.email || "—")}</td>
-      <td>${escapeHtml(formatDate(acc.created_at))}</td>
-      <td>${escapeHtml(formatLastLogin(acc.last_login))}</td>
-      <td>
+      <td data-label="Full Name">${escapeHtml(acc.full_name || "—")}</td>
+      <td data-label="Username">${escapeHtml(acc.username)}</td>
+      <td data-label="Email">${escapeHtml(acc.email || "—")}</td>
+      <td data-label="Created">${escapeHtml(formatDate(acc.created_at))}</td>
+      <td data-label="Last Login">${escapeHtml(formatLastLogin(acc.last_login))}</td>
+      <td data-label="Status">
         <label class="status-toggle">
           <input type="checkbox" data-action="toggleActive" data-role="${role}" data-id="${acc.id}" data-username="${escapeHtml(acc.username)}" ${Number(acc.is_active) ? "checked" : ""}>
           <span class="status-toggle-track"></span>
           <span class="status-toggle-label">${Number(acc.is_active) ? "Active" : "Inactive"}</span>
         </label>
       </td>
-      <td>
+      <td data-label="Actions">
         <div class="account-row-actions">
           <button class="btn-row-action" data-action="edit" data-role="${role}" data-id="${acc.id}" data-username="${escapeHtml(acc.username)}" data-full-name="${escapeHtml(acc.full_name || "")}" data-email="${escapeHtml(acc.email || "")}">Edit</button>
           <button class="btn-row-action" data-action="changeRole" data-role="${role}" data-id="${acc.id}" data-username="${escapeHtml(acc.username)}" data-new-role="${otherRole}">Make ${ROLE_LABEL[otherRole]}</button>
@@ -333,6 +361,8 @@ document.querySelectorAll(".nav-item[data-view]").forEach(btn => {
 
     if (viewId === "timeLogView") loadTimeLog();
     if (viewId === "activityLogView") loadActivityLog();
+
+    closeMobileSidebar();
   });
 });
 
@@ -377,12 +407,12 @@ function renderTimeLog(entries) {
 
   body.innerHTML = entries.map(entry => `
     <tr>
-      <td>${escapeHtml(entry.actor_username)}</td>
-      <td>${escapeHtml(entry.email || "—")}</td>
-      <td>${escapeHtml(ROLE_LABEL[entry.actor_role] || entry.actor_role)}</td>
-      <td>${escapeHtml(formatDate(entry.log_date))}</td>
-      <td>${escapeHtml(formatTimeOnly(entry.time_in))}</td>
-      <td>${escapeHtml(formatTimeOnly(entry.time_out))}</td>
+      <td data-label="Username">${escapeHtml(entry.actor_username)}</td>
+      <td data-label="Email">${escapeHtml(entry.email || "—")}</td>
+      <td data-label="Role">${escapeHtml(ROLE_LABEL[entry.actor_role] || entry.actor_role)}</td>
+      <td data-label="Date">${escapeHtml(formatDate(entry.log_date))}</td>
+      <td data-label="Time In">${escapeHtml(formatTimeOnly(entry.time_in))}</td>
+      <td data-label="Time Out">${escapeHtml(formatTimeOnly(entry.time_out))}</td>
     </tr>
   `).join("");
 }
@@ -428,10 +458,10 @@ function renderActivityLog(entries) {
 
   body.innerHTML = entries.map(entry => `
     <tr>
-      <td>${escapeHtml(formatDateTime(entry.created_at))}</td>
-      <td>${escapeHtml(entry.actor_username)}</td>
-      <td>${escapeHtml(ROLE_LABEL[entry.actor_role] || entry.actor_role)}</td>
-      <td>${escapeHtml(entry.action)}</td>
+      <td data-label="When">${escapeHtml(formatDateTime(entry.created_at))}</td>
+      <td data-label="Actor">${escapeHtml(entry.actor_username)}</td>
+      <td data-label="Role">${escapeHtml(ROLE_LABEL[entry.actor_role] || entry.actor_role)}</td>
+      <td data-label="Action">${escapeHtml(entry.action)}</td>
     </tr>
   `).join("");
 }
@@ -504,10 +534,10 @@ function renderResetRequests(requests) {
 
     return `
       <tr>
-        <td>${escapeHtml(req.username)}</td>
-        <td>${escapeHtml(roleLabel)}</td>
-        <td>${escapeHtml(formatDate(req.requested_at))}${expiredTag}</td>
-        <td>
+        <td data-label="Username">${escapeHtml(req.username)}</td>
+        <td data-label="Role">${escapeHtml(roleLabel)}</td>
+        <td data-label="Requested">${escapeHtml(formatDate(req.requested_at))}${expiredTag}</td>
+        <td data-label="Actions">
           <div class="account-row-actions">
             ${actionBtn}
             <button class="btn-row-action" data-action="dismiss" data-request-id="${req.id}">Dismiss</button>
@@ -1073,15 +1103,6 @@ document.addEventListener("keydown", (e) => {
     nameEl.textContent = displayName;
     avatarEl.textContent = displayName.charAt(0).toUpperCase();
   } catch (err) {
-  }
-})();
-
-(function () {
-  const dateEl = document.getElementById("topbar-date");
-  if (dateEl) {
-    dateEl.textContent = new Date().toLocaleDateString("en-PH", {
-      weekday: "long", year: "numeric", month: "long", day: "numeric"
-    });
   }
 })();
 

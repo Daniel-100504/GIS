@@ -43,6 +43,7 @@
   --shadow-popover: 0 10px 30px rgba(10, 49, 40, 0.18);
 }
 
+
 .data-warning-toast {
   position: fixed;
   bottom: 24px;
@@ -177,4 +178,27 @@
 .btn-confirm-danger:hover {
   background: #a83a2f;
   border-color: #a83a2f;
+}
+
+/* Shared across every page (Login, Admin, MENRO, Ranger) — shown only when
+   the installed app is opened from its home-screen icon, never in a plain
+   browser tab. See the small inline script right after <body> on each page
+   that uses it. */
+.app-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  opacity: 1;
+  transition: opacity 0.4s ease;
+}
+
+.app-splash-hide { opacity: 0; }
+
+.app-splash-logo {
+  width: min(260px, 60vw);
+  height: auto;
 }

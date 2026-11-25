@@ -18,7 +18,51 @@
   const gpsStatusEl = document.getElementById('surveyGpsStatus');
   const btnRetryGps = document.getElementById('btnRetryGps');
   const msgEl = document.getElementById('fieldSurveyMsg');
+  const successBanner = document.getElementById('surveySuccessBanner');
+  const successBannerText = document.getElementById('surveySuccessBannerText');
+
+  function showSuccessBanner(text) {
+    if (!successBanner) return;
+    if (successBannerText) successBannerText.textContent = text;
+    successBanner.hidden = false;
+  }
+  function hideSuccessBanner() {
+    if (successBanner) successBanner.hidden = true;
+  }
   const submitBtn = document.getElementById('btnSubmitSurvey');
+
+  let activeFieldWarning = null;
+
+  function clearFieldWarning() {
+    if (!activeFieldWarning) return;
+    activeFieldWarning.tooltip.remove();
+    activeFieldWarning.cleanup();
+    activeFieldWarning = null;
+  }
+
+  function showFieldWarning(target, message) {
+    clearFieldWarning();
+    msgEl.className = 'field-survey-msg';
+    msgEl.textContent = '';
+    const el = typeof target === 'string' ? document.getElementById(target) : target;
+    if (!el) return;
+    const anchor = el.closest('.edit-field') || el;
+    const tooltip = document.createElement('div');
+    tooltip.className = 'field-warning-tooltip';
+    tooltip.innerHTML = `<span class="field-warning-icon">!</span><span>${escapeHtml(message)}</span>`;
+    anchor.insertAdjacentElement('afterend', tooltip);
+    anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const onInteract = () => clearFieldWarning();
+    el.addEventListener('input', onInteract);
+    el.addEventListener('change', onInteract);
+    activeFieldWarning = {
+      tooltip,
+      cleanup: () => {
+        el.removeEventListener('input', onInteract);
+        el.removeEventListener('change', onInteract);
+      },
+    };
+  }
 
   let currentPosition = null;
 
@@ -30,6 +74,14 @@
   // on the server once the survey is actually submitted.
   const zonePreviewEl = document.getElementById('surveyZonePreview');
   let zonePreviewRequestId = 0;
+
+  // The last zone-match result (or null if it never resolved) — reused by
+  // the Review step (so the ranger can actually see which zone/barangay
+  // this survey will be filed under, not just raw coordinates) and by the
+  // submit confirmation (so a GPS reading far from any mapped zone needs an
+  // explicit hand confirmation instead of silently filing against whatever
+  // zone happened to be nearest).
+  let lastResolvedZone = null;
 
   // Beyond this, the "nearest" zone is probably not actually where the
   // ranger is standing — worth a caveat instead of stating it plainly.
@@ -54,6 +106,9 @@
       if (data && data.zone) {
         const zone = data.zone;
         const isFar = typeof zone.distanceMeters === 'number' && !zone.inside && zone.distanceMeters > ZONE_FAR_THRESHOLD_M;
+        lastResolvedZone = zone;
+        if (typeof setMpaManagerDisplay === 'function') setMpaManagerDisplay(zone.mpaManager);
+        if (typeof setZoneIdentityDisplay === 'function') setZoneIdentityDisplay(zone.name, zone.barangay);
         if (zone.inside) {
           zonePreviewEl.classList.add('survey-zone-preview-inside');
           zonePreviewEl.textContent = `✓ You are in ${zone.name} · Barangay: ${zone.barangay}`;
@@ -64,10 +119,16 @@
           zonePreviewEl.textContent = `Nearest mangrove zone: ${zone.name} · Barangay: ${zone.barangay}`;
         }
       } else {
+        lastResolvedZone = null;
+        if (typeof setMpaManagerDisplay === 'function') setMpaManagerDisplay('');
+        if (typeof setZoneIdentityDisplay === 'function') setZoneIdentityDisplay('', '');
         zonePreviewEl.hidden = true;
       }
     } catch (err) {
+      lastResolvedZone = null;
       if (requestId !== zonePreviewRequestId) return;
+      if (typeof setMpaManagerDisplay === 'function') setMpaManagerDisplay('');
+      if (typeof setZoneIdentityDisplay === 'function') setZoneIdentityDisplay('', '');
       zonePreviewEl.hidden = true;
     }
   }
@@ -146,6 +207,28 @@
 
     gpsMarker = L.marker(startCenter, { draggable: true }).addTo(gpsMap);
 
+    // The real mangrove/protected-area zone shapes, so a ranger moving the
+    // pin can actually see where the zones are instead of just a blank
+    // satellite image — same colors as the MENRO map's own legend (purple
+    // mangroves, gold protected areas). Best-effort: if this fails to load,
+    // the pin and GPS capture still work fine without it.
+    fetch('../Menro/API/mangrove-areas.php?action=list', { credentials: 'same-origin' })
+      .then((res) => res.json())
+      .then((data) => {
+        (data.features || []).forEach((feature) => {
+          const isProtected = feature.properties.category === 'protected_area';
+          L.geoJSON(feature, {
+            style: {
+              color: isProtected ? '#b8860b' : '#8a2be2',
+              weight: 2,
+              fillColor: isProtected ? '#ffd166' : '#8a2be2',
+              fillOpacity: 0.22,
+            },
+          }).bindTooltip(feature.properties.name || (isProtected ? 'Protected area' : 'Mangrove area')).addTo(gpsMap);
+        });
+      })
+      .catch(() => {});
+
     gpsMarker.on('dragend', () => {
       const pos = gpsMarker.getLatLng();
       currentPosition = { lat: pos.lat, lng: pos.lng };
@@ -161,6 +244,20 @@
     setTimeout(() => gpsMap.invalidateSize(), 80);
   }
   window.initSurveyGpsMap = initGpsMap;
+
+  // An installed PWA can report its own window size a beat late right after
+  // launching from the home screen icon (a different startup path than a
+  // normal browser tab) — Leaflet sizes its tiles to whatever size the map's
+  // container reported at creation time, so if that size was wrong at that
+  // moment, the map stays blank/mis-sized until something explicitly tells
+  // it to re-measure. Catching both events here covers it regardless of
+  // which one a given device actually fires.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && gpsMap) setTimeout(() => gpsMap.invalidateSize(), 100);
+  });
+  window.addEventListener('resize', () => {
+    if (gpsMap) gpsMap.invalidateSize();
+  });
 
   function captureGps() {
     if (!navigator.geolocation) {
@@ -187,6 +284,8 @@
   const btnLocateGps = document.getElementById('btnLocateGps');
   if (btnLocateGps) btnLocateGps.addEventListener('click', captureGps);
 
+  const PHOTO_LIMIT = 5;
+
   const photoInputEl = document.getElementById('fs-photo');
   const photoLabelEl = document.getElementById('surveyPhotoLabel');
   const PHOTO_LABEL_DEFAULT = photoLabelEl.textContent;
@@ -196,18 +295,27 @@
   // of adding to it — so photos actually picked so far are tracked by hand
   // here instead of trusting the input to remember earlier picks.
   let selectedPhotoFiles = [];
-  // Existing submission's own photo(s), when editing — read-only for now
-  // (the backend only stores one photo per submission today), shown
-  // alongside whatever new photos get picked in this edit.
+  // Existing submission's own photo(s), when editing — shown alongside
+  // whatever new photos get picked in this edit, counted against the same
+  // 5-photo limit.
   let existingPhotoUrls = [];
 
   function renderPhotoThumbs() {
     if (!surveyPhotosListEl) return;
     surveyPhotosListEl.innerHTML = '';
-    existingPhotoUrls.forEach((url) => {
+    existingPhotoUrls.forEach((url, idx) => {
       const thumb = document.createElement('div');
       thumb.className = 'survey-photo-thumb';
-      thumb.innerHTML = `<img src="${escapeHtml(url)}" alt="Existing photo" />`;
+      thumb.innerHTML = `
+        <img src="${escapeHtml(url)}" alt="Existing photo" />
+        <button type="button" class="survey-photo-thumb-remove" aria-label="Remove photo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      `;
+      thumb.querySelector('.survey-photo-thumb-remove').addEventListener('click', () => {
+        existingPhotoUrls.splice(idx, 1);
+        renderPhotoThumbs();
+      });
       surveyPhotosListEl.appendChild(thumb);
     });
     selectedPhotoFiles.forEach((file, idx) => {
@@ -225,14 +333,145 @@
       });
       surveyPhotosListEl.appendChild(thumb);
     });
-    photoLabelEl.textContent = (selectedPhotoFiles.length > 0 || existingPhotoUrls.length > 0)
-      ? 'Add more photos'
-      : PHOTO_LABEL_DEFAULT;
+    const totalCount = selectedPhotoFiles.length + existingPhotoUrls.length;
+    photoLabelEl.textContent = totalCount > 0 ? 'Add more photos' : PHOTO_LABEL_DEFAULT;
+    if (surveyPhotoPickerEl) surveyPhotoPickerEl.hidden = totalCount >= PHOTO_LIMIT;
   }
 
-  photoInputEl.addEventListener('change', () => {
-    selectedPhotoFiles = selectedPhotoFiles.concat(Array.from(photoInputEl.files || []));
+  const surveyPhotoPickerEl = document.getElementById('surveyPhotoPicker');
+
+  // Draws a rounded rectangle path — ctx.roundRect is modern but not
+  // universal, so a manual quadraticCurveTo path is used as the fallback.
+  function roundRectPath(ctx, x, y, w, h, r) {
+    if (typeof ctx.roundRect === 'function') {
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, r);
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+  }
+
+  // Burns GPS coordinates, date/time, and zone into the image on a canvas
+  // so the geotag is permanently part of the file — survives download,
+  // sharing, and printing, the same way a body-camera timestamp does.
+  // Falls back to the original file if anything goes wrong (no GPS, canvas
+  // error, etc.) so photo capture is never blocked.
+  function geotagPhoto(file) {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        try {
+          // Cap at 1920px on the longest side — full sensor resolution
+          // (12MP+) uses ~150 MB of canvas RAM, which crashes older phones.
+          // 1920px is sharp enough for documentation and reporting.
+          const MAX_DIM = 1920;
+          const scale = Math.min(1, MAX_DIM / Math.max(img.naturalWidth, img.naturalHeight));
+          const canvas = document.createElement('canvas');
+          canvas.width  = Math.round(img.naturalWidth  * scale);
+          canvas.height = Math.round(img.naturalHeight * scale);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+          // Scale stamp to image size so it's readable on both phone
+          // thumbnails (small) and full-resolution exports (large).
+          const base       = Math.max(22, Math.min(Math.round(canvas.width * 0.028), 52));
+          const lineH      = Math.round(base * 1.4);
+          const pad        = Math.round(base * 0.75);
+          const radius     = Math.round(base * 0.45);
+          const margin     = Math.round(base * 0.9);
+
+          const lat  = currentPosition ? currentPosition.lat  : null;
+          const lng  = currentPosition ? currentPosition.lng  : null;
+          const zone = zoneNameDisplayEl ? zoneNameDisplayEl.value.trim() : '';
+
+          const now   = new Date();
+          const hh    = now.getHours();
+          const min   = String(now.getMinutes()).padStart(2, '0');
+          const ampm  = hh >= 12 ? 'PM' : 'AM';
+          const hh12  = String(hh > 12 ? hh - 12 : hh || 12).padStart(2, '0');
+          const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+          const days   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+          const dateStr = `${days[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+
+          const lines = [
+            { text: (zone && zone !== '—') ? zone : 'Calatagan, Batangas', bold: true,  size: Math.round(base * 1.08) },
+            { text: 'Calatagan, Batangas, Philippines',                      bold: false, size: base },
+            { text: lat != null ? `Lat ${lat.toFixed(6)}°  Long ${lng.toFixed(6)}°` : 'GPS location unavailable', bold: false, size: base },
+            { text: `${dateStr}  ${hh12}:${min} ${ampm} GMT+08:00`,          bold: false, size: base },
+            { text: 'AquaGuard · MENRO Calatagan',                           bold: false, size: Math.round(base * 0.88) },
+          ];
+
+          // Measure widest line to size the panel
+          let maxW = 0;
+          lines.forEach((l) => {
+            ctx.font = `${l.bold ? 'bold' : 'normal'} ${l.size}px sans-serif`;
+            maxW = Math.max(maxW, ctx.measureText(l.text).width);
+          });
+
+          const panelW = maxW + pad * 2;
+          const panelH = lines.length * lineH + pad * 2 - Math.round(lineH * 0.2);
+          const panelX = canvas.width  - panelW - margin;
+          const panelY = canvas.height - panelH - margin;
+
+          // Semi-transparent dark background
+          ctx.save();
+          ctx.globalAlpha = 0.70;
+          ctx.fillStyle   = '#0a0a0a';
+          roundRectPath(ctx, panelX, panelY, panelW, panelH, radius);
+          ctx.fill();
+          ctx.restore();
+
+          // Text lines
+          let textY = panelY + pad + lines[0].size;
+          lines.forEach((l) => {
+            ctx.font      = `${l.bold ? 'bold' : 'normal'} ${l.size}px sans-serif`;
+            ctx.fillStyle = '#ffffff';
+            ctx.globalAlpha = 1;
+            ctx.fillText(l.text, panelX + pad, textY);
+            textY += lineH;
+          });
+
+          canvas.toBlob((blob) => {
+            if (!blob) { resolve(file); return; }
+            resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg', lastModified: Date.now() }));
+          }, 'image/jpeg', 0.92);
+        } catch (err) {
+          resolve(file);
+        }
+      };
+      img.src = url;
+    });
+  }
+
+  photoInputEl.addEventListener('change', async () => {
+    const picked = Array.from(photoInputEl.files || []);
+    // iOS lets the camera switch to video mode even when accept="image/*" is set;
+    // reject any non-image file silently so videos never land in selectedPhotoFiles.
+    const imagesOnly = picked.filter(f => f.type.startsWith('image/'));
+    const MAX_PHOTO_BYTES = 20 * 1024 * 1024; // 20 MB
+    const tooBig = imagesOnly.filter(f => f.size > MAX_PHOTO_BYTES);
+    if (tooBig.length > 0) {
+      alert(`${tooBig.length} photo(s) are too large to upload (over 20 MB each). Please reduce the file size or use a lower camera resolution, then try again.`);
+    }
+    const valid = imagesOnly.filter(f => f.size <= MAX_PHOTO_BYTES);
+    const room = PHOTO_LIMIT - (selectedPhotoFiles.length + existingPhotoUrls.length);
+    const toAdd = valid.slice(0, Math.max(0, room));
     photoInputEl.value = '';
+    const geotagged = await Promise.all(toAdd.map(geotagPhoto));
+    selectedPhotoFiles = selectedPhotoFiles.concat(geotagged);
     renderPhotoThumbs();
   });
 
@@ -242,18 +481,60 @@
     renderPhotoThumbs();
   }
 
-  // A canopy cover reading is a percentage of the plot, so anything past
-  // 100 isn't a real reading — the field's own min/max attributes only
-  // affect a native browser form-submit, which this custom step wizard
-  // never actually triggers, so nothing stopped 150 from being typed in
-  // and carried straight through to submission without this.
-  const canopyCoverInput = document.getElementById('fs-canopy-cover');
-  if (canopyCoverInput) {
-    canopyCoverInput.addEventListener('input', () => {
-      const val = parseFloat(canopyCoverInput.value);
-      if (!isNaN(val) && val > 100) canopyCoverInput.value = '100';
+  const videoInputEl = document.getElementById('fs-video');
+  const videoLabelEl = document.getElementById('surveyVideoLabel');
+  const VIDEO_LABEL_DEFAULT = videoLabelEl ? videoLabelEl.textContent : '';
+  const surveyVideoListEl = document.getElementById('surveyVideoList');
+  const surveyVideoPickerEl = document.getElementById('surveyVideoPicker');
+  let selectedVideoFile = null;
+  let existingVideoUrl = null;
+
+  function renderVideoThumb() {
+    if (!surveyVideoListEl) return;
+    surveyVideoListEl.innerHTML = '';
+    const url = selectedVideoFile ? URL.createObjectURL(selectedVideoFile) : existingVideoUrl;
+    const name = selectedVideoFile ? selectedVideoFile.name : (existingVideoUrl ? 'Current video' : '');
+    if (url) {
+      const thumb = document.createElement('div');
+      thumb.className = 'survey-photo-thumb survey-video-thumb';
+      thumb.innerHTML = `
+        <video src="${escapeHtml(url)}" muted></video>
+        <button type="button" class="survey-photo-thumb-remove" aria-label="Remove video">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      `;
+      thumb.querySelector('.survey-photo-thumb-remove').addEventListener('click', () => {
+        selectedVideoFile = null;
+        existingVideoUrl = null;
+        renderVideoThumb();
+      });
+      surveyVideoListEl.appendChild(thumb);
+    }
+    if (videoLabelEl) videoLabelEl.textContent = name ? 'Replace video' : VIDEO_LABEL_DEFAULT;
+    if (surveyVideoPickerEl) surveyVideoPickerEl.hidden = !!url;
+  }
+
+  if (videoInputEl) {
+    videoInputEl.addEventListener('change', () => {
+      const file = (videoInputEl.files || [])[0];
+      const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // 100 MB
+      if (file && file.size > MAX_VIDEO_BYTES) {
+        alert('The video is too large to upload (over 100 MB). Please trim it or record a shorter clip, then try again.');
+        videoInputEl.value = '';
+        return;
+      }
+      if (file) selectedVideoFile = file;
+      videoInputEl.value = '';
+      renderVideoThumb();
     });
   }
+
+  function resetVideo() {
+    selectedVideoFile = null;
+    existingVideoUrl = null;
+    renderVideoThumb();
+  }
+
 
   // Fauna step, part 1: mollusks found — a repeatable table like Vegetation's
   // species table, but genuinely optional and starting completely empty (no
@@ -331,6 +612,7 @@
       updateMolluskOtherVisibility(row);
     });
     row.querySelector('.mollusk-row-remove').addEventListener('click', () => removeMolluskRow(row));
+
     if (isCustom) {
       const otherInput = row.querySelector('.mollusk-row-other');
       otherInput.hidden = false;
@@ -381,9 +663,47 @@
   const threatCheckboxGridEl = document.getElementById('threatCheckboxGrid');
   const threatOtherFieldEl = document.getElementById('threatOtherField');
   const threatOtherInputEl = document.getElementById('fs-observed-threats-other');
+  const customThreatsContainerEl = document.getElementById('customThreatsContainer');
+  const btnAddCustomThreat = document.getElementById('btnAddCustomThreat');
   const threatCheckboxes = threatCheckboxGridEl
     ? Array.from(threatCheckboxGridEl.querySelectorAll('.threat-checkbox-input'))
     : [];
+
+  // Known predefined slugs — values not in this set when loading a saved
+  // submission are custom threats added via the "+" button.
+  const PREDEFINED_THREAT_SLUGS = new Set([
+    'none_observed','charcoal_making','cutting','dieback','pests','garbage',
+    'erosion','land_conversion','encroachment','illegal_fishing',
+    'sand_gravel_extraction','siltation','storm_damage','fire',
+    'pollution___oil_spill','__other__',
+  ]);
+
+  function addCustomThreatRow(value) {
+    if (!customThreatsContainerEl) return;
+    const row = document.createElement('div');
+    row.className = 'custom-threat-row';
+    row.innerHTML = `
+      <input type="text" class="custom-threat-input" placeholder="Threat name" value="${escapeHtml(value || '')}" />
+      <button type="button" class="custom-threat-remove" aria-label="Remove">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>`;
+    row.querySelector('.custom-threat-remove').addEventListener('click', () => row.remove());
+    // Adding any custom threat should uncheck "None observed"
+    row.querySelector('.custom-threat-input').addEventListener('input', () => {
+      const noneBox = threatCheckboxes.find((b) => b.value === 'none_observed');
+      if (noneBox) noneBox.checked = false;
+    });
+    customThreatsContainerEl.appendChild(row);
+    row.querySelector('.custom-threat-input').focus();
+  }
+
+  if (btnAddCustomThreat) {
+    btnAddCustomThreat.addEventListener('click', () => {
+      const noneBox = threatCheckboxes.find((b) => b.value === 'none_observed');
+      if (noneBox) noneBox.checked = false;
+      addCustomThreatRow('');
+    });
+  }
 
   function updateThreatOtherVisibility() {
     const otherBox = threatCheckboxes.find((b) => b.value === '__other__');
@@ -396,6 +716,7 @@
     box.addEventListener('change', () => {
       if (box.checked && box.value === 'none_observed') {
         threatCheckboxes.forEach((b) => { if (b !== box) b.checked = false; });
+        if (customThreatsContainerEl) customThreatsContainerEl.innerHTML = '';
       } else if (box.checked && box.value !== 'none_observed') {
         const noneBox = threatCheckboxes.find((b) => b.value === 'none_observed');
         if (noneBox) noneBox.checked = false;
@@ -405,26 +726,61 @@
   });
 
   function collectSelectedThreats() {
-    return threatCheckboxes.filter((b) => b.checked).map((b) => b.value);
+    const checked = threatCheckboxes.filter((b) => b.checked).map((b) => b.value);
+    const custom = customThreatsContainerEl
+      ? Array.from(customThreatsContainerEl.querySelectorAll('.custom-threat-input'))
+          .map((inp) => inp.value.trim()).filter(Boolean)
+      : [];
+    return [...checked, ...custom];
   }
 
   function resetThreatCheckboxes() {
     threatCheckboxes.forEach((b) => { b.checked = false; });
+    if (customThreatsContainerEl) customThreatsContainerEl.innerHTML = '';
     updateThreatOtherVisibility();
   }
 
   function populateThreatCheckboxes(values) {
     const set = new Set(values || []);
     threatCheckboxes.forEach((b) => { b.checked = set.has(b.value); });
+    if (customThreatsContainerEl) customThreatsContainerEl.innerHTML = '';
+    (values || []).filter((v) => !PREDEFINED_THREAT_SLUGS.has(v)).forEach(addCustomThreatRow);
     updateThreatOtherVisibility();
   }
 
+  // Read-only now — MENRO sets MPA manager when they map the area, not the
+  // ranger. This just displays whatever updateZonePreview() resolved for the
+  // ranger's current GPS match (or, when editing a past submission, whatever
+  // was already on record for it).
+  const mpaManagerDisplayEl = document.getElementById('fs-mpa-manager-display');
+  const zoneNameDisplayEl = document.getElementById('fs-zone-name-display');
+  const zoneBarangayDisplayEl = document.getElementById('fs-zone-barangay-display');
+
+  function mpaManagerValue() {
+    return mpaManagerDisplayEl ? mpaManagerDisplayEl.value : '';
+  }
+
+  function setMpaManagerDisplay(value) {
+    if (mpaManagerDisplayEl) mpaManagerDisplayEl.value = value || '—';
+  }
+
+  function setZoneIdentityDisplay(name, barangay) {
+    if (zoneNameDisplayEl) zoneNameDisplayEl.value = name || '—';
+    if (zoneBarangayDisplayEl) zoneBarangayDisplayEl.value = barangay || '—';
+  }
+
+  function resetMpaManager() {
+    setMpaManagerDisplay('');
+    setZoneIdentityDisplay('', '');
+  }
+
   function resetSpeciesFields() {
-    resetSpeciesTable();
+    resetPlotBlocks();
     resetMolluskTable();
     resetThreatCheckboxes();
     resetPhotos();
-    resetWaterQualityFields();
+    resetVideo();
+    resetMpaManager();
   }
 
   // The Vegetation step's species table — one row per species actually found
@@ -432,49 +788,44 @@
   // of the old single fixed "main species" + "seedling species" + "sapling
   // species" fields. A species already used in one row is removed from every
   // other row's dropdown, since the same species can't be logged twice.
-  const speciesTableRowsEl = document.getElementById('speciesTableRows');
-  const btnAddSpecies = document.getElementById('btnAddSpecies');
   let speciesRowSeq = 0;
 
-  function buildSpeciesRowOptionsHtml(selectedValue) {
-    const used = new Set(
-      Array.from(speciesTableRowsEl.querySelectorAll('.species-row-select'))
-        .map((sel) => sel.value)
-        .filter((v) => v && v !== selectedValue)
-    );
+  // Each row now represents one individually measured tree (its own Code,
+  // Height, GBH, Canopy), not a species-wide total, so the same species can
+  // legitimately appear in more than one row within a plot — e.g. two
+  // separate Kalapinay trees with different measurements. Every row's list
+  // is the same full list, nothing excluded for being used elsewhere.
+  function buildSpeciesRowOptionsHtml(rowsEl, selectedValue) {
+    const optionsFor = (list) => list
+      .map((sp) => {
+        const escaped = sp.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        return `<option value="${escaped}"${sp === selectedValue ? ' selected' : ''}>${escaped}</option>`;
+      })
+      .join('');
+    // Grouped so it's visually obvious where true mangroves end and
+    // associate/other flora begins — previously one flat alphabetical list
+    // scattered e.g. Bakawan and Pagatpat among ~40 non-mangrove species.
     let html = '<option value="">Select…</option>';
-    MANGROVE_SPECIES_LIST.forEach((sp) => {
-      if (used.has(sp)) return;
-      const escaped = sp.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-      html += `<option value="${escaped}"${sp === selectedValue ? ' selected' : ''}>${escaped}</option>`;
-    });
-    // "Other" stays available on every row — several rows can each be a
-    // different unlisted species, unlike a real listed one that's used up.
+    html += `<optgroup label="True Mangroves">${optionsFor(TRUE_MANGROVE_SPECIES_LIST)}</optgroup>`;
+    html += `<optgroup label="Associates / Other">${optionsFor(ASSOCIATE_SPECIES_LIST)}</optgroup>`;
     html += `<option value="__other__"${selectedValue === '__other__' ? ' selected' : ''}>Other (specify)</option>`;
     return html;
   }
 
-  function refreshSpeciesRowOptions() {
-    speciesTableRowsEl.querySelectorAll('.species-row-select').forEach((sel) => {
+  function refreshSpeciesRowOptions(rowsEl) {
+    rowsEl.querySelectorAll('.species-row-select').forEach((sel) => {
       const current = sel.value;
-      sel.innerHTML = buildSpeciesRowOptionsHtml(current);
+      sel.innerHTML = buildSpeciesRowOptionsHtml(rowsEl, current);
     });
-    updateAddSpeciesButtonState();
-    updateRemoveSpeciesButtonsVisibility();
-  }
-
-  function updateAddSpeciesButtonState() {
-    // "Other" makes the list effectively unlimited, so there's always room
-    // for one more row.
-    if (btnAddSpecies) btnAddSpecies.disabled = false;
+    updateRemoveSpeciesButtonsVisibility(rowsEl);
   }
 
   // The remove (trash) button only makes sense once there's more than one
   // row — a lone row should stay in place so the table is never fully empty
   // mid-edit, even though a genuinely empty table is allowed once the ranger
   // hasn't added anything yet at all.
-  function updateRemoveSpeciesButtonsVisibility() {
-    const rows = speciesTableRowsEl.querySelectorAll('.species-row');
+  function updateRemoveSpeciesButtonsVisibility(rowsEl) {
+    const rows = rowsEl.querySelectorAll('.species-row');
     rows.forEach((row) => {
       const btn = row.querySelector('.species-row-remove');
       if (btn) btn.hidden = rows.length <= 1;
@@ -490,7 +841,7 @@
     else otherInput.value = '';
   }
 
-  function createSpeciesRowEl(prefill) {
+  function createSpeciesRowEl(rowsEl, prefill) {
     const rowId = ++speciesRowSeq;
     const row = document.createElement('div');
     row.className = 'species-row';
@@ -515,20 +866,53 @@
       <button type="button" class="species-row-remove" aria-label="Remove species row" title="Remove">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
       </button>
+      <div class="species-row-measurements">
+        <label>
+          <span>Code</span>
+          <input type="text" class="species-row-measure" data-field="code" placeholder="e.g. P1M1" aria-label="Tree code" readonly />
+        </label>
+        <label>
+          <span>Height (m)</span>
+          <input type="number" class="species-row-measure" data-field="height" step="any" min="0" placeholder="0" aria-label="Height in meters" />
+        </label>
+        <label>
+          <span>GBH (cm)</span>
+          <input type="number" class="species-row-measure" data-field="gbh" step="any" min="0" placeholder="0" aria-label="Girth at breast height in centimeters" />
+        </label>
+        <label>
+          <span>Canopy L (m)</span>
+          <input type="number" class="species-row-measure" data-field="canopyLength" step="any" min="0" placeholder="0" aria-label="Canopy length in meters" />
+        </label>
+        <label>
+          <span>Canopy W (m)</span>
+          <input type="number" class="species-row-measure" data-field="canopyWidth" step="any" min="0" placeholder="0" aria-label="Canopy width in meters" />
+        </label>
+      </div>
     `;
     const select = row.querySelector('.species-row-select');
     const isKnown = prefill && prefill.species && MANGROVE_SPECIES_LIST.includes(prefill.species);
     const isCustom = prefill && prefill.species && !isKnown;
-    select.innerHTML = buildSpeciesRowOptionsHtml(isCustom ? '__other__' : (prefill ? prefill.species : ''));
+    select.innerHTML = buildSpeciesRowOptionsHtml(rowsEl, isCustom ? '__other__' : (prefill ? prefill.species : ''));
     select.addEventListener('change', () => {
-      refreshSpeciesRowOptions();
+      refreshSpeciesRowOptions(rowsEl);
       updateSpeciesOtherVisibility(row);
     });
-    row.querySelector('.species-row-remove').addEventListener('click', () => removeSpeciesRow(row));
+    row.querySelector('.species-row-remove').addEventListener('click', () => removeSpeciesRow(rowsEl, row));
     if (isCustom) {
       const otherInput = row.querySelector('.species-row-other');
       otherInput.hidden = false;
       otherInput.value = prefill.species;
+    }
+
+    // Code defaults to "P{plot no.}M{tree number in this plot}" (e.g.
+    // P1M1, P1M2…), matching the real sheet's own tagging convention —
+    // still editable, and only applied when the plot's own number is
+    // known and nothing more specific was already prefilled.
+    const plotBlockEl = rowsEl.closest('.plot-block');
+    const plotNoForCode = plotBlockEl ? (plotBlockEl.querySelector('.plot-no-input').value || '').trim() : '';
+    if (plotNoForCode) {
+      const rowIndexForCode = rowsEl.querySelectorAll('.species-row').length + 1;
+      row.querySelector('.species-row-measure[data-field="code"]').value = `P${plotNoForCode}M${rowIndexForCode}`;
     }
 
     if (prefill) {
@@ -539,135 +923,224 @@
       setCount('tree', prefill.treeCount);
       setCount('sapling', prefill.saplingCount);
       setCount('seedling', prefill.seedlingCount);
+      const setMeasure = (field, value) => {
+        const el = row.querySelector(`.species-row-measure[data-field="${field}"]`);
+        if (el && value !== null && value !== undefined && value !== '') el.value = value;
+      };
+      setMeasure('code', prefill.code);
+      setMeasure('height', prefill.height);
+      setMeasure('gbh', prefill.gbh);
+      setMeasure('canopyLength', prefill.canopyLength);
+      setMeasure('canopyWidth', prefill.canopyWidth);
     }
     return row;
   }
 
-  function addSpeciesRow(prefill) {
-    const row = createSpeciesRowEl(prefill);
-    speciesTableRowsEl.appendChild(row);
-    updateAddSpeciesButtonState();
-    updateRemoveSpeciesButtonsVisibility();
+  function addSpeciesRow(rowsEl, prefill) {
+    const row = createSpeciesRowEl(rowsEl, prefill);
+    rowsEl.appendChild(row);
+    updateRemoveSpeciesButtonsVisibility(rowsEl);
     return row;
   }
 
-  function removeSpeciesRow(row) {
-    if (speciesTableRowsEl.querySelectorAll('.species-row').length <= 1) return;
+  // Codes are read-only and generated purely from position (P{plot}M{n}),
+  // so removing a row from the middle has to renumber everything after it
+  // right away — otherwise a gap or a duplicate code would be stuck there
+  // with no way for the ranger to fix it by hand.
+  function renumberSpeciesRowCodes(rowsEl) {
+    const plotBlockEl = rowsEl.closest('.plot-block');
+    const plotNo = plotBlockEl ? (plotBlockEl.querySelector('.plot-no-input').value || '').trim() : '';
+    if (!plotNo) return;
+    rowsEl.querySelectorAll('.species-row').forEach((row, i) => {
+      const codeInput = row.querySelector('.species-row-measure[data-field="code"]');
+      if (codeInput) codeInput.value = `P${plotNo}M${i + 1}`;
+    });
+  }
+
+  function removeSpeciesRow(rowsEl, row) {
+    if (rowsEl.querySelectorAll('.species-row').length <= 1) return;
     row.remove();
-    refreshSpeciesRowOptions();
+    refreshSpeciesRowOptions(rowsEl);
+    renumberSpeciesRowCodes(rowsEl);
   }
 
-  function resetSpeciesTable() {
-    speciesTableRowsEl.innerHTML = '';
-    addSpeciesRow();
+  function resetSpeciesTable(rowsEl) {
+    rowsEl.innerHTML = '';
+    addSpeciesRow(rowsEl);
   }
-
-  if (btnAddSpecies) btnAddSpecies.addEventListener('click', () => addSpeciesRow());
-  if (speciesTableRowsEl) resetSpeciesTable();
 
   // One row per species that actually has a species chosen; rows left on
   // "Select…" are ignored rather than treated as an error, so an unused
   // blank row (e.g. after removing others) doesn't block submission.
-  function collectSpeciesTableRows() {
+  function collectSpeciesTableRows(rowsEl) {
     const rows = [];
-    speciesTableRowsEl.querySelectorAll('.species-row').forEach((row) => {
+    rowsEl.querySelectorAll('.species-row').forEach((row) => {
       const selectVal = row.querySelector('.species-row-select').value;
       const species = selectVal === '__other__' ? row.querySelector('.species-row-other').value.trim() : selectVal;
       if (!species) return;
       const getCount = (field) => row.querySelector(`.species-row-count[data-field="${field}"]`).value;
+      const getMeasure = (field) => row.querySelector(`.species-row-measure[data-field="${field}"]`).value;
       rows.push({
         species,
         treeCount: getCount('tree'),
         saplingCount: getCount('sapling'),
         seedlingCount: getCount('seedling'),
+        code: getMeasure('code'),
+        height: getMeasure('height'),
+        gbh: getMeasure('gbh'),
+        canopyLength: getMeasure('canopyLength'),
+        canopyWidth: getMeasure('canopyWidth'),
       });
     });
     return rows;
   }
 
-  function populateSpeciesTable(rows) {
-    speciesTableRowsEl.innerHTML = '';
+  function populateSpeciesTable(rowsEl, rows) {
+    rowsEl.innerHTML = '';
     const real = (rows || []).filter((r) => r && r.species);
     if (real.length === 0) {
-      addSpeciesRow();
+      addSpeciesRow(rowsEl);
       return;
     }
-    real.forEach((r) => addSpeciesRow(r));
+    real.forEach((r) => addSpeciesRow(rowsEl, r));
+  }
+
+  // Plots & Species — a repeatable block per plot visited during this
+  // survey (matches the real MENRO sheet, where one visit can measure
+  // several numbered plots). Each block owns its own species table, built
+  // from the same row machinery above, just scoped to that block's own
+  // rows container instead of one shared table.
+  const plotBlocksContainerEl = document.getElementById('plotBlocksContainer');
+  const btnAddPlot = document.getElementById('btnAddPlot');
+  let plotBlockSeq = 0;
+
+  function updatePlotBlockRemoveVisibility() {
+    const blocks = plotBlocksContainerEl.querySelectorAll('.plot-block');
+    blocks.forEach((block) => {
+      const btn = block.querySelector('.plot-block-remove');
+      if (btn) btn.hidden = blocks.length <= 1;
+    });
+  }
+
+  function createPlotBlockEl(prefill) {
+    const blockId = ++plotBlockSeq;
+    const block = document.createElement('div');
+    block.className = 'plot-block';
+    block.dataset.blockId = String(blockId);
+    block.innerHTML = `
+      <div class="plot-block-header">
+        <label class="edit-field">
+          <span>Plot No.</span>
+          <input type="text" class="plot-no-input" placeholder="e.g. 1" readonly />
+        </label>
+        <label class="edit-field">
+          <span>Plot size (m)</span>
+          <div class="plot-size-inputs">
+            <input type="number" class="plot-size-length" placeholder="Length" min="0" step="0.1" />
+            <span class="plot-size-sep">×</span>
+            <input type="number" class="plot-size-width" placeholder="Width" min="0" step="0.1" />
+          </div>
+        </label>
+        <button type="button" class="plot-block-remove" aria-label="Remove this plot" title="Remove">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+      <div class="species-table-wrap">
+        <div class="species-table-header">
+          <span>Species <em>*</em></span>
+          <span>Trees</span>
+          <span>Saplings</span>
+          <span>Seedlings</span>
+          <span></span>
+        </div>
+        <div class="species-table-rows"></div>
+      </div>
+      <button type="button" class="btn-add-species">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add species
+      </button>
+    `;
+    // Plot No. defaults to this plot's position (1, 2, 3…) — still editable,
+    // but matches the order plots are measured in for the common case.
+    block.querySelector('.plot-no-input').value = (prefill && prefill.plotNo) ? prefill.plotNo : String(blockId);
+    if (prefill && prefill.plotSize) {
+      const m = /^(\d+(?:\.\d+)?)\s*[mx×]\s*(\d+(?:\.\d+)?)/i.exec(prefill.plotSize);
+      if (m) {
+        block.querySelector('.plot-size-length').value = m[1];
+        block.querySelector('.plot-size-width').value = m[2];
+      }
+    }
+    const rowsEl = block.querySelector('.species-table-rows');
+    block.querySelector('.btn-add-species').addEventListener('click', () => addSpeciesRow(rowsEl));
+    if (prefill && prefill.speciesRows && prefill.speciesRows.length) {
+      populateSpeciesTable(rowsEl, prefill.speciesRows);
+    } else {
+      resetSpeciesTable(rowsEl);
+    }
+    block.querySelector('.plot-block-remove').addEventListener('click', () => removePlotBlock(block));
+    return block;
+  }
+
+  function addPlotBlock(prefill) {
+    const block = createPlotBlockEl(prefill);
+    plotBlocksContainerEl.appendChild(block);
+    updatePlotBlockRemoveVisibility();
+    return block;
+  }
+
+  // Same reasoning as renumberSpeciesRowCodes — Plot No. is read-only and
+  // just reflects position, so removing a plot from the middle has to shift
+  // every plot after it (and every one of their species codes, since those
+  // are built from the plot's own number) down by one right away.
+  function renumberPlotBlocks() {
+    Array.from(plotBlocksContainerEl.querySelectorAll('.plot-block')).forEach((block, i) => {
+      block.querySelector('.plot-no-input').value = String(i + 1);
+      renumberSpeciesRowCodes(block.querySelector('.species-table-rows'));
+    });
+  }
+
+  function removePlotBlock(block) {
+    if (plotBlocksContainerEl.querySelectorAll('.plot-block').length <= 1) return;
+    block.remove();
+    updatePlotBlockRemoveVisibility();
+    renumberPlotBlocks();
+  }
+
+  function resetPlotBlocks() {
+    plotBlocksContainerEl.innerHTML = '';
+    plotBlockSeq = 0;
+    addPlotBlock();
+  }
+
+  if (btnAddPlot) btnAddPlot.addEventListener('click', () => addPlotBlock());
+  if (plotBlocksContainerEl) resetPlotBlocks();
+
+  function collectPlotBlocks() {
+    return Array.from(plotBlocksContainerEl.querySelectorAll('.plot-block')).map((block) => ({
+      plotNo: block.querySelector('.plot-no-input').value,
+      plotSize: (() => {
+        const l = block.querySelector('.plot-size-length').value.trim();
+        const w = block.querySelector('.plot-size-width').value.trim();
+        return (l && w) ? `${l}x${w}` : (l || w || '');
+      })(),
+      speciesRows: collectSpeciesTableRows(block.querySelector('.species-table-rows')),
+    }));
+  }
+
+  function populatePlotBlocks(plots) {
+    plotBlocksContainerEl.innerHTML = '';
+    plotBlockSeq = 0;
+    const real = (plots || []).filter((p) => p && (p.plotNo || (p.speciesRows && p.speciesRows.length)));
+    if (real.length === 0) {
+      addPlotBlock();
+      return;
+    }
+    real.forEach((p) => addPlotBlock(p));
   }
 
   function setFieldValue(id, value) {
     const el = document.getElementById(id);
     if (el) el.value = value === null || value === undefined ? '' : value;
-  }
-
-  // Water Quality, part 2: aquafarm — the follow-up questions (location,
-  // distance, discharge direction) only make sense once an aquafarm is
-  // actually confirmed nearby, so they stay hidden and get cleared the
-  // moment the answer changes back to No.
-  const aquafarmSelect = document.getElementById('fs-aquafarm-activity');
-  const aquafarmBoxEl = document.getElementById('aquafarmBox');
-  const btnAquafarmLocation = document.getElementById('btnAquafarmLocation');
-  const aquafarmLocationOutEl = document.getElementById('aquafarmLocationOut');
-  let aquafarmLocation = null;
-
-  function resetAquafarmLocation() {
-    aquafarmLocation = null;
-    if (aquafarmLocationOutEl) aquafarmLocationOutEl.textContent = '';
-  }
-
-  aquafarmSelect.addEventListener('change', () => {
-    const isYes = aquafarmSelect.value === 'yes';
-    aquafarmBoxEl.hidden = !isYes;
-    if (!isYes) {
-      resetAquafarmLocation();
-      setFieldValue('fs-aquafarm-name', '');
-      setFieldValue('fs-aquafarm-distance', '');
-      setFieldValue('fs-discharge-toward-mangroves', '');
-    }
-  });
-
-  if (btnAquafarmLocation) {
-    btnAquafarmLocation.addEventListener('click', () => {
-      if (!navigator.geolocation) {
-        aquafarmLocationOutEl.textContent = 'Location is not supported on this device.';
-        return;
-      }
-      aquafarmLocationOutEl.textContent = 'Getting location…';
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          aquafarmLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          aquafarmLocationOutEl.textContent = `${aquafarmLocation.lat.toFixed(5)}, ${aquafarmLocation.lng.toFixed(5)}`;
-        },
-        () => {
-          aquafarmLocationOutEl.textContent = 'Could not get your location. Check location permission.';
-        },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
-      );
-    });
-  }
-
-  // Water Quality, part 3: instrument readings — collapsed by default since
-  // most rangers won't have the instruments on hand; opening it never clears
-  // whatever was already typed in, only hides it again.
-  const btnToggleInstruments = document.getElementById('btnToggleInstruments');
-  const btnToggleInstrumentsLabel = document.getElementById('btnToggleInstrumentsLabel');
-  const instrumentReadingsPanel = document.getElementById('instrumentReadingsPanel');
-  const instrumentReadingsHelp = document.getElementById('instrumentReadingsHelp');
-  if (btnToggleInstruments) {
-    btnToggleInstruments.addEventListener('click', () => {
-      const opening = !instrumentReadingsPanel.classList.contains('active');
-      instrumentReadingsPanel.classList.toggle('active', opening);
-      if (instrumentReadingsHelp) instrumentReadingsHelp.hidden = !opening;
-      btnToggleInstrumentsLabel.textContent = opening ? 'Hide instrument readings' : 'Add instrument readings (optional)';
-    });
-  }
-
-  function resetWaterQualityFields() {
-    aquafarmBoxEl.hidden = true;
-    resetAquafarmLocation();
-    if (instrumentReadingsPanel) instrumentReadingsPanel.classList.remove('active');
-    if (instrumentReadingsHelp) instrumentReadingsHelp.hidden = true;
-    if (btnToggleInstrumentsLabel) btnToggleInstrumentsLabel.textContent = 'Add instrument readings (optional)';
   }
 
   const todayInput = document.getElementById('fs-inspection-date');
@@ -685,7 +1158,7 @@
   const btnNext = document.getElementById('btnSurveyNext');
   const btnBack = document.getElementById('btnSurveyBack');
   const btnCancel = document.getElementById('btnSurveyCancel');
-  const STEP_NAMES = ['Site Information', 'Vegetation', 'Fauna', 'Water Quality', 'Review'];
+  const STEP_NAMES = ['Site Information', 'Vegetation', 'Fauna & Threats', 'Water Quality', 'Review'];
   const TOTAL_STEPS = stepPanels.length;
   let currentStep = 1;
   let maxReachedStep = 1;
@@ -774,16 +1247,12 @@
     return `<span class="view-badge ${info.cls}">${escapeHtml(info.label)}</span>`;
   }
 
-  // .view-grid is a 3-column grid — a row left with only 1 or 2 real fields
-  // in it (e.g. right before a full-width field, or at the end of the list)
-  // has no element in its last column(s), so nothing paints a border or
-  // background there and the grid's box looks cut off. Blank filler cells
-  // close out that row so every row looks like a complete, evenly bordered
-  // row regardless of how many real fields are in it.
-  function reviewGridPad(fieldCount) {
-    const remainder = fieldCount % 3;
-    if (remainder === 0) return '';
-    return '<div class="view-field view-field-blank"></div>'.repeat(3 - remainder);
+  // .view-grid used to be a 3-column grid, where a row left with only 1 or 2
+  // real fields needed blank filler cells to close out its border evenly.
+  // It's a plain stacked list now, so every field is already its own
+  // full-width row — nothing to pad.
+  function reviewGridPad() {
+    return '';
   }
 
   // Same icon glyphs as this step's own header in the wizard above, so the
@@ -802,25 +1271,49 @@
   }
 
   function buildReviewHtml() {
+    // Zone/barangay, not just raw coordinates — that's the thing most worth
+    // double-checking before submitting (it's what the survey actually gets
+    // filed against), and raw GPS numbers don't tell a ranger whether that
+    // lookup landed somewhere sensible.
+    // Shows the distance too when it's not a clean "inside" match — "Area 23"
+    // alone read as a confirmed fact even when it was actually 10.4 km away
+    // and the ranger hadn't ticked the override checkbox yet.
+    const zoneLabel = lastResolvedZone
+      ? (lastResolvedZone.inside || typeof lastResolvedZone.distanceMeters !== 'number'
+          ? lastResolvedZone.name
+          : `${lastResolvedZone.name} (${formatDistance(lastResolvedZone.distanceMeters)} away)`)
+      : null;
     const siteFields = [
       reviewField('Inspection date', fieldVal('fs-inspection-date')),
       reviewField('GPS location', currentPosition ? `${currentPosition.lat.toFixed(5)}, ${currentPosition.lng.toFixed(5)}` : null),
+      reviewField('Nearest mangrove zone', zoneLabel),
+      reviewField('Barangay', lastResolvedZone ? lastResolvedZone.barangay : null),
     ];
     const siteHtml = `<div class="view-grid">${siteFields.join('')}${reviewGridPad(siteFields.length)}</div>`;
 
-    // Mirrors the Vegetation step's own 3 numbered groups (Canopy / Species
-    // Found in Plot / Overall Health), same reasoning as the Water Quality
+    // Mirrors the Vegetation step's own numbered groups (Area & MPA Manager /
+    // Plots & Species / Overall Health), same reasoning as the Water Quality
     // section below.
-    const canopyHtml = `<p class="view-subsection-label">Canopy</p><div class="view-grid">${reviewField('Canopy cover (%)', fieldVal('fs-canopy-cover'))}${reviewGridPad(1)}</div>`;
+    const areaFields = [
+      reviewField('Mangrove name', zoneNameDisplayEl ? zoneNameDisplayEl.value : ''),
+      reviewField('Barangay', zoneBarangayDisplayEl ? zoneBarangayDisplayEl.value : ''),
+      reviewField('Area', fieldVal('fs-area-no')),
+      reviewField('MPA manager', mpaManagerValue()),
+    ];
+    const areaHtml = `<p class="view-subsection-label">Plot</p><div class="view-grid">${areaFields.join('')}${reviewGridPad(areaFields.length)}</div>`;
 
-    const speciesRowsForReview = collectSpeciesTableRows();
-    const speciesTableReviewHtml = speciesRowsForReview.length
-      ? `<div class="view-table-wrap"><table class="view-species-table">
-          <thead><tr><th>Species</th><th>Trees</th><th>Saplings</th><th>Seedlings</th></tr></thead>
-          <tbody>${speciesRowsForReview.map((r) => `<tr><td>${escapeHtml(r.species)}</td><td>${escapeHtml(r.treeCount || '—')}</td><td>${escapeHtml(r.saplingCount || '—')}</td><td>${escapeHtml(r.seedlingCount || '—')}</td></tr>`).join('')}</tbody>
-        </table></div>`
-      : viewEmptyNote('No species recorded.');
-    const speciesSectionHtml = `<p class="view-subsection-label">Species Found in Plot</p>${speciesTableReviewHtml}`;
+    const plotsForReview = collectPlotBlocks();
+    const plotsReviewHtml = plotsForReview.map((p, i) => {
+      const plotLabel = p.plotNo ? (p.plotSize ? `${p.plotNo} (${p.plotSize})` : p.plotNo) : null;
+      const plotFieldHtml = `<div class="view-grid">${reviewField('Plot No.', plotLabel)}${reviewGridPad(1)}</div>`;
+      const tableHtml = p.speciesRows.length
+        ? `<div class="view-table-wrap"><table class="view-species-table">
+            <thead><tr><th>Code</th><th>Species</th><th>Trees</th><th>Saplings</th><th>Seedlings</th><th>Height (m)</th><th>GBH (cm)</th><th>Canopy L (m)</th><th>Canopy W (m)</th></tr></thead>
+            <tbody>${p.speciesRows.map((r) => `<tr><td>${escapeHtml(r.code || '—')}</td><td>${escapeHtml(r.species)}</td><td>${escapeHtml(r.treeCount || '—')}</td><td>${escapeHtml(r.saplingCount || '—')}</td><td>${escapeHtml(r.seedlingCount || '—')}</td><td>${escapeHtml(r.height || '—')}</td><td>${escapeHtml(r.gbh || '—')}</td><td>${escapeHtml(r.canopyLength || '—')}</td><td>${escapeHtml(r.canopyWidth || '—')}</td></tr>`).join('')}</tbody>
+          </table></div>`
+        : viewEmptyNote('No species recorded.');
+      return `<p class="view-subsection-label">Plot ${i + 1}</p>${plotFieldHtml}${tableHtml}`;
+    }).join('');
 
     const healthRaw = fieldVal('fs-health-assessment');
     const healthBadge = healthBadgeHtml(healthRaw);
@@ -829,7 +1322,7 @@
       : reviewField('Overall health assessment', null);
     const healthHtml = `<p class="view-subsection-label">Overall Health</p><div class="view-grid">${healthFieldHtml}${reviewGridPad(1)}</div>`;
 
-    const vegetationHtml = `${canopyHtml}${speciesSectionHtml}${healthHtml}`;
+    const vegetationHtml = `${areaHtml}${plotsReviewHtml}${healthHtml}`;
 
     const allPhotos = existingPhotoUrls.map((url) => ({ src: url })).concat(
       selectedPhotoFiles.map((file) => ({ src: URL.createObjectURL(file) }))
@@ -837,6 +1330,11 @@
     const photoHtml = allPhotos.length
       ? `<div class="view-photos">${allPhotos.map((p) => `<img class="edit-photo-preview survey-review-photo" src="${p.src}" alt="Photo" />`).join('')}</div>`
       : viewEmptyNote('No photos attached.');
+
+    const videoSrc = selectedVideoFile ? URL.createObjectURL(selectedVideoFile) : existingVideoUrl;
+    const videoHtml = videoSrc
+      ? `<div class="view-photos"><video class="edit-photo-preview survey-review-photo" src="${escapeHtml(videoSrc)}" controls></video></div>`
+      : viewEmptyNote('No video attached.');
 
     // Mirrors the Fauna step's own 4 numbered groups (Mollusks Found /
     // Observed Threats / Additional Notes / Photos).
@@ -854,13 +1352,13 @@
     const notesRaw = fieldVal('fs-additional-notes');
     const notesHtml = `<p class="view-subsection-label">Additional Notes</p>${notesRaw ? `<div class="view-notes">${escapeHtml(notesRaw)}</div>` : viewEmptyNote('No additional notes.')}`;
 
-    const photosHtml = `<p class="view-subsection-label">Photos</p>${photoHtml}`;
+    const photosHtml = `<p class="view-subsection-label">Photos</p>${photoHtml}${videoSrc ? `<p class="view-subsection-label">Video</p>${videoHtml}` : ''}`;
 
     const faunaHtml = `${molluskSectionHtml}${threatsHtml}${notesHtml}${photosHtml}`;
 
-    // Mirrors the Water Quality step's own 4 numbered groups (Observations /
-    // Aquafarm / Instrument Readings / Notes) instead of one long flat grid,
-    // so the review reads as the same 4 groups the ranger just filled in.
+    // Mirrors the Water Quality step's own 2 numbered groups (Observations /
+    // Notes) instead of one long flat grid, so the review reads as the same
+    // groups the ranger just filled in.
     const observationsFields = [
       reviewField('Water clarity', selectText('fs-water-clarity')),
       reviewField('Water color', selectText('fs-water-color')),
@@ -868,18 +1366,6 @@
       reviewField('Visible foam or discharge', selectText('fs-foam-discharge')),
     ];
     const observationsHtml = `<p class="view-subsection-label">Observations</p><div class="view-grid">${observationsFields.join('')}${reviewGridPad(observationsFields.length)}</div>`;
-
-    const aquafarmFields = [reviewField('Nearby aquafarm activity', selectText('fs-aquafarm-activity'))];
-    const isAquafarmYesReview = aquafarmSelect.value === 'yes';
-    if (isAquafarmYesReview) {
-      aquafarmFields.push(
-        reviewField('Aquafarm name', fieldVal('fs-aquafarm-name')),
-        reviewField('Aquafarm location', aquafarmLocation ? `${aquafarmLocation.lat.toFixed(5)}, ${aquafarmLocation.lng.toFixed(5)}` : null),
-        reviewField('Distance to mangroves (m)', fieldVal('fs-aquafarm-distance')),
-        reviewField('Discharge flowing toward mangroves?', selectText('fs-discharge-toward-mangroves'))
-      );
-    }
-    const aquafarmHtml = `<p class="view-subsection-label">Aquafarm</p><div class="view-grid">${aquafarmFields.join('')}${reviewGridPad(aquafarmFields.length)}</div>`;
 
     const instrumentIds = ['fs-salinity', 'fs-ph', 'fs-water-temp', 'fs-secchi-depth'];
     const hasInstrumentValues = instrumentIds.some((id) => fieldVal(id));
@@ -889,13 +1375,13 @@
           reviewField('pH', fieldVal('fs-ph')),
           reviewField('Water temperature (°C)', fieldVal('fs-water-temp')),
           reviewField('Secchi depth (cm)', fieldVal('fs-secchi-depth')),
-        ].join('')}${reviewGridPad(4)}</div>`
+        ].join('')}</div>`
       : '';
 
     const waterNotesRaw = fieldVal('fs-water-notes');
     const waterNotesHtml = `<p class="view-subsection-label">Notes</p>${waterNotesRaw ? `<div class="view-notes">${escapeHtml(waterNotesRaw)}</div>` : viewEmptyNote('No water quality notes.')}`;
 
-    const waterHtml = `${observationsHtml}${aquafarmHtml}${instrumentHtml}${waterNotesHtml}`;
+    const waterHtml = `${observationsHtml}${instrumentHtml}${waterNotesHtml}`;
 
     const reviewBody = document.getElementById('surveyReviewBody');
     if (reviewBody) {
@@ -903,9 +1389,16 @@
         <p class="survey-note">Please check your answers below. You can go back to fix anything before submitting.</p>
         ${reviewSection('site', 'Site Information', siteHtml)}
         ${reviewSection('vegetation', 'Vegetation', vegetationHtml)}
-        ${reviewSection('fauna', 'Fauna', faunaHtml)}
+        ${reviewSection('fauna', 'Fauna & Threats', faunaHtml)}
         ${reviewSection('water', 'Water Quality', waterHtml)}
       `;
+      reviewBody.querySelectorAll('.survey-review-photo').forEach((el) => {
+        el.addEventListener('click', () => {
+          if (typeof window.openMediaLightbox === 'function') {
+            window.openMediaLightbox(el.src || el.currentSrc, el.tagName === 'VIDEO' ? 'video' : 'image');
+          }
+        });
+      });
     }
   }
 
@@ -928,6 +1421,7 @@
     if (submitBtn) submitBtn.hidden = currentStep !== TOTAL_STEPS;
     msgEl.className = 'field-survey-msg';
     msgEl.textContent = '';
+    clearFieldWarning();
 
     if (currentStep === TOTAL_STEPS) buildReviewHtml();
     if (currentStep === 1 && gpsMap) setTimeout(() => gpsMap.invalidateSize(), 50);
@@ -936,50 +1430,68 @@
     if (panelEl) panelEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  // Water Quality, part 2: instrument readings — collapsed by default since
+  // most rangers won't have the instruments on hand; opening it never clears
+  // whatever was already typed in, so toggling back and forth is safe.
+  const btnToggleInstruments = document.getElementById('btnToggleInstruments');
+  const btnToggleInstrumentsLabel = document.getElementById('btnToggleInstrumentsLabel');
+  const instrumentReadingsPanel = document.getElementById('instrumentReadingsPanel');
+  const instrumentReadingsHelp = document.getElementById('instrumentReadingsHelp');
+  if (btnToggleInstruments) {
+    btnToggleInstruments.addEventListener('click', () => {
+      const opening = !instrumentReadingsPanel.classList.contains('active');
+      instrumentReadingsPanel.classList.toggle('active', opening);
+      if (instrumentReadingsHelp) instrumentReadingsHelp.hidden = !opening;
+      if (btnToggleInstrumentsLabel) btnToggleInstrumentsLabel.textContent = opening ? 'Hide instrument readings' : 'Add instrument readings (optional)';
+    });
+  }
+
   function validateStep(step) {
     if (step === 1) {
       if (!fieldVal('fs-inspection-date')) {
-        msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Please choose the inspection date before continuing.';
+        showFieldWarning('fs-inspection-date', 'Please choose the inspection date before continuing.');
         return false;
       }
       if (fieldVal('fs-inspection-date') > todayStr) {
-        msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Inspection date cannot be in the future.';
+        showFieldWarning('fs-inspection-date', 'Inspection date cannot be in the future.');
         return false;
       }
       if (!currentPosition) {
-        msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Waiting for your GPS location. Allow location access, or tap Retry, before continuing.';
+        showFieldWarning(gpsRow, 'Waiting for your GPS location. Allow location access, or tap Retry, before continuing.');
         return false;
       }
     }
     if (step === 2) {
-      if (!fieldVal('fs-canopy-cover')) {
-        msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Please enter canopy cover.';
-        return false;
-      }
       if (!fieldVal('fs-health-assessment')) {
-        msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Please select an overall health assessment before continuing.';
+        showFieldWarning('fs-health-assessment', 'Please select an overall health assessment before continuing.');
         return false;
       }
-      const speciesRows = collectSpeciesTableRows();
-      if (speciesRows.length === 0) {
-        msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Please select a species.';
+      const plots = collectPlotBlocks();
+      const allSpeciesRows = plots.flatMap((p) => p.speciesRows);
+      if (allSpeciesRows.length === 0) {
+        showFieldWarning(plotBlocksContainerEl, 'Please select a species.');
         return false;
       }
-      const rowMissingCount = speciesRows.some((r) => {
+      // Checked before the "missing count" rule below — a row with -5 trees
+      // and nothing else used to fall into "t <= 0 && s <= 0 && e <= 0"
+      // (true for -5) and get the generic "enter at least one count"
+      // message instead of being told the actual problem was the negative
+      // number.
+      const rowNegativeCount = allSpeciesRows.some((r) => {
+        return [r.treeCount, r.saplingCount, r.seedlingCount].some((v) => v !== '' && parseFloat(v) < 0);
+      });
+      if (rowNegativeCount) {
+        showFieldWarning(plotBlocksContainerEl, 'Tree, sapling, and seedling counts cannot be negative.');
+        return false;
+      }
+      const rowMissingCount = allSpeciesRows.some((r) => {
         const t = parseFloat(r.treeCount) || 0;
         const s = parseFloat(r.saplingCount) || 0;
         const e = parseFloat(r.seedlingCount) || 0;
         return t <= 0 && s <= 0 && e <= 0;
       });
       if (rowMissingCount) {
-        msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Enter at least one count for this species.';
+        showFieldWarning(plotBlocksContainerEl, 'Enter at least one count for this species.');
         return false;
       }
     }
@@ -987,8 +1499,7 @@
       const molluskRows = collectMolluskTableRows();
       const molluskMissingSpecies = molluskRows.some((r) => !r.species);
       if (molluskMissingSpecies) {
-        msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Please select a species.';
+        showFieldWarning(document.querySelector('.mollusk-table-wrap'), 'Please select a species.');
         return false;
       }
       // "None observed" counts as a real answer too — without requiring
@@ -996,13 +1507,11 @@
       // saw no threats" apart from "the ranger skipped this step".
       const selectedThreats = collectSelectedThreats();
       if (selectedThreats.length === 0) {
-        msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Select the threats you saw, or None observed.';
+        showFieldWarning(threatCheckboxGridEl, 'Select the threats you saw, or None observed.');
         return false;
       }
       if (selectedThreats.includes('__other__') && !fieldVal('fs-observed-threats-other')) {
-        msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Describe the other threat.';
+        showFieldWarning('fs-observed-threats-other', 'Describe the other threat.');
         return false;
       }
 
@@ -1011,53 +1520,8 @@
       // never accepted on the inspector's word alone, threat or no threat.
       const photoAttached = selectedPhotoFiles.length > 0 || existingPhotoUrls.length > 0;
       if (!photoAttached) {
-        msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Please attach at least one photo before continuing.';
+        showFieldWarning(document.getElementById('surveyPhotoPicker'), 'Please attach at least one photo before continuing.');
         return false;
-      }
-    }
-    if (step === 4) {
-      if (!fieldVal('fs-water-clarity')) {
-        msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Please select water clarity.';
-        return false;
-      }
-      if (!fieldVal('fs-water-color')) {
-        msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Please select water color.';
-        return false;
-      }
-      if (!fieldVal('fs-odor')) {
-        msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Please select odor.';
-        return false;
-      }
-      if (!fieldVal('fs-foam-discharge')) {
-        msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Please select visible foam or discharge.';
-        return false;
-      }
-      if (!fieldVal('fs-aquafarm-activity')) {
-        msgEl.className = 'field-survey-msg error';
-        msgEl.textContent = 'Please select nearby aquafarm activity.';
-        return false;
-      }
-      if (aquafarmSelect.value === 'yes') {
-        if (!fieldVal('fs-aquafarm-name')) {
-          msgEl.className = 'field-survey-msg error';
-          msgEl.textContent = 'Please enter the aquafarm name.';
-          return false;
-        }
-        if (!aquafarmLocation) {
-          msgEl.className = 'field-survey-msg error';
-          msgEl.textContent = 'Please mark the aquafarm location.';
-          return false;
-        }
-        if (!fieldVal('fs-discharge-toward-mangroves')) {
-          msgEl.className = 'field-survey-msg error';
-          msgEl.textContent = 'Please select an option.';
-          return false;
-        }
       }
     }
     return true;
@@ -1066,6 +1530,7 @@
   if (btnNext) {
     btnNext.addEventListener('click', () => {
       if (!validateStep(currentStep)) return;
+      hideSuccessBanner();
       if (currentStep < TOTAL_STEPS) showStep(currentStep + 1);
     });
   }
@@ -1151,19 +1616,54 @@
       if (parts.length >= 2) currentPosition = { lat: parseFloat(parts[0]), lng: parseFloat(parts[1]) };
     }
 
-    const trees = (submission.trees && submission.trees.length) ? submission.trees : [{}];
     // Canopy cover and mollusk data are flat fields on the outer record, not
     // inside the per-species Vegetation table — read straight from the raw
     // saved record instead of off the first species row, which no longer
     // carries them now that species are real repeat-group entries.
     const rawRecord = submission.raw || {};
-    setFieldValue('fs-canopy-cover', rawRecord['Estimated_Canopy_Cover_']);
-    populateSpeciesTable(trees.map((t) => ({
-      species: t.species !== '—' ? t.species : '',
-      treeCount: t.treeCount,
-      saplingCount: t.saplingCount,
-      seedlingCount: t.seedlingCount,
-    })));
+    setFieldValue('fs-area-no', rawRecord['Area_No']);
+    setMpaManagerDisplay(rawRecord['MPA_Manager']);
+    setZoneIdentityDisplay(rawRecord['_zone_name'], rawRecord['_zone_barangay']);
+
+    // A real Plot_Records array (new-format, multi-plot submissions) takes
+    // priority; a legacy record only ever had one implicit plot, described
+    // by the flat Plot_No/Plot_Size fields and a single Species_Records list.
+    let plotsForEdit;
+    if (Array.isArray(rawRecord['Plot_Records']) && rawRecord['Plot_Records'].length > 0) {
+      plotsForEdit = rawRecord['Plot_Records'].map((p) => ({
+        plotNo: p['Plot_No'] || '',
+        plotSize: p['Plot_Size'] || '',
+        speciesRows: (p['Species_Records'] || []).map((t) => ({
+          species: t['Species_Name'] || '',
+          treeCount: t['Tree_Count'],
+          saplingCount: t['Sapling_Count'],
+          seedlingCount: t['Seedling_Count'],
+          code: t['Tree_Code'],
+          height: t['Height_m'],
+          gbh: t['GBH_cm'],
+          canopyLength: t['Canopy_Length_m'],
+          canopyWidth: t['Canopy_Width_m'],
+        })),
+      }));
+    } else {
+      const trees = (submission.trees && submission.trees.length) ? submission.trees : [];
+      plotsForEdit = [{
+        plotNo: rawRecord['Plot_No'] || '',
+        plotSize: rawRecord['Plot_Size'] || '',
+        speciesRows: trees.map((t) => ({
+          species: t.species !== '—' ? t.species : '',
+          treeCount: t.treeCount,
+          saplingCount: t.saplingCount,
+          seedlingCount: t.seedlingCount,
+          code: t.code !== '—' ? t.code : '',
+          height: t.height,
+          gbh: t.gbh,
+          canopyLength: t.canopyLength,
+          canopyWidth: t.canopyWidth,
+        })),
+      }];
+    }
+    populatePlotBlocks(plotsForEdit);
     setFieldValue('fs-health-assessment', submission.healthAssessmentRaw);
 
     // A real Mollusk_Records array (new-format submissions) takes priority;
@@ -1184,38 +1684,21 @@
     existingPhotoUrls = (submission.photos || []).map((p) => p.full || p.thumb).filter(Boolean);
     selectedPhotoFiles = [];
     renderPhotoThumbs();
+    existingVideoUrl = submission.video || null;
+    selectedVideoFile = null;
+    renderVideoThumb();
 
     setFieldValue('fs-water-clarity', rawRecord['Water_Clarity']);
     setFieldValue('fs-water-color', submission.waterColor);
     setFieldValue('fs-odor', submission.odor);
     setFieldValue('fs-foam-discharge', submission.foamOrDischarge);
 
-    const aquafarmVal = submission.aquafarmRaw || '';
-    setFieldValue('fs-aquafarm-activity', aquafarmVal);
-    const isAquafarmYes = aquafarmVal === 'yes';
-    aquafarmBoxEl.hidden = !isAquafarmYes;
-    if (isAquafarmYes) {
-      setFieldValue('fs-aquafarm-name', rawRecord['Aquafarm_Name']);
-      const lat = rawRecord['Aquafarm_Location_Lat'];
-      const lng = rawRecord['Aquafarm_Location_Lng'];
-      if (lat && lng) {
-        aquafarmLocation = { lat: parseFloat(lat), lng: parseFloat(lng) };
-        aquafarmLocationOutEl.textContent = `${aquafarmLocation.lat.toFixed(5)}, ${aquafarmLocation.lng.toFixed(5)}`;
-      } else {
-        resetAquafarmLocation();
-      }
-      setFieldValue('fs-aquafarm-distance', rawRecord['Aquafarm_Distance_m']);
-      setFieldValue('fs-discharge-toward-mangroves', rawRecord['Discharge_Toward_Mangroves']);
-    } else {
-      resetAquafarmLocation();
-    }
-
     setFieldValue('fs-salinity', rawRecord['Salinity_ppt']);
     setFieldValue('fs-ph', rawRecord['PH']);
     setFieldValue('fs-water-temp', rawRecord['Water_Temperature_C']);
     setFieldValue('fs-secchi-depth', rawRecord['Secchi_Depth_cm']);
     const hasInstrumentReadings = ['Salinity_ppt', 'PH', 'Water_Temperature_C', 'Secchi_Depth_cm']
-      .some((k) => rawRecord[k] !== undefined && rawRecord[k] !== null && rawRecord[k] !== '');
+      .some((key) => rawRecord[key] !== undefined && rawRecord[key] !== null && rawRecord[key] !== '');
     if (hasInstrumentReadings && instrumentReadingsPanel) {
       instrumentReadingsPanel.classList.add('active');
       if (instrumentReadingsHelp) instrumentReadingsHelp.hidden = false;
@@ -1262,30 +1745,45 @@
     }
   }
 
+  // Returns true on success, 'stripped' if it only fit after dropping
+  // photos, or false if it couldn't be saved at all. A full offline queue
+  // (several photos stored as base64 text add up fast) used to throw
+  // QuotaExceededError straight out of this call — uncaught, which is what
+  // was leaving "Submitting…" stuck forever: the code that updates that
+  // message never got the chance to run once this line died.
   function setQueue(queue) {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+    try {
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+      return true;
+    } catch (err) {
+      try {
+        const stripped = queue.map((item) => ({ ...item, photoDataUrl: null }));
+        localStorage.setItem(QUEUE_KEY, JSON.stringify(stripped));
+        return 'stripped';
+      } catch (err2) {
+        return false;
+      }
+    }
   }
 
   function fieldsFromForm() {
     return {
       inspectionDate: document.getElementById('fs-inspection-date').value,
-      canopyCover: document.getElementById('fs-canopy-cover').value,
-      speciesRows: JSON.stringify(collectSpeciesTableRows()),
+      areaNo: fieldVal('fs-area-no'),
+      plots: JSON.stringify(collectPlotBlocks()),
       healthAssessment: document.getElementById('fs-health-assessment').value,
       molluskRows: JSON.stringify(collectMolluskTableRows()),
       observedThreats: collectSelectedThreats().join(','),
       observedThreatsOther: fieldVal('fs-observed-threats-other'),
       additionalNotes: document.getElementById('fs-additional-notes').value,
       waterClarity: document.getElementById('fs-water-clarity').value,
+      waterClarityOther: fieldVal('fs-water-clarity-other'),
       waterColor: document.getElementById('fs-water-color').value,
+      waterColorOther: fieldVal('fs-water-color-other'),
       odor: document.getElementById('fs-odor').value,
+      odorOther: fieldVal('fs-odor-other'),
       foamDischarge: document.getElementById('fs-foam-discharge').value,
-      aquafarmActivity: aquafarmSelect.value,
-      aquafarmName: fieldVal('fs-aquafarm-name'),
-      aquafarmLat: aquafarmLocation ? aquafarmLocation.lat : '',
-      aquafarmLng: aquafarmLocation ? aquafarmLocation.lng : '',
-      aquafarmDistance: fieldVal('fs-aquafarm-distance'),
-      dischargeTowardMangroves: fieldVal('fs-discharge-toward-mangroves'),
+      foamDischargeOther: fieldVal('fs-foam-discharge-other'),
       salinity: fieldVal('fs-salinity'),
       ph: fieldVal('fs-ph'),
       waterTemp: fieldVal('fs-water-temp'),
@@ -1314,19 +1812,68 @@
     return new Blob([bytes], { type: mime });
   }
 
-  function buildFormData(fields, photoFile) {
+  function buildFormData(fields, photoFiles, videoFile) {
     const fd = new FormData();
     Object.entries(fields).forEach(([key, value]) => fd.append(key, value ?? ''));
-    if (photoFile) fd.append('photo', photoFile, photoFile.name || 'photo.jpg');
+    (photoFiles || []).forEach((file, i) => {
+      if (file) fd.append(`photo${i === 0 ? '' : i + 1}`, file, file.name || 'photo.jpg');
+    });
+    if (videoFile) fd.append('video', videoFile, videoFile.name || 'video.mp4');
     return fd;
   }
 
-  async function sendToServer(fields, photoFile) {
-    const res = await fetch(SUBMIT_URL, { method: 'POST', body: buildFormData(fields, photoFile), credentials: 'same-origin' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'Submission failed');
-    return data;
+  // "Offline" in the field often isn't clean — still connected to a router
+  // with no real internet behind it, a weak signal, etc. navigator.onLine
+  // can stay true in exactly that case, and without a timeout the fetch
+  // below just hangs until the OS gives up (which can take a very long
+  // time), leaving "Submitting…" on screen with no sign anything is wrong.
+  // Failing fast here is what actually gets a bad connection into the same
+  // offline-queue path a flat-out disconnected one already takes.
+  async function sendToServer(fields, photoFiles, videoFile) {
+    const controller = new AbortController();
+    const timeoutMs = videoFile ? 120000 : 30000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(SUBMIT_URL, {
+        method: 'POST',
+        body: buildFormData(fields, photoFiles, videoFile),
+        credentials: 'same-origin',
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Submission failed');
+      return data;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  // Shown through the service worker (not a plain `new Notification()`) since
+  // that's the form mobile browsers actually honor reliably, including while
+  // the app is just sitting in the background rather than the active tab —
+  // exactly the moment a ranger is most likely to regain signal and not be
+  // looking at the screen.
+  function notifySurveysSent(count) {
+    const body = count === 1
+      ? 'Your offline survey was successfully submitted.'
+      : `${count} offline surveys were successfully submitted.`;
+
+    // Always goes in the app's own notification bell, whether or not OS
+    // push permission was ever granted — that one's never blocked by a
+    // permission prompt.
+    if (typeof window.addLocalRangerNotification === 'function') {
+      window.addLocalRangerNotification(body);
+    }
+
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+      navigator.serviceWorker.ready
+        .then((reg) => reg.showNotification('Survey submitted', { body, icon: '../assets/aquaguard-logo.png' }))
+        .catch(() => {});
+    } else {
+      try { new Notification('Survey submitted', { body }); } catch (err) {}
+    }
   }
 
   // Tries every queued offline submission again — called on page load and
@@ -1339,52 +1886,53 @@
     for (const item of queue) {
       try {
         const photoFile = item.photoDataUrl ? dataUrlToBlob(item.photoDataUrl) : null;
-        await sendToServer(item.fields, photoFile);
+        await sendToServer(item.fields, photoFile ? [photoFile] : []);
       } catch (err) {
         remaining.push(item);
       }
     }
     setQueue(remaining);
-    if (remaining.length < queue.length && typeof window.refreshAquaGuardSubmissions === 'function') {
-      window.refreshAquaGuardSubmissions();
+    const sentCount = queue.length - remaining.length;
+    if (sentCount > 0) {
+      notifySurveysSent(sentCount);
+      if (typeof window.refreshAquaGuardSubmissions === 'function') window.refreshAquaGuardSubmissions();
     }
   }
 
   window.addEventListener('online', flushQueue);
   flushQueue();
 
-  async function saveFieldSurveyEdit() {
-    const speciesRows = collectSpeciesTableRows();
+  // Mobile browsers don't always fire the 'online' event promptly — poll
+  // every 30 s so a reconnected ranger doesn't have to wait long for their
+  // queued survey to send.
+  setInterval(() => { if (navigator.onLine && getQueue().length > 0) flushQueue(); }, 30000);
 
+  async function saveFieldSurveyEdit() {
     const body = new FormData();
     body.append('action', 'updateFields');
     body.append('id', editSubmissionId);
-    body.append('aquafarm', aquafarmSelect.value);
-    body.append('aquafarmName', fieldVal('fs-aquafarm-name'));
-    body.append('aquafarmLat', aquafarmLocation ? aquafarmLocation.lat : '');
-    body.append('aquafarmLng', aquafarmLocation ? aquafarmLocation.lng : '');
-    body.append('aquafarmDistance', fieldVal('fs-aquafarm-distance'));
-    body.append('dischargeTowardMangroves', fieldVal('fs-discharge-toward-mangroves'));
+    body.append('areaNo', fieldVal('fs-area-no'));
+    body.append('plots', JSON.stringify(collectPlotBlocks()));
     body.append('waterNotes', fieldVal('fs-water-notes'));
     body.append('observedThreats', collectSelectedThreats().join(','));
     body.append('observedThreatsOther', fieldVal('fs-observed-threats-other'));
     body.append('additionalNotes', fieldVal('fs-additional-notes'));
     body.append('waterClarity', fieldVal('fs-water-clarity'));
+    body.append('waterClarityOther', fieldVal('fs-water-clarity-other'));
     body.append('waterColor', fieldVal('fs-water-color'));
+    body.append('waterColorOther', fieldVal('fs-water-color-other'));
     body.append('odor', fieldVal('fs-odor'));
+    body.append('odorOther', fieldVal('fs-odor-other'));
     body.append('foamDischarge', fieldVal('fs-foam-discharge'));
+    body.append('foamDischargeOther', fieldVal('fs-foam-discharge-other'));
     body.append('salinity', fieldVal('fs-salinity'));
     body.append('ph', fieldVal('fs-ph'));
     body.append('waterTemp', fieldVal('fs-water-temp'));
     body.append('secchiDepth', fieldVal('fs-secchi-depth'));
-    body.append('canopyCover', fieldVal('fs-canopy-cover'));
     body.append('healthAssessment', fieldVal('fs-health-assessment'));
     body.append('molluskRows', JSON.stringify(collectMolluskTableRows()));
-    body.append('trees', JSON.stringify(speciesRows));
-    // Only the first newly picked photo is sent for now — the backend still
-    // stores one photo per submission; saving several is a later step.
-    const photoFile = selectedPhotoFiles[0];
-    if (photoFile) body.append('photo', photoFile, photoFile.name || 'photo.jpg');
+    selectedPhotoFiles.forEach((file, i) => body.append(`photo${i === 0 ? '' : i + 1}`, file, file.name || 'photo.jpg'));
+    if (selectedVideoFile) body.append('video', selectedVideoFile, selectedVideoFile.name || 'video.mp4');
 
     try {
       const res = await fetch('../Menro/API/ranger-submissions.php', { method: 'POST', credentials: 'same-origin', body });
@@ -1416,14 +1964,31 @@
       return;
     }
 
-    const fields = fieldsFromForm();
-    // Only the first picked photo is actually sent for now — the backend
-    // still stores one photo per submission; saving several is a later step.
-    const photoFile = selectedPhotoFiles[0] || null;
+    // fieldsFromForm() reads values straight off the form's own DOM elements
+    // — if any single one of them were ever missing (a stale cached page
+    // referencing an element a later update renamed, for example),
+    // .value on that null would throw synchronously, right here, before
+    // the network code below even runs. That's a real bug, independent of
+    // being online or offline: nothing downstream could ever catch it,
+    // since it never reached the try block at all — leaving the button
+    // disabled and "Submitting…" on screen permanently, no matter what
+    // your connection was doing. Wrapping this is what actually guarantees
+    // the UI can't get stuck this way again, regardless of the cause.
+    let fields, photoFiles, videoFile;
+    try {
+      fields = fieldsFromForm();
+      photoFiles = selectedPhotoFiles.slice(0, PHOTO_LIMIT);
+      videoFile = selectedVideoFile || null;
+    } catch (setupErr) {
+      submitBtn.disabled = false;
+      msgEl.className = 'field-survey-msg error';
+      msgEl.textContent = `Something went wrong reading the form: ${setupErr.message || 'please try again'}.`;
+      return;
+    }
 
     const trySend = async () => {
       if (!navigator.onLine) throw new Error('offline');
-      return sendToServer(fields, photoFile);
+      return sendToServer(fields, photoFiles, videoFile);
     };
 
     try {
@@ -1434,35 +1999,53 @@
       if (zonePreviewEl) zonePreviewEl.hidden = true;
       captureGps();
       resetWizard();
-      msgEl.className = 'field-survey-msg ok';
-      msgEl.textContent = 'Submitted successfully.';
+      msgEl.className = 'field-survey-msg';
+      msgEl.textContent = '';
+      showSuccessBanner('Survey submitted successfully. You can start a new survey below.');
       if (typeof window.refreshAquaGuardSubmissions === 'function') window.refreshAquaGuardSubmissions();
     } catch (err) {
-      // No connection (or the request itself failed) — save it on this
-      // device instead of losing the ranger's work, and send it automatically
-      // once a connection comes back.
-      const queue = getQueue();
+      // No connection (or the request itself failed) — save text fields
+      // immediately so the ranger sees confirmation right away, then encode
+      // the photo in the background (it can take a few seconds for a large
+      // image and there's no reason to make the ranger wait for it).
       const queuedItem = { fields, photoDataUrl: null };
-      if (photoFile) {
-        try {
-          queuedItem.photoDataUrl = await fileToDataUrl(photoFile);
-        } catch (readErr) {
-          // Photo couldn't be read for offline storage — keep the rest of the report anyway.
-        }
-      }
-      queue.push(queuedItem);
-      setQueue(queue);
 
+      // Reset the form immediately — don't make the ranger wait while photos encode.
       form.reset();
       todayInput.value = todayStr;
       resetSpeciesFields();
       if (zonePreviewEl) zonePreviewEl.hidden = true;
       captureGps();
       resetWizard();
+      submitBtn.disabled = false;
+
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+      }
+
       msgEl.className = 'field-survey-msg offline';
       msgEl.textContent = 'No connection. Saved on this device. It will send automatically once you\'re back online.';
+
+      // Encode photo in background — if it succeeds the queued item gets
+      // a photo, if not the report still goes through without it.
+      (async () => {
+        if (photoFiles && photoFiles[0]) {
+          try { queuedItem.photoDataUrl = await fileToDataUrl(photoFiles[0]); } catch (_) {}
+        }
+        const queue = getQueue();
+        queue.push(queuedItem);
+        const saved = setQueue(queue);
+        if (saved === false) {
+          msgEl.className = 'field-survey-msg error';
+          msgEl.textContent = "Couldn't save offline — storage is full. Connect to the internet to clear the backlog.";
+        } else if (saved === 'stripped') {
+          msgEl.textContent = 'No connection. Saved on this device (without the photo — storage was nearly full). It will send automatically once you\'re back online.';
+        }
+      })();
     } finally {
-      submitBtn.disabled = false;
+      // submitBtn already re-enabled above in the catch block before async photo work;
+      // only re-enable here for the success path where finally runs without the catch.
+      if (submitBtn.disabled) submitBtn.disabled = false;
     }
   }
 
@@ -1472,6 +2055,8 @@
   const btnCloseConfirmSubmit = document.getElementById('btnCloseConfirmSubmit');
   const btnCancelConfirmSubmit = document.getElementById('btnCancelConfirmSubmit');
   const btnConfirmSubmit = document.getElementById('btnConfirmSubmit');
+  const confirmZoneAckRow = document.getElementById('confirmZoneAckRow');
+  const confirmZoneAckCheckbox = document.getElementById('confirmZoneAckCheckbox');
 
   function closeSubmitConfirm() {
     if (confirmSubmitOverlay) confirmSubmitOverlay.classList.remove('open');
@@ -1479,6 +2064,20 @@
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
+
+    // The browser's own validation (number step mismatches, required
+    // fields, etc.) can't show its bubble on a field sitting on a hidden
+    // step — it just silently does nothing. Jumping to that field's step
+    // first is what actually lets the browser show the message.
+    if (!form.checkValidity()) {
+      const invalidEl = form.querySelector(':invalid');
+      const stepPanel = invalidEl ? invalidEl.closest('.survey-step') : null;
+      const stepNum = stepPanel ? Number(stepPanel.getAttribute('data-step')) : null;
+      if (stepNum) showStep(stepNum);
+      form.reportValidity();
+      return;
+    }
+
     if (!confirmSubmitOverlay) { performSubmit(); return; }
 
     if (editSubmissionId) {
@@ -1490,8 +2089,30 @@
       if (confirmSubmitText) confirmSubmitText.textContent = "Make sure everything looks correct. You can still edit it afterward from Submission History.";
       if (btnConfirmSubmit) btnConfirmSubmit.textContent = 'Submit';
     }
+
+    // A GPS reading nowhere near any mapped zone (or one that never resolved
+    // at all) used to file just as easily as a reading taken standing inside
+    // the zone — the survey still gets counted against whatever "nearest"
+    // zone the server found, however far away that really was. This can't
+    // block entirely (GPS can be down, or a real zone might not be mapped
+    // yet), so instead it requires the ranger to explicitly tick a box
+    // acknowledging the distance before Submit does anything.
+    const zoneIsFar = !lastResolvedZone
+      || (!lastResolvedZone.inside
+          && typeof lastResolvedZone.distanceMeters === 'number'
+          && lastResolvedZone.distanceMeters > ZONE_FAR_THRESHOLD_M);
+    if (confirmZoneAckRow) confirmZoneAckRow.hidden = !zoneIsFar;
+    if (confirmZoneAckCheckbox) confirmZoneAckCheckbox.checked = false;
+    if (btnConfirmSubmit) btnConfirmSubmit.disabled = zoneIsFar;
+
     confirmSubmitOverlay.classList.add('open');
   });
+
+  if (confirmZoneAckCheckbox) {
+    confirmZoneAckCheckbox.addEventListener('change', () => {
+      if (btnConfirmSubmit) btnConfirmSubmit.disabled = !confirmZoneAckCheckbox.checked;
+    });
+  }
 
   if (confirmSubmitOverlay) {
     if (btnCloseConfirmSubmit) btnCloseConfirmSubmit.addEventListener('click', closeSubmitConfirm);

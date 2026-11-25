@@ -16,19 +16,51 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-<link rel="icon" href="../assets/calatagan-seal.png"/>
-<link rel="stylesheet" href="../assets/theme.css"/>
-<link rel="stylesheet" href="admin.css?v=3"/>
+<link rel="icon" href="../assets/aquaguard-logo.png"/>
+<link rel="manifest" href="../manifest.json" />
+<meta name="theme-color" content="#1b6b3a" />
+<link rel="apple-touch-icon" href="../assets/aquaguard-logo.png" />
+<link rel="stylesheet" href="../assets/theme.css?v=1"/>
+<link rel="stylesheet" href="admin.css?v=10"/>
 </head>
 <body>
+
+<!-- Shown only when launched as the installed app (standalone mode) — a
+     plain browser tab visit never sees this. -->
+<div id="appSplash" class="app-splash">
+  <img src="../assets/aquaguard-logo-app.png" alt="AquaGuard" class="app-splash-logo">
+</div>
+<script>
+  (function () {
+    var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    var splash = document.getElementById('appSplash');
+    if (!isStandalone) {
+      splash.remove();
+      return;
+    }
+    window.addEventListener('load', function () {
+      setTimeout(function () {
+        splash.classList.add('app-splash-hide');
+        setTimeout(function () { splash.remove(); }, 400);
+      }, 500);
+    });
+  })();
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('../sw.js').catch(function () {});
+    });
+  }
+</script>
 
 <canvas id="gisCanvas" aria-hidden="true"></canvas>
 
 <div class="shell">
 
-  <aside class="sidebar">
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+  <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
-      <img src="../assets/calatagan-seal.png" width="36" height="36" alt="Calatagan Seal" style="border-radius:50%;object-fit:contain;">
+      <img src="../assets/aquaguard-logo.png" width="36" height="36" alt="AquaGuard logo" style="border-radius:50%;object-fit:contain;">
       <div>
         <div class="sidebar-brand-name">AquaGuard</div>
         <div class="sidebar-brand-sub">Admin Panel</div>
@@ -74,7 +106,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
           <polyline points="16 17 21 12 16 7"/>
           <line x1="21" y1="12" x2="9" y2="12"/>
         </svg>
-        Sign Out
+        Log Out
       </button>
     </div>
   </aside>
@@ -82,12 +114,19 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
   <main class="main">
 
     <header class="topbar">
-      <div>
-        <div class="topbar-title" id="topbarTitle">Accounts</div>
-        <div class="topbar-sub">Calatagan Mangrove Reserve &middot; <span id="topbar-date"></span></div>
+      <div class="topbar-left">
+        <button class="topbar-menu-btn" id="btnToggleSidebar" type="button" aria-label="Toggle menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+        <div>
+          <div class="topbar-title" id="topbarTitle">Accounts</div>
+        </div>
       </div>
       <div class="topbar-right">
-        <div class="topbar-coord">13.8317&deg; N, 120.6400&deg; E</div>
         <div class="notif-wrap">
           <button class="notif-bell" id="notifBell" type="button" aria-label="Notifications">
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -333,11 +372,11 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
         <line x1="21" y1="12" x2="9" y2="12"/>
       </svg>
     </div>
-    <div class="confirm-modal-title">Sign out?</div>
-    <div class="confirm-modal-text">You'll need to sign in again to access the Admin Panel.</div>
+    <div class="confirm-modal-title">Log Out?</div>
+    <div class="confirm-modal-text">You'll need to log in again to access the Admin Panel.</div>
     <div class="confirm-modal-actions">
       <button class="btn-confirm-cancel" id="btnCancelSignout">Cancel</button>
-      <button class="btn-confirm-danger" id="btnConfirmSignout">Sign Out</button>
+      <button class="btn-confirm-danger" id="btnConfirmSignout">Log Out</button>
     </div>
   </div>
 </div>
@@ -490,7 +529,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
   </div>
 </div>
 
-<script src="../assets/utils.js?v=2"></script>
-<script src="admin.js?v=38"></script>
+<script src="../assets/utils.js?v=3"></script>
+<script src="admin.js?v=41"></script>
 </body>
 </html>

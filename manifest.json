@@ -1,0 +1,20 @@
+{
+  "name": "AquaGuard",
+  "short_name": "AquaGuard",
+  "description": "Mangrove monitoring system for Calatagan, Batangas — Admin, MENRO, and Forest Ranger access in one app.",
+  "start_url": "./Login/Login.php",
+  "scope": "./",
+  "id": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#1b6b3a",
+  "icons": [
+    {
+      "src": "./assets/aquaguard-logo.png",
+      "sizes": "441x441",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

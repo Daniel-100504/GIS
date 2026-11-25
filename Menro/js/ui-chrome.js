@@ -199,7 +199,7 @@ async function initWithKobo() {
   dataReady = true;
   applyDataForDate(sceneDate.value);
 
-  selectZone(ZONES[0]);
+  if (ZONES.length) selectZone(ZONES[0]);
 }
 
 initWithKobo();

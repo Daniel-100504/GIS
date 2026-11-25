@@ -8,14 +8,25 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'ranger') {
 // Shared list so the species dropdowns (mature/seedling/sapling, in both the
 // survey form and the edit form) all offer the same choices — sourced from
 // the Municipality of Calatagan Forest Land Use Plan 2023-2027 (Table 5.2.3.1,
-// Flora Species stated by the Stakeholders during the Workshop).
-$mangroveSpeciesList = [
-    'Anonang (Cordia dichotoma)',
-    'Antipolo (Artocarpus blancoi)',
-    'Aroma (Acacia farnesiana)',
+// Flora Species stated by the Stakeholders during the Workshop). Split into
+// true mangroves (Rhizophoraceae/Avicenniaceae/Sonneratiaceae, plus Nipa —
+// the actual species the plot assessment is about) and associates/other
+// (upland or buffer-zone flora the same workshop table also recorded) —
+// flat and alphabetical, the real mangroves used to be scattered among ~40
+// other species with no way to tell them apart at a glance.
+$trueMangroveSpeciesList = [
     'Bakawan babae (Rhizophora mucronata)',
     'Bakawan bato (Rhizophora stylosa)',
     'Bakawan lalaki (Rhizophora apiculata)',
+    'Kalapinay (Avicennia marina)',
+    'Nipa / Sasa (Nypa fruticans)',
+    'Pagatpat (Sonneratia alba)',
+    'Saging-saging (Aegiceras corniculatum)',
+];
+$associateSpeciesList = [
+    'Anonang (Cordia dichotoma)',
+    'Antipolo (Artocarpus blancoi)',
+    'Aroma (Acacia farnesiana)',
     'Bamboo species',
     'Bangkal (Nauclea orientalis)',
     'Bangkoro (Morinda citrifolia)',
@@ -31,7 +42,6 @@ $mangroveSpeciesList = [
     'Himbabao (Broussonetia luzonica)',
     'Ipil-ipil (Leucaena leucocephala)',
     'Kakawate (Gliricidia sepium)',
-    'Kalapinay (Avicennia marina)',
     'Kalumpang (Sterculia foetida)',
     'Kalumpit (Terminalia microcarpa)',
     'Kamatsili (Pithecellobium dulce)',
@@ -42,25 +52,24 @@ $mangroveSpeciesList = [
     'Mahogany (Swietenia macrophylla)',
     'Molawin (Vitex parviflora)',
     'Narra (Pterocarpus indicus)',
-    'Nipa / Sasa (Nypa fruticans)',
-    'Pagatpat (Sonneratia alba)',
     'Pakpak-lawin (Drynaria quercifolia)',
     'Paper tree / mulberry (Broussonetia papyrifera)',
     'Pong-apong (Amorphophallus paeoniifolius)',
     'Rain tree (Samanea saman)',
     'Rubber tree (Hevea brasiliensis)',
     'Saga (Adenanthera pavonina)',
-    'Saging-saging (Aegiceras corniculatum)',
     'Susong-kalabaw (Uvaria rufa)',
     'Talisay (Terminalia catappa)',
     'Taluto (Pterocybium tinctorium)',
     'Usiw',
 ];
-$mangroveSpeciesOptions = '<option value="">Select…</option>';
-foreach ($mangroveSpeciesList as $sp) {
-    $mangroveSpeciesOptions .= '<option value="' . htmlspecialchars($sp) . '">' . htmlspecialchars($sp) . '</option>';
-}
-$mangroveSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
+// Kept for any other code still reading the old flat list (e.g. validating a
+// submitted value is one of the known species). The actual species <select>
+// is built client-side (see buildSpeciesRowOptionsHtml in field-survey.js),
+// from TRUE_MANGROVE_SPECIES_LIST/ASSOCIATE_SPECIES_LIST below — not from a
+// PHP-built option string, since the dropdown's options depend on which
+// species other rows have already used.
+$mangroveSpeciesList = array_merge($trueMangroveSpeciesList, $associateSpeciesList);
 
 // Same idea for mollusk sightings — sourced from Table 5.2.3.2, Faunal
 // Species stated by the Stakeholders during the Workshop (only the entry
@@ -89,6 +98,10 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AquaGuard – Ranger Dashboard</title>
+  <link rel="manifest" href="../manifest.json" />
+  <link rel="icon" href="../assets/aquaguard-logo.png" />
+  <meta name="theme-color" content="#1b6b3a" />
+  <link rel="apple-touch-icon" href="../assets/aquaguard-logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://tile.openstreetmap.org">
@@ -98,12 +111,37 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
   <link
     href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="../assets/theme.css" />
+  <link rel="stylesheet" href="../assets/theme.css?v=2" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="ranger.css?v=89" />
+  <link rel="stylesheet" href="ranger.css?v=116" />
 </head>
 
 <body>
+
+  <!-- Shown only when launched as the installed app (standalone mode) — a
+       plain browser tab visit never sees this, since there's no "opening
+       the app" moment to mark there. Hidden immediately by inline script
+       below if this isn't a standalone launch, so it never flashes for
+       regular browser use. -->
+  <div id="appSplash" class="app-splash">
+    <img src="../assets/aquaguard-logo-app.png" alt="AquaGuard" class="app-splash-logo">
+  </div>
+  <script>
+    (function () {
+      var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      var splash = document.getElementById('appSplash');
+      if (!isStandalone) {
+        splash.remove();
+        return;
+      }
+      window.addEventListener('load', function () {
+        setTimeout(function () {
+          splash.classList.add('app-splash-hide');
+          setTimeout(function () { splash.remove(); }, 400);
+        }, 500);
+      });
+    })();
+  </script>
 
   <canvas id="gisCanvas" aria-hidden="true"></canvas>
 
@@ -113,7 +151,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
 
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand">
-        <img src="../assets/calatagan-seal.png" width="36" height="36" alt="Calatagan Seal"
+        <img src="../assets/aquaguard-logo.png" width="36" height="36" alt="AquaGuard logo"
           class="sidebar-brand-logo" style="border-radius:50%;object-fit:contain;" />
         <div class="sidebar-brand-text">
           <div class="sidebar-brand-name">AquaGuard</div>
@@ -130,14 +168,14 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             <rect x="14" y="14" width="7" height="7" />
             <rect x="3" y="14" width="7" height="7" />
           </svg>
-          <span class="nav-item-label">Dashboard</span>
+          <span class="nav-item-label" data-i18n="nav-dashboard">Dashboard</span>
         </button>
         <button class="nav-item" data-view="submit" onclick="switchView('submit', this)" title="Submit Field Data">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 5v14M5 12l7 7 7-7" />
           </svg>
-          <span class="nav-item-label">Submit Field Data</span>
+          <span class="nav-item-label" data-i18n="nav-submit">Submit Field Data</span>
         </button>
         <button class="nav-item" data-view="history" onclick="switchView('history', this)" title="Submission History">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -145,7 +183,14 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             <circle cx="12" cy="12" r="10" />
             <polyline points="12 6 12 12 16 14" />
           </svg>
-          <span class="nav-item-label">Submission History</span>
+          <span class="nav-item-label" data-i18n="nav-history">Submission History</span>
+        </button>
+        <button class="nav-item" data-view="settings" onclick="switchView('settings', this)" type="button" title="Settings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span class="nav-item-label" data-i18n="settings-title">Settings</span>
         </button>
       </nav>
 
@@ -157,14 +202,14 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             <div class="ranger-role">Field Personnel</div>
           </div>
         </div>
-        <button class="btn-logout" id="btnSignOut" type="button" title="Sign Out">
+        <button class="btn-logout" id="btnSignOut" type="button" title="Log Out">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
             <polyline points="16 17 21 12 16 7" />
             <line x1="21" y1="12" x2="9" y2="12" />
           </svg>
-          <span class="btn-logout-label">Sign Out</span>
+          <span class="btn-logout-label">Log Out</span>
         </button>
       </div>
     </aside>
@@ -186,7 +231,6 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
           </div>
         </div>
         <div class="topbar-right">
-          <div class="topbar-coord">13.8317° N, 120.6400° E</div>
           <button type="button" class="notif-btn" id="btnHelpGuide" aria-label="Open user guide">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="10" />
@@ -264,7 +308,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                 <polyline points="22 4 12 14.01 9 17.01" />
               </svg>
             </div>
-            <div class="stat-label">Approved</div>
+            <div class="stat-label">Verified</div>
             <div class="stat-value" id="dash-approved-count">–</div>
             <div class="stat-meta">Reviewed &amp; accepted</div>
           </button>
@@ -333,7 +377,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             <div class="survey-step-line"></div>
             <div class="survey-step-item" data-step-item="3">
               <span class="survey-step-circle">3</span>
-              <span class="survey-step-label">Fauna</span>
+              <span class="survey-step-label">Fauna &amp; Threats</span>
             </div>
             <div class="survey-step-line"></div>
             <div class="survey-step-item" data-step-item="4">
@@ -360,6 +404,12 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                   <span class="survey-section-desc">When and where this inspection took place</span>
                 </span>
               </div>
+
+              <div id="surveySuccessBanner" class="survey-success-banner" hidden>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                <span id="surveySuccessBannerText">Survey submitted successfully.</span>
+              </div>
+
               <div class="edit-panel active">
                 <label class="edit-field">
                   <span>Inspection date <em>*</em></span>
@@ -401,31 +451,36 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                 </span>
               </div>
 
-              <p class="survey-group-label">1 &middot; Canopy</p>
+              <p class="survey-group-label">1 &middot; Plot</p>
               <div class="edit-panel active">
-                <label class="edit-field edit-field-full">
-                  <span>Canopy cover (%) <em>*</em></span>
-                  <input type="number" step="1" min="0" max="100" id="fs-canopy-cover" placeholder="e.g. 75" />
-                  <span class="field-helper-text">Estimate how much of the sky above the plot is covered by mangrove leaves.</span>
+                <label class="edit-field">
+                  <span>Mangrove name</span>
+                  <input type="text" id="fs-zone-name-display" class="edit-field-readonly" value="—" readonly />
+                  <span class="edit-field-help">Matched from your GPS location.</span>
+                </label>
+                <label class="edit-field">
+                  <span>Barangay</span>
+                  <input type="text" id="fs-zone-barangay-display" class="edit-field-readonly" value="—" readonly />
+                </label>
+                <label class="edit-field">
+                  <span>Area</span>
+                  <input type="text" id="fs-area-no" placeholder="e.g. 2" />
+                </label>
+                <label class="edit-field">
+                  <span>MPA manager</span>
+                  <input type="text" id="fs-mpa-manager-display" class="edit-field-readonly" value="—" readonly />
+                  <span class="edit-field-help">Set by MENRO for this area — not something you choose here.</span>
                 </label>
               </div>
 
-              <p class="survey-group-label">2 &middot; Species Found in Plot</p>
-              <div class="species-table-wrap">
-                <div class="species-table-header">
-                  <span>Species <em>*</em></span>
-                  <span>Trees</span>
-                  <span>Saplings</span>
-                  <span>Seedlings</span>
-                  <span></span>
-                </div>
-                <div class="species-table-rows" id="speciesTableRows"></div>
-              </div>
-              <button type="button" class="btn-add-species" id="btnAddSpecies">
+              <p class="survey-group-label">2 &middot; Plots &amp; Species</p>
+              <div id="plotBlocksContainer"></div>
+              <button type="button" class="btn-add-species" id="btnAddPlot">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Add species
+                Add another plot
               </button>
               <p class="species-size-limit-note">Seedling: [size limit] &middot; Sapling: [size limit] &middot; Tree: [size limit]</p>
+              <p class="field-helper-text">Height, GBH, and canopy size are optional — fill them in if you have a measuring tape or similar on hand.</p>
 
               <p class="survey-group-label">3 &middot; Overall Health</p>
               <div class="edit-panel active">
@@ -447,7 +502,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 8V4"/><path d="M12 20v-4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
                 </span>
                 <span class="survey-section-text">
-                  <span class="survey-section-name">Fauna</span>
+                  <span class="survey-section-name">Fauna &amp; Threats</span>
                   <span class="survey-section-desc">Wildlife observed and any threats to the site</span>
                 </span>
               </div>
@@ -504,7 +559,16 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                 <span id="surveyPhotoLabel">Take or choose photos</span>
               </label>
               <input type="file" accept="image/*" capture="environment" id="fs-photo" multiple hidden />
-              <p class="field-helper-text">You can add more than one photo.</p>
+              <p class="field-helper-text">Up to 5 photos.</p>
+
+              <p class="survey-group-label">5 &middot; Video</p>
+              <div class="survey-photos-list" id="surveyVideoList"></div>
+              <label class="survey-photo-picker" id="surveyVideoPicker" for="fs-video">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                <span id="surveyVideoLabel">Take or choose a video</span>
+              </label>
+              <input type="file" accept="video/*" capture="environment" id="fs-video" hidden />
+              <p class="field-helper-text">Optional — a short clip, e.g. to document illegal cutting. One video per survey.</p>
             </div>
 
             <div class="survey-step" data-step="4" hidden>
@@ -517,10 +581,10 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                   <span class="survey-section-desc">Condition of water near the mangrove area</span>
                 </span>
               </div>
-              <p class="survey-group-label">1 &middot; Observations <em>*</em></p>
+              <p class="survey-group-label">1 &middot; Observations</p>
               <div class="edit-panel active">
                 <label class="edit-field">
-                  <span>Water clarity <em>*</em></span>
+                  <span>Water clarity</span>
                   <select id="fs-water-clarity">
                     <option value="">Select…</option>
                     <option value="clear">Clear – you can see the bottom</option>
@@ -530,28 +594,29 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                   </select>
                 </label>
                 <label class="edit-field">
-                  <span>Water color <em>*</em></span>
+                  <span>Water color</span>
                   <select id="fs-water-color">
                     <option value="">Select…</option>
                     <option value="no_color">No color</option>
                     <option value="brown">Brown</option>
                     <option value="green">Green</option>
+                    <option value="white">White</option>
+                    <option value="red">Red</option>
                     <option value="dark___black">Dark / black</option>
                   </select>
                 </label>
                 <label class="edit-field">
-                  <span>Odor <em>*</em></span>
+                  <span>Odor</span>
                   <select id="fs-odor">
                     <option value="">Select…</option>
                     <option value="none">None</option>
                     <option value="rotten_egg___sulfur">Rotten egg / sulfur</option>
                     <option value="fishy">Fishy</option>
                     <option value="chemical">Chemical</option>
-                    <option value="other">Other</option>
                   </select>
                 </label>
                 <label class="edit-field">
-                  <span>Visible foam or discharge <em>*</em></span>
+                  <span>Visible foam or discharge</span>
                   <select id="fs-foam-discharge">
                     <option value="">Select…</option>
                     <option value="none">None</option>
@@ -562,51 +627,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                 </label>
               </div>
 
-              <p class="survey-group-label">2 &middot; Aquafarm <em>*</em></p>
-              <div class="edit-panel active">
-                <label class="edit-field edit-field-full">
-                  <span>Nearby aquafarm activity <em>*</em></span>
-                  <select id="fs-aquafarm-activity">
-                    <option value="">Select…</option>
-                    <option value="yes">Yes</option>
-                    <option value="no">No</option>
-                  </select>
-                </label>
-              </div>
-              <div class="aquafarm-box" id="aquafarmBox" hidden>
-                <div class="edit-panel active">
-                  <label class="edit-field edit-field-full">
-                    <span>Aquafarm name <em>*</em></span>
-                    <input type="text" id="fs-aquafarm-name" placeholder="e.g. owner's name or farm name" />
-                    <span class="edit-field-help">So MENRO knows which aquafarm this is, in case of a follow-up.</span>
-                  </label>
-                  <label class="edit-field edit-field-full">
-                    <span>Aquafarm location <em>*</em></span>
-                    <div class="aquafarm-location-row">
-                      <button type="button" class="btn-use-location" id="btnAquafarmLocation">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
-                        Use my current location
-                      </button>
-                      <span class="aquafarm-location-out" id="aquafarmLocationOut"></span>
-                    </div>
-                    <span class="edit-field-help">Stand at the edge of the aquafarm before tapping.</span>
-                  </label>
-                  <label class="edit-field">
-                    <span>Distance to mangroves (m)</span>
-                    <input type="number" min="0" step="1" id="fs-aquafarm-distance" placeholder="50" />
-                  </label>
-                  <label class="edit-field">
-                    <span>Discharge flowing toward mangroves? <em>*</em></span>
-                    <select id="fs-discharge-toward-mangroves">
-                      <option value="">Select…</option>
-                      <option value="yes">Yes</option>
-                      <option value="no_visible_discharge">No visible discharge</option>
-                    </select>
-                  </label>
-                </div>
-              </div>
-
-              <p class="survey-group-label">3 &middot; Instrument Readings</p>
+              <p class="survey-group-label">2 &middot; Instrument Readings</p>
               <button type="button" class="btn-add-species" id="btnToggleInstruments">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
                 <span id="btnToggleInstrumentsLabel">Add instrument readings (optional)</span>
@@ -635,7 +656,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
               </div>
               <p class="field-helper-text" id="instrumentReadingsHelp" hidden>Leave blank if you don't have the instrument.</p>
 
-              <p class="survey-group-label">4 &middot; Notes</p>
+              <p class="survey-group-label">3 &middot; Notes</p>
               <div class="edit-panel active">
                 <label class="edit-field edit-field-full">
                   <span>Water quality notes</span>
@@ -690,7 +711,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
           <div class="approval-tabs" id="approvalTabs">
             <button type="button" class="approval-tab active" data-approval-tab="all">All <span class="approval-tab-count" id="tabCountAll">0</span></button>
             <button type="button" class="approval-tab" data-approval-tab="pending">Pending <span class="approval-tab-count" id="tabCountPending">0</span></button>
-            <button type="button" class="approval-tab" data-approval-tab="approved">Approved <span class="approval-tab-count" id="tabCountApproved">0</span></button>
+            <button type="button" class="approval-tab" data-approval-tab="approved">Verified <span class="approval-tab-count" id="tabCountApproved">0</span></button>
             <button type="button" class="approval-tab" data-approval-tab="rejected">Needs Revision <span class="approval-tab-count" id="tabCountRejected">0</span></button>
           </div>
 
@@ -727,13 +748,13 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
           <div class="history-table-scroll">
           <table class="history-table">
             <colgroup>
+              <col style="width:9%;">
+              <col style="width:24%;">
               <col style="width:11%;">
-              <col style="width:27%;">
               <col style="width:14%;">
               <col style="width:13%;">
-              <col style="width:13%;">
-              <col style="width:12%;">
               <col style="width:10%;">
+              <col style="width:19%;">
             </colgroup>
             <thead>
               <tr>
@@ -741,7 +762,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
                 <th data-sort-key="area"><button type="button" class="sort-th-btn">Mangroves<span class="sort-arrow"></span></button></th>
                 <th data-sort-key="barangay"><button type="button" class="sort-th-btn">Barangay<span class="sort-arrow"></span></button></th>
                 <th class="cell-center" data-sort-key="threats"><button type="button" class="sort-th-btn">Observed Threats<span class="sort-arrow"></span></button></th>
-                <th class="cell-center" data-sort-key="aquafarm"><button type="button" class="sort-th-btn">Aquafarm Nearby<span class="sort-arrow"></span></button></th>
+                <th class="cell-center" data-sort-key="health"><button type="button" class="sort-th-btn">Health<span class="sort-arrow"></span></button></th>
                 <th class="cell-center" data-sort-key="status"><button type="button" class="sort-th-btn">Status<span class="sort-arrow"></span></button></th>
                 <th class="cell-center">Actions</th>
               </tr>
@@ -763,6 +784,93 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
           </div>
         </div>
       </section>
+
+      <section class="view" id="view-profile">
+        <div class="profile-view-card">
+          <div class="profile-view-avatar" id="profileViewAvatar">R</div>
+          <div class="profile-view-name" id="profileViewName">Ranger</div>
+          <div class="profile-view-role" data-i18n="profile-role">Field Personnel &middot; Calatagan Mangrove Reserve</div>
+          <div class="profile-view-actions">
+            <button class="profile-view-settings" id="profileViewSettings" type="button" onclick="switchView('settings', null)">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+              <span data-i18n="settings-title">Settings</span>
+            </button>
+            <button class="profile-view-logout" id="profileViewLogout" type="button">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              <span data-i18n="profile-logout">Log Out</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-settings">
+        <div class="panel settings-panel">
+          <div class="panel-header">
+            <span class="panel-title" data-i18n="settings-title">Settings</span>
+          </div>
+          <div class="settings-panel-body">
+            <div class="settings-section">
+              <div class="settings-section-label" data-i18n="settings-language">Language</div>
+              <div class="settings-option-row">
+                <button class="settings-option active" id="settingsLangEn" data-lang-opt="en" type="button">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                  </svg>
+                  English
+                </button>
+                <button class="settings-option" id="settingsLangTl" data-lang-opt="tl" type="button">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                  </svg>
+                  Filipino
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <nav class="mobile-bottom-nav" aria-label="Main navigation">
+        <button class="mobile-nav-item active" data-view="dashboard" onclick="switchView('dashboard', this)" type="button">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" />
+            <rect x="14" y="3" width="7" height="7" />
+            <rect x="14" y="14" width="7" height="7" />
+            <rect x="3" y="14" width="7" height="7" />
+          </svg>
+          <span data-i18n="bottomnav-dashboard">Dashboard</span>
+        </button>
+        <button class="mobile-nav-item" data-view="history" onclick="switchView('history', this)" type="button">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          <span data-i18n="bottomnav-history">History</span>
+        </button>
+        <button class="mobile-nav-item" data-view="profile" onclick="switchView('profile', this)" type="button">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span data-i18n="bottomnav-profile">Profile</span>
+        </button>
+      </nav>
 
     </main>
   </div>
@@ -816,7 +924,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </div>
             <div class="guide-text">
               <h3>Submission History</h3>
-              <p>Lists every survey you've submitted. Click a row to view full details. You can edit or delete a submission until MENRO approves it.</p>
+              <p>Lists every survey you've submitted. Click a row to view full details. You can edit or delete a submission until MENRO verifies it.</p>
             </div>
           </div>
         </div>
@@ -832,7 +940,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </div>
             <div class="guide-text">
               <h3>Section 1: Site Information</h3>
-              <p>Inspection date and your GPS location. You don't need to pick a zone. AquaGuard matches your GPS point to the nearest mangrove area automatically.</p>
+              <p>Inspection date, your GPS location, and an optional plot no. and plot size. You don't need to pick a zone. AquaGuard matches your GPS point to the nearest mangrove area automatically.</p>
             </div>
           </div>
 
@@ -844,7 +952,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </div>
             <div class="guide-text">
               <h3>Section 2: Vegetation</h3>
-              <p>Canopy length/width, estimated canopy cover, species, tree count, average height, GBH, seedling/sapling counts, and your own <strong>Overall Health Assessment</strong> for the site.</p>
+              <p>Mangrove name, barangay, and MPA manager fill in on their own once your location matches a mapped zone — none of these are something you choose, they're read straight from how MENRO mapped the area. Area is the only field here you type in yourself (optional). Then add one or more plots — tap "Add another plot" if you measured more than one — each with its own plot no., plot size, and species table (tree/sapling/seedling counts, plus an optional tree code, height, GBH, and canopy length/width if you have a measuring tape on hand). Finish with your own <strong>Overall Health Assessment</strong> for the site.</p>
             </div>
           </div>
 
@@ -855,8 +963,8 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
               </svg>
             </div>
             <div class="guide-text">
-              <h3>Section 3: Fauna</h3>
-              <p>Mollusk species observed, any observed threats (e.g. illegal cutting, dumping), additional notes, and an optional photo.</p>
+              <h3>Section 3: Fauna &amp; Threats</h3>
+              <p>Mollusk species observed, any observed threats (e.g. illegal cutting, dumping), additional notes, up to 5 required photos, and an optional short video — useful for documenting something like active cutting.</p>
             </div>
           </div>
 
@@ -868,7 +976,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </div>
             <div class="guide-text">
               <h3>Section 4: Water Quality</h3>
-              <p>Water color, odor, and visible foam or discharge. If there's a nearby aquafarm, you'll also record its name, its location, how far it is from the mangroves, and whether it's discharging toward them, plus a notes field.</p>
+              <p>Water clarity, color, odor, and visible foam or discharge — all optional. There's also an optional "Add instrument readings" section for salinity, pH, water temperature, and Secchi depth if you have the equipment, plus a notes field.</p>
             </div>
           </div>
         </div>
@@ -884,7 +992,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </div>
             <div class="guide-text">
               <h3>Viewing a Submission</h3>
-              <p>Click any row in Submission History to see everything recorded for that visit, organized the same way as the survey: Site Information, Vegetation, Fauna, then Water Quality.</p>
+              <p>Click any row in Submission History to see everything recorded for that visit, organized the same way as the survey: Site Information, Vegetation, Fauna &amp; Threats, then Water Quality.</p>
             </div>
           </div>
 
@@ -897,7 +1005,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </div>
             <div class="guide-text">
               <h3>Editing a Submission</h3>
-              <p>You can edit aquafarm info, water quality notes, and tree measurements here, but only before MENRO approves the submission. After that, it's locked.</p>
+              <p>You can edit aquafarm info, water quality notes, and tree measurements here, but only before MENRO verifies the submission. After that, it's locked.</p>
             </div>
           </div>
         </div>
@@ -913,7 +1021,7 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
             </div>
             <div class="guide-text">
               <h3>Auto Sign-Out</h3>
-              <p>You'll be signed out after 15 minutes of inactivity, for security. A warning appears first. Click <strong>Stay signed in</strong> to keep working.</p>
+              <p>You'll be logged out after 15 minutes of inactivity, for security. A warning appears first. Click <strong>Stay logged in</strong> to keep working.</p>
             </div>
           </div>
         </div>
@@ -933,11 +1041,11 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
           <line x1="21" y1="12" x2="9" y2="12" />
         </svg>
       </div>
-      <div class="confirm-modal-title">Sign out?</div>
-      <div class="confirm-modal-text">You'll need to sign in again to access the ranger dashboard.</div>
+      <div class="confirm-modal-title">Log Out?</div>
+      <div class="confirm-modal-text">You'll need to log in again to access the ranger dashboard.</div>
       <div class="confirm-modal-actions">
         <button class="btn-confirm-cancel" id="btnCancelSignout">Cancel</button>
-        <button class="btn-confirm-danger" id="btnConfirmSignout">Sign Out</button>
+        <button class="btn-confirm-danger" id="btnConfirmSignout">Log Out</button>
       </div>
     </div>
   </div>
@@ -996,6 +1104,10 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
       </div>
       <div class="confirm-modal-title" id="confirmSubmitTitle">Submit This Survey?</div>
       <div class="confirm-modal-text" id="confirmSubmitText">Make sure everything looks correct. You can still edit it afterward from Submission History.</div>
+      <label class="confirm-zone-ack" id="confirmZoneAckRow" hidden>
+        <input type="checkbox" id="confirmZoneAckCheckbox">
+        <span>I confirm this GPS location is correct for this survey.</span>
+      </label>
       <div class="confirm-modal-actions">
         <button class="btn-confirm-cancel" id="btnCancelConfirmSubmit">Review Again</button>
         <button class="btn-confirm-primary" id="btnConfirmSubmit">Submit</button>
@@ -1019,18 +1131,97 @@ $molluskSpeciesOptions .= '<option value="__other__">Other (specify)</option>';
 
       <div class="confirm-modal-actions">
         <button type="button" class="btn-confirm-cancel" id="btnCloseViewFooter">Close</button>
-        <button type="button" class="btn-confirm-primary" id="btnEditFromView">Edit this submission</button>
+        <button type="button" class="btn-confirm-primary" id="btnEditFromView">Edit</button>
       </div>
     </div>
   </div>
 
-  <script src="../assets/utils.js?v=1"></script>
+  <script src="../assets/utils.js?v=2"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>const MANGROVE_SPECIES_LIST = <?= json_encode($mangroveSpeciesList) ?>;</script>
+  <script>
+    const MANGROVE_SPECIES_LIST = <?= json_encode($mangroveSpeciesList) ?>;
+    const TRUE_MANGROVE_SPECIES_LIST = <?= json_encode($trueMangroveSpeciesList) ?>;
+    const ASSOCIATE_SPECIES_LIST = <?= json_encode($associateSpeciesList) ?>;
+  </script>
   <script>const MOLLUSK_SPECIES_LIST = <?= json_encode($molluskSpeciesList) ?>;</script>
-  <script src="ranger.js?v=47"></script>
-  <script src="field-survey.js?v=48"></script>
-  <script src="ranger-notifications.js?v=5"></script>
+  <script src="ranger.js?v=62"></script>
+  <script src="field-survey.js?v=79"></script>
+  <script src="ranger-notifications.js?v=6"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('../sw.js').catch(() => {});
+      });
+    }
+  </script>
+
+  <!-- Shared media lightbox — opened by openMediaLightbox(src, type) -->
+  <div id="mediaLightbox" class="media-lightbox" role="dialog" aria-modal="true" aria-label="Media viewer" hidden>
+    <div class="media-lightbox-toolbar">
+      <a id="mediaLightboxDownload" class="media-lightbox-btn" download aria-label="Download">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download
+      </a>
+      <button class="media-lightbox-btn media-lightbox-close" id="mediaLightboxClose" aria-label="Close">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Close
+      </button>
+    </div>
+    <div class="media-lightbox-inner">
+      <img id="mediaLightboxImg" class="media-lightbox-img" src="" alt="Full-size photo" hidden />
+      <video id="mediaLightboxVideo" class="media-lightbox-video" controls playsinline hidden></video>
+    </div>
+  </div>
+  <script>
+    (function () {
+      const lb        = document.getElementById('mediaLightbox');
+      const lbImg     = document.getElementById('mediaLightboxImg');
+      const lbVid     = document.getElementById('mediaLightboxVideo');
+      const lbClose   = document.getElementById('mediaLightboxClose');
+      const lbDl      = document.getElementById('mediaLightboxDownload');
+
+      window.openMediaLightbox = function (src, type) {
+        // Hide any page-level video elements — native controls can render above
+        // position:fixed overlays in some browsers due to compositor layering.
+        document.querySelectorAll('video:not(#mediaLightboxVideo)').forEach(v => {
+          v.pause(); v.dataset.lbHidden = '1'; v.style.visibility = 'hidden';
+        });
+        if (type === 'video') {
+          lbImg.hidden = true;
+          lbVid.src   = src;
+          lbVid.hidden = false;
+          lbVid.play().catch(() => {});
+        } else {
+          lbVid.pause();
+          lbVid.src   = '';
+          lbVid.hidden = true;
+          lbImg.src   = src;
+          lbImg.hidden = false;
+        }
+        lbDl.href = src;
+        lbDl.download = src.split('/').pop() || (type === 'video' ? 'video.mp4' : 'photo.jpg');
+        lb.hidden = false;
+        document.body.style.overflow = 'hidden';
+        lbClose.focus();
+      };
+
+      function closeLightbox() {
+        lb.hidden = true;
+        lbVid.pause();
+        lbVid.src = '';
+        lbImg.src = '';
+        document.body.style.overflow = '';
+        // Restore any video elements that were hidden when lightbox opened.
+        document.querySelectorAll('video[data-lb-hidden]').forEach(v => {
+          v.style.visibility = ''; delete v.dataset.lbHidden;
+        });
+      }
+
+      lbClose.addEventListener('click', closeLightbox);
+      lb.addEventListener('click', (e) => { if (e.target === lb) closeLightbox(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !lb.hidden) closeLightbox(); });
+    })();
+  </script>
 </body>
 
 </html>

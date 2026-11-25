@@ -6,6 +6,33 @@ function formatNdvi(value) {
   return fixed === "-0.00" ? "0.00" : fixed;
 }
 
+// Matches the map's own NDVI legend (Bare -0.1 to 0.1, Sparse 0.2 to 0.4,
+// Dense above 0.4) so a zone's NDVI reads the same way in the list as it
+// does on the map, without needing the separate field-survey status badge.
+function ndviVegetationClass(value) {
+  if (value < 0.2) return "ndvi-bare";
+  if (value <= 0.4) return "ndvi-sparse";
+  return "ndvi-dense";
+}
+
+// Renders a zone's change since the previous usable scene as a small ▲/▼,
+// so the list reads as a monitoring tool (is this zone improving or
+// declining?) instead of just one snapshot's NDVI. Flat (±0.01) gets no
+// arrow. The exact value and compared date live in the title tooltip rather
+// than inline text, to keep the list compact.
+function ndviDeltaArrowHtml(zone) {
+  if (zone.ndviDelta === null || zone.ndviDelta === undefined) return "";
+  if (Math.abs(zone.ndviDelta) <= 0.01) return "";
+
+  const up = zone.ndviDelta > 0;
+  const cls = up ? "ndvi-delta-up" : "ndvi-delta-down";
+  const arrow = up ? "▲" : "▼";
+  const dateLabel = typeof formatDate === "function" ? formatDate(zone.ndviPreviousDate) : zone.ndviPreviousDate;
+  const title = `${up ? "+" : ""}${formatNdvi(zone.ndviDelta)} since ${dateLabel || "previous scene"}`;
+
+  return ` <span class="ndvi-delta-arrow ${cls}" title="${escapeHtml(title)}">${arrow}</span>`;
+}
+
 function todayISO() {
     const d = new Date();
     const yyyy = d.getFullYear();
@@ -143,6 +170,20 @@ function sentinelTimeRangeFor(dateStr) {
 
 const currentMaxCC = 50;
 
+const mapLoadingBarEl = document.getElementById("mapLoadingBar");
+let activeTileLoads = 0;
+
+function trackTileLoading(layer) {
+    layer.on("loading", function () {
+        activeTileLoads++;
+        if (mapLoadingBarEl) mapLoadingBarEl.classList.add("is-active");
+    });
+    layer.on("load", function () {
+        activeTileLoads = Math.max(0, activeTileLoads - 1);
+        if (activeTileLoads === 0 && mapLoadingBarEl) mapLoadingBarEl.classList.remove("is-active");
+    });
+}
+
 const sentinelLayer = L.tileLayer.wms(`${SENTINEL_PROXY_URL}?mode=wms`, {
     layers: "TRUE_COLOR",
     format: "image/png",
@@ -153,6 +194,7 @@ const sentinelLayer = L.tileLayer.wms(`${SENTINEL_PROXY_URL}?mode=wms`, {
     time: sentinelTimeRangeFor(sceneDateInputValueOrToday()),
     maxcc: currentMaxCC,
 });
+trackTileLoading(sentinelLayer);
 
 const layerSentinel2El = document.getElementById("layerSentinel2");
 if (layerSentinel2El) {
@@ -180,6 +222,7 @@ const ndviOverlayLayer = L.tileLayer.wms(`${SENTINEL_PROXY_URL}?mode=wms`, {
     time: sentinelTimeRangeFor(sceneDateInputValueOrToday()),
     maxcc: currentMaxCC,
 });
+trackTileLoading(ndviOverlayLayer);
 
 const layerNdviOverlayEl = document.getElementById("layerNdviOverlay");
 const legendNdviEl = document.getElementById("legendNdvi");
@@ -195,6 +238,44 @@ if (layerNdviOverlayEl) {
     if (layerNdviOverlayEl.checked) ndviOverlayLayer.addTo(map);
     if (legendNdviEl) legendNdviEl.hidden = !layerNdviOverlayEl.checked;
 }
+
+const mapLegendEl = document.getElementById("mapLegend");
+const mapLegendToggleEl = document.getElementById("mapLegendToggle");
+if (mapLegendEl && mapLegendToggleEl) {
+    mapLegendToggleEl.addEventListener("click", function () {
+        const collapsed = mapLegendEl.classList.toggle("collapsed");
+        mapLegendToggleEl.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        mapLegendToggleEl.title = collapsed ? "Expand legend" : "Collapse legend";
+    });
+}
+
+// Mobile-only drawer for the right panel (Scene Calendar, Mangrove Zones) —
+// on a phone-width screen the panel's normal 340px fixed width would leave
+// almost nothing for the map itself, so below that breakpoint it's an
+// off-canvas panel instead, opened by its own topbar button.
+const rightPanelEl         = document.getElementById("rightPanel");
+const rightPanelBackdropEl = document.getElementById("rightPanelBackdrop");
+const btnToggleRightPanel  = document.getElementById("btnToggleRightPanel");
+
+function openRightPanel() {
+    if (rightPanelEl) rightPanelEl.classList.add("open");
+    if (rightPanelBackdropEl) rightPanelBackdropEl.classList.add("open");
+    if (btnToggleRightPanel) btnToggleRightPanel.setAttribute("aria-expanded", "true");
+}
+
+function closeRightPanel() {
+    if (rightPanelEl) rightPanelEl.classList.remove("open");
+    if (rightPanelBackdropEl) rightPanelBackdropEl.classList.remove("open");
+    if (btnToggleRightPanel) btnToggleRightPanel.setAttribute("aria-expanded", "false");
+}
+
+if (btnToggleRightPanel) {
+    btnToggleRightPanel.addEventListener("click", () => {
+        if (rightPanelEl && rightPanelEl.classList.contains("open")) closeRightPanel();
+        else openRightPanel();
+    });
+}
+if (rightPanelBackdropEl) rightPanelBackdropEl.addEventListener("click", closeRightPanel);
 
 // Real mangrove boundary shapes for Calatagan, clipped from the Global Mangrove
 // Watch (10m resolution, 2020) worldwide dataset — a broader, satellite-derived
@@ -269,15 +350,15 @@ function bindProtectedAreaPopup(layer, p) {
     layer._protectedAreaProps = p;
     layer.unbindPopup();
     layer.bindPopup(`
-        <div style="min-width:190px">
+        <div style="min-width:300px">
           <div class="popup-title">${escapeHtml(p.name)}</div>
           <table style="width:100%;font-size:0.78rem;border-collapse:collapse">
-            <tr><td style="color:#777;padding:2px 6px 2px 0">Barangay</td><td style="font-weight:600">${escapeHtml(p.barangay || "")}</td></tr>
-            <tr><td style="color:#777;padding:2px 6px 2px 0">Area</td><td style="font-weight:600">${p.statedHa} ha</td></tr>
-            <tr><td style="color:#777;padding:2px 6px 2px 0">Boundary</td><td style="font-weight:600">${p.source === "approximate_circle" ? "Approximate" : "Official survey"}</td></tr>
+            <tr><td style="color:#777;padding:2px 10px 2px 0;white-space:nowrap">Barangay:</td><td style="font-weight:600">${escapeHtml(p.barangay || "")}</td></tr>
+            <tr><td style="color:#777;padding:2px 10px 2px 0;white-space:nowrap">Area:</td><td style="font-weight:600">${p.statedHa} ha</td></tr>
+            <tr><td style="color:#777;padding:2px 10px 2px 0;white-space:nowrap">Boundary:</td><td style="font-weight:600">${p.source === "approximate_circle" ? "Approximate" : "Official survey"}</td></tr>
           </table>
         </div>
-    `);
+    `, { minWidth: 300, maxWidth: 360 });
 }
 
 fetch("../API/protected-areas.php?action=list")
@@ -455,42 +536,126 @@ function ensureZoneNdviLoaded(zone, dateStr) {
     if (zone._ndviLoading) return;
     zone._ndviLoading = true;
 
-    fetchZoneNdviFromCopernicus(zone, dateStr).then((value) => {
+    const date = dateStr || todayISO();
+
+    fetchZoneNdviFromCopernicus(zone, date).then((value) => {
         zone._ndviLoading = false;
         zone.satNdvi = value;
-        if (typeof renderZoneList === "function") renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");
+        refreshZonePanels(zone);
+        loadZoneNdviDelta(zone, date);
+    });
+}
 
-        const layer = zone._mangroveAreaLayer || (typeof zoneShapes !== "undefined" ? zoneShapes[zone.id] : null);
-        if (layer && typeof layer.isPopupOpen === "function" && layer.isPopupOpen()) {
-            layer.getPopup().update();
-        }
+function refreshZonePanels(zone) {
+    if (typeof renderZoneList === "function") renderZoneList(zoneSearchEl ? zoneSearchEl.value : "");
+
+    const layer = zone._mangroveAreaLayer || (typeof zoneShapes !== "undefined" ? zoneShapes[zone.id] : null);
+    if (layer && typeof layer.isPopupOpen === "function" && layer.isPopupOpen()) {
+        layer.getPopup().update();
+    }
+}
+
+// Compares this reading against the zone's NDVI at the previous usable
+// Sentinel-2 pass. Fetched after the current reading so the list shows NDVI
+// right away, with the ▲/▼ filling in a beat later rather than delaying it.
+function loadZoneNdviDelta(zone, date) {
+    if (zone.satNdvi === null || zone.satNdvi === undefined) return;
+    if (typeof findAdjacentClearDate !== "function") return;
+
+    findAdjacentClearDate(date, -1).then((prevDate) => {
+        if (!prevDate) return;
+        return fetchZoneNdviFromCopernicus(zone, prevDate).then((prevValue) => {
+            if (prevValue === null || prevValue === undefined) return;
+            zone.ndviDelta = zone.satNdvi - prevValue;
+            zone.ndviPreviousDate = prevDate;
+            refreshZonePanels(zone);
+        });
     });
 }
 
 const markersLayer = L.layerGroup().addTo(map);
 
 function buildPopup(zone) {
-  const hasKobo = zone.lastRanger && zone.lastRanger !== "—";
-
-  const surveyRow = hasKobo ? `
-    <tr><td style="color:#777;padding:2px 6px 2px 0">Last Inspection</td><td style="font-weight:600">${escapeHtml(zone.lastDate)}</td></tr>
-  ` : `<tr><td colspan="2" style="color:#999;font-size:0.72rem;padding-top:4px;">No field survey data yet</td></tr>`;
-
   return `
-    <div style="min-width:190px">
+    <div style="min-width:300px">
       <div class="popup-title">${escapeHtml(zone.name)}</div>
       <table style="width:100%;font-size:0.78rem;border-collapse:collapse">
-        <tr><td style="color:#777;padding:2px 6px 2px 0">Status</td><td style="font-weight:600">${(typeof STATUS_DISPLAY_LABELS !== "undefined" && STATUS_DISPLAY_LABELS[zone.status]) || capitalise(zone.status)}</td></tr>
-        <tr><td style="color:#777;padding:2px 6px 2px 0">NDVI</td><td style="font-weight:600">${zone.satNdvi != null ? formatNdvi(zone.satNdvi) : "Pending fetch…"}</td></tr>
-        <tr><td style="color:#777;padding:2px 6px 2px 0">Area</td><td style="font-weight:600">${zone.area !== null ? zone.area + " ha" : "—"}</td></tr>
-        ${surveyRow}
+        ${fieldStatusRowHtml(zone)}
+        <tr><td style="color:#777;padding:2px 10px 2px 0;white-space:nowrap">NDVI:</td><td style="font-weight:600">${zone.satNdvi != null ? formatNdvi(zone.satNdvi) : "Pending fetch…"}</td></tr>
+        <tr><td style="color:#777;padding:2px 10px 2px 0;white-space:nowrap">Area:</td><td style="font-weight:600">${zone.area !== null ? zone.area + " ha" : "—"}</td></tr>
+        ${surveyPopupRows(zone)}
       </table>
+      ${viewSurveyButtonHtml(zone)}
     </div>
   `;
 }
 
+// The list no longer shows a status badge (it clashed visually with the NDVI
+// number right next to it), so the popup is now the only place a zone's
+// field-survey status appears — labeled "Field status" with its review state,
+// so it's never mistaken for an NDVI-derived reading.
+function fieldStatusRowHtml(zone) {
+  const label = (typeof STATUS_DISPLAY_LABELS !== "undefined" && STATUS_DISPLAY_LABELS[zone.status]) || capitalise(zone.status);
+  const hasKobo = zone.lastRanger && zone.lastRanger !== "—";
+
+  let qualifier = "";
+  if (hasKobo) {
+    if (zone.approvalStatus === "approved" && zone.reviewedAt) {
+      const dateLabel = typeof formatDate === "function" ? formatDate(zone.reviewedAt) : zone.reviewedAt;
+      qualifier = ` (verified ${escapeHtml(dateLabel)})`;
+    } else if (zone.approvalStatus === "rejected") {
+      qualifier = " (needs revision)";
+    } else {
+      qualifier = " (pending review)";
+    }
+  }
+
+  return `<tr><td style="color:#777;padding:2px 10px 2px 0;white-space:nowrap">Field status:</td><td style="font-weight:600">${label}${qualifier}</td></tr>`;
+}
+
+// Shared by buildPopup() here and bindMangrovePopup() in mangrove-draw.js.
+// Last Survey/Canopy Cover/Threats were dropped from here — that detail is
+// already visible inside the survey itself, which "View survey" opens, so
+// showing it twice was redundant.
+function surveyPopupRows(zone) {
+  const hasKobo = zone.lastRanger && zone.lastRanger !== "—";
+  if (!hasKobo) {
+    return `<tr><td colspan="2" style="color:#999;font-size:0.72rem;padding-top:4px;">No field survey data yet</td></tr>`;
+  }
+  return "";
+}
+
+function viewSurveyButtonHtml(zone) {
+  if (!zone.lastSubmissionId) return "";
+  return `
+    <div class="popup-view-buttons">
+      <button type="button" class="popup-view-survey-btn" data-view-survey-id="${escapeHtml(zone.lastSubmissionId)}">View survey</button>
+      <button type="button" class="popup-view-history-btn" data-view-history-zone="${escapeHtml(zone.id)}">View history</button>
+    </div>
+  `;
+}
+
+// Delegated at the document level since the button lives inside Leaflet popup
+// markup, which is created/destroyed on open/close rather than present up front.
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".popup-view-survey-btn");
+  if (!btn) return;
+  const id = btn.dataset.viewSurveyId;
+  const sub = typeof ALL_SUBMISSIONS !== "undefined" ? ALL_SUBMISSIONS.find(s => String(s["_id"]) === id) : null;
+  if (sub && typeof openSubmissionDetailModal === "function") openSubmissionDetailModal(sub);
+});
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".popup-view-history-btn");
+  if (!btn) return;
+  const zoneId = btn.dataset.viewHistoryZone;
+  const zone = typeof ZONES !== "undefined" ? ZONES.find(z => z.id === zoneId) : null;
+  if (zone && typeof openZoneHistoryModal === "function") openZoneHistoryModal(zone);
+});
+
 const mapLayersControl = document.getElementById("mapLayersControl");
 const layersToggleBtn  = document.getElementById("layersToggleBtn");
+const layersExpandBtn  = document.getElementById("layersExpandBtn");
 
 if (layersToggleBtn && mapLayersControl) {
     layersToggleBtn.addEventListener("click", function (e) {
@@ -498,25 +663,37 @@ if (layersToggleBtn && mapLayersControl) {
         setMapType(!satelliteBasemapActive);
     });
 
+    function setLayersPopupOpen(open) {
+        mapLayersControl.classList.toggle("open", open);
+        if (layersExpandBtn) layersExpandBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+
+    // Hover keeps working for mouse/trackpad users; the expand button (always
+    // visible, not hover-dependent) is what makes the popup reachable on
+    // touch devices, where "hover" never fires.
     let layersHoverCloseTimer = null;
 
     mapLayersControl.addEventListener("mouseenter", function () {
         clearTimeout(layersHoverCloseTimer);
-        mapLayersControl.classList.add("open");
-        layersToggleBtn.setAttribute("aria-expanded", "true");
+        setLayersPopupOpen(true);
     });
 
     mapLayersControl.addEventListener("mouseleave", function () {
         layersHoverCloseTimer = setTimeout(function () {
-            mapLayersControl.classList.remove("open");
-            layersToggleBtn.setAttribute("aria-expanded", "false");
+            setLayersPopupOpen(false);
         }, 150);
     });
 
+    if (layersExpandBtn) {
+        layersExpandBtn.addEventListener("click", function (e) {
+            e.stopPropagation();
+            setLayersPopupOpen(!mapLayersControl.classList.contains("open"));
+        });
+    }
+
     document.addEventListener("click", function (e) {
         if (!mapLayersControl.contains(e.target)) {
-            mapLayersControl.classList.remove("open");
-            layersToggleBtn.setAttribute("aria-expanded", "false");
+            setLayersPopupOpen(false);
         }
     });
 

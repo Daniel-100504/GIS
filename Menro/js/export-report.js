@@ -50,19 +50,6 @@ function getExportDateRange() {
     const toISO = (d) => d.toISOString().slice(0, 10);
     const today = new Date();
 
-    if (mode === "today") {
-        return { from: toISO(today), to: toISO(today) };
-    }
-    if (mode === "7days") {
-        const from = new Date(today);
-        from.setDate(from.getDate() - 6);
-        return { from: toISO(from), to: toISO(today) };
-    }
-    if (mode === "30days") {
-        const from = new Date(today);
-        from.setDate(from.getDate() - 29);
-        return { from: toISO(from), to: toISO(today) };
-    }
     if (mode === "thisyear") {
         const year = today.getFullYear();
         return { from: `${year}-01-01`, to: toISO(today) };
@@ -82,16 +69,6 @@ function getExportDateRange() {
     return { from: null, to: null };
 }
 
-function exportRangeLabel() {
-    const { from, to } = getExportDateRange();
-    if (!from && !to) return `Generated ${new Date().toLocaleString("en-US")}`;
-
-    const fmt = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-    if (from && to) return `${fmt(from)} – ${fmt(to)}`;
-    if (from) return `From ${fmt(from)}`;
-    return `Through ${fmt(to)}`;
-}
-
 // A report only earns the "Annual" title when its range is a full, completed
 // calendar year (Jan 1 – Dec 31 of one year) — matching how MENRO actually
 // compiles an annual report, once the year is over. Anything shorter (a day,
@@ -108,15 +85,15 @@ function reportTitleInfo() {
         if (isFullCalendarYear) {
             return {
                 title: "Annual Monitoring Data Sheet",
-                subtitle: `Assessing the Climate Change Vulnerability and Recruitment Capacity of Mangrove Ecosystem — ${fromD.getFullYear()}`,
+                subtitle: "Assessing the Climate Change Vulnerability and Recruitment Capacity of Mangrove Ecosystem",
                 fileTag: `annual-monitoring-data-sheet-${fromD.getFullYear()}`,
             };
         }
     }
     return {
-        title: "Field Monitoring Data Sheet",
-        subtitle: `Assessing the Climate Change Vulnerability and Recruitment Capacity of Mangrove Ecosystem — ${exportRangeLabel()}`,
-        fileTag: "field-monitoring-data-sheet",
+        title: "Annual Monitoring Data Sheet",
+        subtitle: "Assessing the Climate Change Vulnerability and Recruitment Capacity of Mangrove Ecosystem",
+        fileTag: "annual-monitoring-data-sheet",
     };
 }
 
@@ -124,6 +101,7 @@ function sortedSubmissions() {
     const { from, to } = getExportDateRange();
     const subDate = (sub) => (typeof koboSubmissionDate === "function" ? koboSubmissionDate(sub) : (sub["Date_of_visit"] || sub["Inspection_Date"] || ""));
     return [...ALL_SUBMISSIONS]
+        .filter(sub => (sub["_approval_status"] || "pending") !== "pending")
         .filter(sub => {
             const date = subDate(sub);
             if (from && date < from) return false;
@@ -133,6 +111,15 @@ function sortedSubmissions() {
         .sort((a, b) => subDate(a).localeCompare(subDate(b)));
 }
 
+// Full month name reads more like an official document than the raw
+// "2026-01-21" ISO string the submission stores it as.
+function pdfFormatDate(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso + "T00:00:00");
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+}
+
 function healthAssessmentLabel(raw) {
     switch ((raw || "").toString().toLowerCase()) {
         case "healthy":  return "Good";
@@ -140,14 +127,6 @@ function healthAssessmentLabel(raw) {
         case "degraded": return "Poor";
         default:         return "—";
     }
-}
-
-function prettify(raw) {
-    if (!raw) return "—";
-    return raw.toString()
-        .replace(/___/g, " / ")
-        .replace(/_/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function pdfEscapeHtml(str) {
@@ -170,46 +149,38 @@ const PDF_SHEET_STYLE = `
 }
 #pdfExportRoot *{box-sizing:border-box;margin:0;padding:0}
 #pdfExportRoot{font-family:"Source Sans 3","Segoe UI",Arial,sans-serif;color:var(--pdf-ink);font-size:10pt;line-height:1.4}
-#pdfExportRoot .sheet{width:210mm;min-height:297mm;background:#fff;padding:14mm 14mm 12mm;display:flex;flex-direction:column}
+#pdfExportRoot .sheet{width:297mm;min-height:210mm;background:#fff;padding:10mm 22mm 22mm;display:flex;flex-direction:column}
 
 #pdfExportRoot .letterhead{display:grid;grid-template-columns:22mm 1fr 22mm;align-items:center;padding-bottom:4mm;border-bottom:2px solid var(--pdf-green)}
 #pdfExportRoot .letterhead img{width:20mm;height:20mm;object-fit:contain}
-#pdfExportRoot .letterhead .gov{text-align:center;font-size:9pt;line-height:1.35;color:var(--pdf-muted)}
+#pdfExportRoot .letterhead .gov{text-align:center;font-size:9pt;line-height:1.35;color:var(--pdf-muted);text-transform:uppercase}
 #pdfExportRoot .letterhead .gov strong{display:block;color:var(--pdf-ink);font-size:10pt;font-weight:700}
 #pdfExportRoot .rule{border-bottom:0.75px solid var(--pdf-green);margin-top:1mm}
 
 #pdfExportRoot .title{text-align:center;margin:4mm 0 4mm}
-#pdfExportRoot .title h1{font-family:"Source Serif 4",Georgia,serif;font-size:16pt;font-weight:700;color:var(--pdf-green)}
-#pdfExportRoot .title p{font-size:9.5pt;color:var(--pdf-muted);font-style:italic;margin-top:1mm}
+#pdfExportRoot .title h1{font-family:"Source Serif 4",Georgia,serif;font-size:16pt;font-weight:700;color:var(--pdf-green);text-transform:uppercase}
+#pdfExportRoot .title p{font-size:9.5pt;color:var(--pdf-muted);margin-top:1mm}
 
-#pdfExportRoot .fields{display:grid;grid-template-columns:1fr 1fr;column-gap:10mm;row-gap:2.5mm}
-#pdfExportRoot .fields div{display:grid;grid-template-columns:30mm 4mm 1fr;align-items:baseline}
-#pdfExportRoot .fields dt{color:var(--pdf-muted);font-size:9.5pt;grid-column:1;grid-row:1}
-#pdfExportRoot .fields div::before{content:":";grid-column:2;grid-row:1;color:var(--pdf-muted)}
-#pdfExportRoot .fields dd{grid-column:3;grid-row:1;font-weight:600;min-height:5.5mm;border-bottom:0.75px solid var(--pdf-rule-light)}
+#pdfExportRoot .fields{display:flex;flex-direction:column;row-gap:1.5mm}
+#pdfExportRoot .fields div{display:grid;grid-template-columns:34mm 4mm 1fr;align-items:baseline;font-size:11pt}
+#pdfExportRoot .fields dt{color:var(--pdf-ink);font-size:11pt;grid-column:1;grid-row:1}
+#pdfExportRoot .fields div::before{content:":";grid-column:2;grid-row:1;color:var(--pdf-ink)}
+#pdfExportRoot .fields dd{grid-column:3;grid-row:1;font-size:11pt;font-weight:600}
 
-#pdfExportRoot section{margin-top:7mm}
+#pdfExportRoot section{margin-top:5mm}
 #pdfExportRoot h2{font-size:11pt;font-weight:700;color:var(--pdf-green);padding-bottom:1.5mm;margin-bottom:3mm;border-bottom:0.75px solid var(--pdf-rule)}
 
 #pdfExportRoot table{width:100%;border-collapse:collapse;table-layout:fixed}
-#pdfExportRoot .data th,#pdfExportRoot .data td{border:0.75px solid var(--pdf-rule);padding:1.8mm 2.5mm;font-size:9.5pt;vertical-align:middle}
+#pdfExportRoot .data th,#pdfExportRoot .data td{border:0.75px solid var(--pdf-rule);padding:2.2mm 3mm;font-size:11pt;vertical-align:middle}
 #pdfExportRoot .data thead th{background:var(--pdf-green);color:#fff;font-weight:600;border-color:var(--pdf-green)}
-#pdfExportRoot .data td{height:7.5mm;font-variant-numeric:tabular-nums}
+#pdfExportRoot .data td{height:8.5mm;font-variant-numeric:tabular-nums}
 #pdfExportRoot .data .no{width:9%;text-align:center}
-#pdfExportRoot .data .num{width:16%;text-align:right}
-#pdfExportRoot .data thead .num{text-align:right}
+#pdfExportRoot .data .num{width:16%;text-align:center}
 #pdfExportRoot .data thead th:not(.no):not(.num){text-align:left}
 #pdfExportRoot .data tbody tr:nth-child(even) td{background:#FAFBFA}
 #pdfExportRoot .data tfoot td{font-weight:700;background:var(--pdf-green-soft);border-top:1.25px solid var(--pdf-green)}
 
-#pdfExportRoot .signatures{display:grid;grid-template-columns:1fr 1fr;gap:18mm;margin-top:12mm}
-#pdfExportRoot .sig .line{border-bottom:0.75px solid var(--pdf-ink);height:12mm}
-#pdfExportRoot .sig .name{font-weight:600;margin-top:1.5mm;min-height:5mm}
-#pdfExportRoot .sig .role{font-size:9pt;color:var(--pdf-muted)}
-#pdfExportRoot .sig .date{font-size:9pt;color:var(--pdf-muted);margin-top:3mm}
-
-#pdfExportRoot .spacer{flex:1;min-height:6mm}
-#pdfExportRoot footer{padding-top:5mm;margin-top:6mm;display:flex;justify-content:space-between;font-size:8pt;color:var(--pdf-muted);border-top:0.75px solid var(--pdf-rule-light)}
+#pdfExportRoot .spacer{flex:1;min-height:2mm}
 `;
 
 function ensurePdfExportRoot() {
@@ -232,7 +203,8 @@ function pdfFieldsHtml(pairs) {
     ).join("")}</dl>`;
 }
 
-function pdfDataTableHtml(headers, colClasses, rows, totalRow, emptyMessage) {
+function pdfDataTableHtml(headers, colClasses, rows, totalRow, emptyMessage, widths) {
+    const colgroupHtml = widths ? `<colgroup>${widths.map(w => `<col style="width:${w}%">`).join("")}</colgroup>` : "";
     const headHtml = `<tr>${headers.map((h, i) => `<th class="${colClasses[i] || ""}">${pdfEscapeHtml(h)}</th>`).join("")}</tr>`;
     const bodyHtml = rows.length > 0
         ? rows.map(cells => `<tr>${cells.map((c, i) => `<td class="${colClasses[i] || ""}">${pdfEscapeHtml(c)}</td>`).join("")}</tr>`).join("")
@@ -240,77 +212,76 @@ function pdfDataTableHtml(headers, colClasses, rows, totalRow, emptyMessage) {
     const footHtml = rows.length > 0 && totalRow
         ? `<tfoot><tr>${totalRow.map((c, i) => `<td class="${colClasses[i] || ""}">${pdfEscapeHtml(c)}</td>`).join("")}</tr></tfoot>`
         : "";
-    return `<table class="data"><thead>${headHtml}</thead><tbody>${bodyHtml}</tbody>${footHtml}</table>`;
+    return `<table class="data">${colgroupHtml}<thead>${headHtml}</thead><tbody>${bodyHtml}</tbody>${footHtml}</table>`;
 }
 
 // Builds one full A4 "Annual Monitoring Data Sheet" page for a single
 // submission — same design as the official paper form, filled in with that
 // submission's real data.
-function buildSheetHtml(sub, sealDataUrl, pageNum, pageCount) {
+// Species are stored as "Tagalog common name (Scientific name)" (e.g.
+// "Bakawan lalaki (Rhizophora apiculata)") — the printed sheet only wants
+// the scientific name, matching the real MENRO data sheet's own species
+// column ("Avicennia sp.", "Rhizophora sp."). A name with no parenthesized
+// part (e.g. "Bamboo species") has no scientific form to pull out, so it's
+// shown as-is.
+function scientificSpeciesName(raw) {
+    const match = /\(([^)]+)\)\s*$/.exec(raw || "");
+    return match ? match[1] : raw;
+}
+
+function buildSheetHtml(sub, sealDataUrl, plot, isFirstPlot, isLastPlot) {
     const zone = zoneForSubmission(sub);
 
-    const trees = koboExtractTrees(sub).filter(t => koboTreeField(t, "Species_Name") || koboTreeField(t, "Species"));
+    const trees = (plot.Species_Records || []).filter(t => koboTreeField(t, "Species_Name") || koboTreeField(t, "Species"));
     const speciesRows = trees.map(t => [
-        koboTreeField(t, "Species_Name") || koboTreeField(t, "Species") || "—",
+        koboTreeField(t, "Tree_Code") || "—",
+        scientificSpeciesName(koboTreeField(t, "Species_Name") || koboTreeField(t, "Species") || "—"),
+        koboTreeField(t, "Average_Tree_Height_m") || koboTreeField(t, "Height_m") || "—",
+        koboTreeField(t, "GBH_Girth_at_Breast_Height_cm") || koboTreeField(t, "GBH_cm") || "—",
+        koboTreeField(t, "Canopy_Length_m") || "—",
+        koboTreeField(t, "Canopy_Width_m") || "—",
         koboTreeField(t, "Tree_Count") || "0",
-        koboTreeField(t, "Sapling_Count") ?? koboTreeField(t, "Sapling_count") ?? "0",
-        koboTreeField(t, "Seedling_Count") ?? koboTreeField(t, "Seedling_count") ?? "0",
+        koboTreeField(t, "Sapling_Count") || koboTreeField(t, "Sapling_count") || "0",
+        koboTreeField(t, "Seedling_Count") || koboTreeField(t, "Seedling_count") || "0",
     ]);
-    const sumCol = (rows, i) => rows.reduce((a, r) => a + (parseFloat(r[i]) || 0), 0);
-    const speciesTotal = ["Total", sumCol(speciesRows, 1), sumCol(speciesRows, 2), sumCol(speciesRows, 3)];
     const speciesTableHtml = pdfDataTableHtml(
-        ["No.", "Species", "Trees", "Saplings", "Seedlings"],
-        ["no", "", "num", "num", "num"],
+        ["No.", "Code", "Species", "Height (m)", "GBH (cm)", "Canopy Length (m)", "Canopy Width (m)", "Trees", "Saplings", "Seedlings"],
+        ["no", "", "", "num", "num", "num", "num", "num", "num", "num"],
         speciesRows.map((r, i) => [i + 1, ...r]),
-        ["", ...speciesTotal],
-        "No species recorded for this visit."
-    );
-
-    const mollusks = koboExtractMollusks(sub);
-    const molluskRows = mollusks.map(m => [
-        koboTreeField(m, "Mollusk_Species_Name") || koboTreeField(m, "Mollusk_species_name") || "—",
-    ]);
-    const molluskTableHtml = pdfDataTableHtml(
-        ["No.", "Species"],
-        ["no", ""],
-        molluskRows.map((r, i) => [i + 1, ...r]),
         null,
-        "No mollusks recorded for this visit."
+        "No species recorded for this visit.",
+        [6, 9, 21, 10, 10, 10, 10, 8, 8, 8]
     );
 
-    const aquafarmRaw = sub["Nearby_Aquafarm_Activity"] || sub["Nearby_aquafarm_activity"] || "";
-    const isAquafarmYes = aquafarmRaw.toLowerCase() === "yes";
-    const waterFields = [
-        ["Water clarity", prettify(sub["Water_Clarity"])],
-        ["Water color", prettify(sub["Water_Color"])],
-        ["Odor", prettify(sub["Odor"])],
-        ["Foam / discharge", prettify(sub["Visible_Foam_or_Discharge"])],
-        ["Aquafarm nearby", prettify(aquafarmRaw)],
-        ["Observed threats", observedThreatsDisplay(sub["Observed_Threats"], sub["Observed_Threats_Other"]) || "—"],
-    ];
-    if (isAquafarmYes) {
-        waterFields.push(
-            ["Aquafarm name", sub["Aquafarm_Name"] || "—"],
-            ["Distance to mangroves (m)", sub["Aquafarm_Distance_m"] || "—"],
-            ["Discharge toward mangroves", prettify(sub["Discharge_Toward_Mangroves"] || sub["Discharge_toward_mangroves"])]
-        );
+    // Mollusks and notes are recorded once for the whole visit, not per
+    // plot, so they only appear on the last plot's page instead of
+    // repeating identically on every one.
+    let molluskSectionHtml = "";
+    let notesHtml = "";
+    if (isLastPlot) {
+        const mollusks = koboExtractMollusks(sub).filter(m => koboTreeField(m, "Mollusk_Species_Name") || koboTreeField(m, "Mollusk_species_name"));
+        if (mollusks.length > 0) {
+            const molluskRows = mollusks.map(m => [
+                koboTreeField(m, "Mollusk_Species_Name") || koboTreeField(m, "Mollusk_species_name") || "—",
+            ]);
+            const molluskTableHtml = pdfDataTableHtml(
+                ["No.", "Species"],
+                ["no", ""],
+                molluskRows.map((r, i) => [i + 1, ...r]),
+                null,
+                "No mollusks recorded for this visit."
+            );
+            molluskSectionHtml = `<section><h2>Mollusks</h2>${molluskTableHtml}</section>`;
+        }
+
+        const notes = sub["Additional_Notes"] || "";
+        notesHtml = notes ? `<p style="margin-top:4mm;font-size:9pt;font-style:italic;color:var(--pdf-ink)">Notes: ${pdfEscapeHtml(notes)}</p>` : "";
     }
 
-    const hasInstrumentReadings = sub["Salinity_ppt"] || sub["PH"] || sub["Water_Temperature_C"] || sub["Secchi_Depth_cm"];
-    const instrumentSectionHtml = hasInstrumentReadings
-        ? `<section><h2>Instrument readings</h2>${pdfFieldsHtml([
-            ["Salinity (ppt)", sub["Salinity_ppt"] || "—"],
-            ["pH", sub["PH"] || "—"],
-            ["Water temp (°C)", sub["Water_Temperature_C"] || "—"],
-            ["Secchi depth (cm)", sub["Secchi_Depth_cm"] || "—"],
-        ])}</section>`
-        : "";
-
-    const notes = [sub["Water_Quality_Notes"], sub["Additional_Notes"]].filter(Boolean).join("  •  ");
-    const notesHtml = notes ? `<p style="margin-top:4mm;font-size:9pt;font-style:italic;color:var(--pdf-ink)">Notes: ${pdfEscapeHtml(notes)}</p>` : "";
-
-    return `
-<div class="sheet">
+    // The letterhead and title only print once, on the first plot's page —
+    // a continuation plot (Plot 2, 3…) goes straight into the field list,
+    // matching the real MENRO sheet's own multi-plot layout.
+    const letterheadHtml = isFirstPlot ? `
   <header class="letterhead">
     ${sealDataUrl ? `<img src="${sealDataUrl}" alt="Municipality of Calatagan seal">` : "<div></div>"}
     <div class="gov">
@@ -325,58 +296,29 @@ function buildSheetHtml(sub, sealDataUrl, pageNum, pageCount) {
   <div class="title">
     <h1>${pdfEscapeHtml(reportTitleInfo().title)}</h1>
     <p>${pdfEscapeHtml(reportTitleInfo().subtitle)}</p>
-  </div>
+  </div>` : "";
+
+    return `
+<div class="sheet">
+  ${letterheadHtml}
 
   ${pdfFieldsHtml([
-      ["Date", koboSubmissionDate(sub) || "—"],
-      ["Ranger", sub["Ranger_Name"] || "—"],
+      ["Date", pdfFormatDate(koboSubmissionDate(sub))],
       ["Protected area", zone ? zone.name : zoneNameForSubmission(sub)],
-      ["Area", zone && zone.area ? `${zone.area} ha` : "—"],
-      ["MPA manager", zone && zone.partner ? zone.partner : "—"],
-      ["Canopy cover (%)", sub["Estimated_Canopy_Cover_"] || "—"],
-      ["Overall health", healthAssessmentLabel(sub["Overall_Health_Assessment"])],
+      ["Area", sub["Area_No"] || "—"],
+      ["MPA Manager", sub["MPA_Manager"] || "—"],
+      ["Plot No.", plot.Plot_No ? (plot.Plot_Size ? `${plot.Plot_No} (${plot.Plot_Size})` : plot.Plot_No) : "—"],
   ])}
 
   <section>
-    <h2>Species found in plot</h2>
     ${speciesTableHtml}
   </section>
 
-  <section>
-    <h2>Mollusks found</h2>
-    ${molluskTableHtml}
-  </section>
+  ${molluskSectionHtml}
 
-  <section>
-    <h2>Water quality and observations</h2>
-    ${pdfFieldsHtml(waterFields)}
-    ${notesHtml}
-  </section>
-
-  ${instrumentSectionHtml}
+  ${notesHtml}
 
   <div class="spacer"></div>
-
-  <div class="signatures">
-    <div class="sig">
-      <div class="line"></div>
-      <div class="name"></div>
-      <div class="role">Prepared by, Field Ranger</div>
-      <div class="date">Date: ____________________</div>
-    </div>
-    <div class="sig">
-      <div class="line"></div>
-      <div class="name"></div>
-      <div class="role">Reviewed by, MENRO</div>
-      <div class="date">Date: ____________________</div>
-    </div>
-  </div>
-
-  <footer>
-    <span>Source: field data submitted by ranger via AquaGuard</span>
-    <span>Generated ${pdfEscapeHtml(new Date().toLocaleString("en-US"))}</span>
-    <span>Page ${pageNum} of ${pageCount}</span>
-  </footer>
 </div>`;
 }
 
@@ -398,29 +340,29 @@ async function exportFieldSurveyPdf() {
         try { await document.fonts.ready; } catch (err) { /* proceeds with whatever fonts were ready in time */ }
     }
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     const rows = sortedSubmissions();
     const root = ensurePdfExportRoot();
 
     // Placed at its own true aspect ratio (width pinned to the full page
     // width, height following whatever the canvas actually came out as)
-    // instead of being force-fit into a fixed 210x297 box — forcing a
+    // instead of being force-fit into a fixed 297x210 box — forcing a
     // capture that wasn't exactly that shape into that box was what made
     // every page come out visibly stretched. jsPDF already opens with one
     // blank page, so every call after the first has to add its own page.
     let firstPhysicalPage = true;
     function addCanvasAsPage(canvas, topMarginMM = 0) {
-        if (!firstPhysicalPage) doc.addPage("a4", "portrait");
+        if (!firstPhysicalPage) doc.addPage("a4", "landscape");
         firstPhysicalPage = false;
-        const widthMM = 210;
+        const widthMM = 297;
         const heightMM = (canvas.height / canvas.width) * widthMM;
-        doc.addImage(canvas.toDataURL("image/png"), "PNG", 0, topMarginMM, widthMM, heightMM, undefined, "FAST");
+        doc.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, topMarginMM, widthMM, heightMM, undefined, "FAST");
     }
 
-    // Higher than a plain 2x — the source is vector text and thin 0.75px
-    // rules, so the extra resolution actually shows once printed or zoomed
-    // in, instead of just inflating file size for nothing.
-    const CAPTURE_SCALE = 3;
+    // 1.5x is sharp enough for print (vector text/thin rules look fine) and
+    // processes ~44% fewer pixels than 2x, which is the single biggest lever
+    // on how long html2canvas takes per page.
+    const CAPTURE_SCALE = 1.5;
 
     // The first physical page of a sheet already has its own top margin —
     // it's the sheet's own 14mm CSS padding, baked into the capture. A
@@ -434,7 +376,7 @@ async function exportFieldSurveyPdf() {
 
     // A submission whose species/mollusk tables and readings add up to more
     // than one physical A4 page used to just overflow silently — the image
-    // was taller than 297mm, so jsPDF clipped everything past the first
+    // was taller than 210mm, so jsPDF clipped everything past the first
     // page and the rest was simply lost. This collects every point in the
     // sheet where a page break is "safe" (between two sections, or between
     // two table rows) — the space between direct children of the sheet, and
@@ -454,13 +396,12 @@ async function exportFieldSurveyPdf() {
         return Array.from(points).filter(p => p >= 0).sort((a, b) => a - b);
     }
 
-    // Rendered and captured one submission at a time (rather than one long
-    // HTML page auto-paginated by jsPDF), but a submission itself can now
-    // spill across more than one physical page — each slice is cut only at
-    // one of the safe break points collected above, closest to (but not
-    // past) a full page's worth of content.
-    async function renderSheetToPage(sub, pageNum, pageCount) {
-        root.innerHTML = buildSheetHtml(sub, sealDataUrl, pageNum, pageCount);
+    // Captures whatever sheet is currently in #pdfExportRoot and adds it as
+    // one or more physical pages — split only at the safe break points
+    // collected above, closest to (but not past) a full page's worth of
+    // content, so a sheet taller than one page spills onto a continuation
+    // page instead of getting silently clipped.
+    async function captureAndPaginateSheetEl() {
         const sheetEl = root.querySelector(".sheet");
         // The seal is already an inline data URI, so it paints essentially
         // instantly — decode() just guards against html2canvas snapshotting
@@ -471,12 +412,12 @@ async function exportFieldSurveyPdf() {
         }
         const breakPoints = collectSafeBreakPoints(sheetEl);
         const totalDomHeight = sheetEl.getBoundingClientRect().height;
-        const canvas = await html2canvas(sheetEl, { scale: CAPTURE_SCALE, useCORS: true, backgroundColor: "#ffffff" });
-        const pxPerMM = canvas.width / 210;
-        const fullPageDomPx = (297 * pxPerMM) / CAPTURE_SCALE;
-        const continuationPageDomPx = ((297 - CONTINUATION_TOP_MARGIN_MM) * pxPerMM) / CAPTURE_SCALE;
+        const canvas = await html2canvas(sheetEl, { scale: CAPTURE_SCALE, useCORS: true, backgroundColor: "#ffffff", logging: false });
+        const pxPerMM = canvas.width / 297;
+        const fullPageDomPx = (210 * pxPerMM) / CAPTURE_SCALE;
+        const continuationPageDomPx = ((210 - CONTINUATION_TOP_MARGIN_MM) * pxPerMM) / CAPTURE_SCALE;
 
-        if (canvas.height <= 297 * pxPerMM + 2) {
+        if (canvas.height <= 210 * pxPerMM + 2) {
             addCanvasAsPage(canvas);
             return;
         }
@@ -511,6 +452,18 @@ async function exportFieldSurveyPdf() {
         }
     }
 
+    // A submission can cover several plots, each printed as its own full
+    // sheet (own letterhead, own field header with that plot's Plot No.,
+    // own species table) — matching the real MENRO sheet, where Plot 2
+    // starts a fresh page rather than being crammed onto Plot 1's.
+    async function renderSheetToPage(sub) {
+        const plots = koboExtractPlots(sub);
+        for (let i = 0; i < plots.length; i++) {
+            root.innerHTML = buildSheetHtml(sub, sealDataUrl, plots[i], i === 0, i === plots.length - 1);
+            await captureAndPaginateSheetEl();
+        }
+    }
+
     try {
         if (rows.length === 0) {
             root.innerHTML = `<div class="sheet"><p style="margin-top:40mm;text-align:center;font-style:italic;color:var(--pdf-muted)">No field survey submissions found for this date range.</p></div>`;
@@ -518,7 +471,8 @@ async function exportFieldSurveyPdf() {
             addCanvasAsPage(canvas);
         } else {
             for (let i = 0; i < rows.length; i++) {
-                await renderSheetToPage(rows[i], i + 1, rows.length);
+                await renderSheetToPage(rows[i]);
+                await new Promise(r => setTimeout(r, 0));
             }
         }
         doc.setProperties({ title: `aquaguard-${reportTitleInfo().fileTag}-${todayISO()}.pdf` });

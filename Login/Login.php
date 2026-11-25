@@ -4,12 +4,44 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AquaGuard – Mangrove Monitoring System</title>
+  <link rel="icon" href="../assets/aquaguard-logo.png" />
+  <link rel="manifest" href="../manifest.json" />
+  <meta name="theme-color" content="#1b6b3a" />
+  <link rel="apple-touch-icon" href="../assets/aquaguard-logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/theme.css?v=1" />
   <link rel="stylesheet" href="style.css?v=2" />
 </head>
 <body>
+
+  <!-- Shown only when launched as the installed app (standalone mode) — a
+       plain browser tab visit never sees this. -->
+  <div id="appSplash" class="app-splash">
+    <img src="../assets/aquaguard-logo-app.png" alt="AquaGuard" class="app-splash-logo">
+  </div>
+  <script>
+    (function () {
+      var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      var splash = document.getElementById('appSplash');
+      if (!isStandalone) {
+        splash.remove();
+        return;
+      }
+      window.addEventListener('load', function () {
+        setTimeout(function () {
+          splash.classList.add('app-splash-hide');
+          setTimeout(function () { splash.remove(); }, 400);
+        }, 500);
+      });
+    })();
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('../sw.js').catch(function () {});
+      });
+    }
+  </script>
 
   <div class="auth-layout">
 
@@ -18,7 +50,7 @@
 
       <div class="brand-panel-content">
         <div class="brand-top">
-          <img src="../assets/calatagan-seal.png" width="44" height="44" alt="Calatagan Seal" class="brand-seal">
+          <img src="../assets/aquaguard-logo.png" width="44" height="44" alt="AquaGuard logo" class="brand-seal">
           <div class="brand-text">
             <h1 class="brand-title">AquaGuard</h1>
             <p class="brand-sub">Mangrove Monitoring System</p>
@@ -51,7 +83,7 @@
 
         <div class="form-card-head">
           <h2 class="form-title">Welcome back</h2>
-          <p class="form-subtitle">Sign in to access the monitoring dashboard.</p>
+          <p class="form-subtitle">Log In to access the monitoring dashboard.</p>
         </div>
 
         <div class="form-body">
@@ -88,7 +120,7 @@
           </div>
 
           <button class="btn-signin" id="btnSignIn" type="button">
-            <span class="btn-text">Sign In</span>
+            <span class="btn-text">Log In</span>
             <span class="btn-arrow">→</span>
           </button>
 

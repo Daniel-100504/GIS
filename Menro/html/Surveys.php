@@ -6,13 +6,10 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 }
 ?>
 <div class="dashboard-header">
-  <div class="dashboard-header-badge">
-    <img src="../../assets/calatagan-seal.png" width="48" height="48" alt="Calatagan Seal">
-  </div>
   <div>
     <h2 class="dashboard-page-title">Ranger Surveys</h2>
     <div class="dashboard-meta-row">
-      <span>Review, approve, or request revisions on field survey submissions</span>
+      <span>Review, verify, or request revisions on field survey submissions</span>
     </div>
   </div>
 </div>
@@ -23,7 +20,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     <div class="approval-tabs">
       <button type="button" class="approval-tab active" data-surveys-tab="all">All <span class="approval-tab-count" id="surveysTabCountAll">0</span></button>
       <button type="button" class="approval-tab" data-surveys-tab="pending">Pending <span class="approval-tab-count" id="surveysTabCountPending">0</span></button>
-      <button type="button" class="approval-tab" data-surveys-tab="approved">Approved <span class="approval-tab-count" id="surveysTabCountApproved">0</span></button>
+      <button type="button" class="approval-tab" data-surveys-tab="approved">Verified <span class="approval-tab-count" id="surveysTabCountApproved">0</span></button>
       <button type="button" class="approval-tab" data-surveys-tab="rejected">Needs Revision <span class="approval-tab-count" id="surveysTabCountRejected">0</span></button>
     </div>
   </div>
@@ -45,7 +42,7 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     <select id="surveysFilterStatus" class="surveys-filter-select">
       <option value="">All status</option>
       <option value="pending">Pending</option>
-      <option value="approved">Approved</option>
+      <option value="approved">Verified</option>
       <option value="rejected">Needs Revision</option>
     </select>
 
@@ -56,18 +53,18 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     <table class="survey-log-table">
       <colgroup>
         <col style="width:11%;">
-        <col style="width:27%;">
-        <col style="width:16%;">
-        <col style="width:18%;">
+        <col style="width:25%;">
+        <col style="width:15%;">
         <col style="width:14%;">
-        <col style="width:14%;">
+        <col style="width:15%;">
+        <col style="width:20%;">
       </colgroup>
       <thead>
         <tr>
           <th data-sort-key="date"><button type="button" class="sort-th-btn">Date<span class="sort-arrow"></span></button></th>
           <th data-sort-key="zone"><button type="button" class="sort-th-btn">Zone<span class="sort-arrow"></span></button></th>
           <th data-sort-key="ranger"><button type="button" class="sort-th-btn">Ranger<span class="sort-arrow"></span></button></th>
-          <th class="cell-center" data-sort-key="aquafarm"><button type="button" class="sort-th-btn">Aquafarm Nearby<span class="sort-arrow"></span></button></th>
+          <th class="cell-center" data-sort-key="health"><button type="button" class="sort-th-btn">Health<span class="sort-arrow"></span></button></th>
           <th class="cell-center" data-sort-key="status"><button type="button" class="sort-th-btn">Status<span class="sort-arrow"></span></button></th>
           <th class="cell-center">Actions</th>
         </tr>

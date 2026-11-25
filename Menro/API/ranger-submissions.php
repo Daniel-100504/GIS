@@ -99,7 +99,7 @@ if ($action === 'delete') {
         // here since the UI's own disabled button is only a client-side hint.
         if ($row['approval_status'] === 'approved') {
             http_response_code(403);
-            echo json_encode(['error' => 'This submission has already been approved and can\'t be deleted. Contact MENRO if a correction is needed.']);
+            echo json_encode(['error' => 'This submission has already been verified and can\'t be deleted. Contact MENRO if a correction is needed.']);
             exit;
         }
     }
@@ -142,7 +142,7 @@ if ($action === 'updateFields') {
         'PH'                                         => $_POST['ph']             ?? null,
         'Water_Temperature_C'                        => $_POST['waterTemp']       ?? null,
         'Secchi_Depth_cm'                            => $_POST['secchiDepth']     ?? null,
-        'Estimated_Canopy_Cover_'                  => $_POST['canopyCover']      ?? null,
+        'Area_No'                                   => $_POST['areaNo']          ?? null,
         'Overall_Health_Assessment'                => $_POST['healthAssessment'] ?? null,
     ];
 
@@ -174,7 +174,7 @@ if ($action === 'updateFields') {
         // enforced here since the UI's own lock is only a client-side hint.
         if ($row['approval_status'] === 'approved') {
             http_response_code(403);
-            echo json_encode(['error' => 'This submission has already been approved and can\'t be edited. Contact MENRO if a correction is needed.']);
+            echo json_encode(['error' => 'This submission has already been verified and can\'t be edited. Contact MENRO if a correction is needed.']);
             exit;
         }
     }
@@ -185,28 +185,54 @@ if ($action === 'updateFields') {
         }
     }
 
-    // A replacement photo is optional — most edits don't touch it, and the
-    // existing one (if any) stays untouched unless a new file is uploaded.
-    if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+    // A replacement photo/video is optional — most edits don't touch them,
+    // and the existing ones stay untouched unless a new file is uploaded
+    // for that same slot.
+    function storeUploadedMediaForEdit($file, string $prefix, array $allowedExt) {
+        if (!isset($file['error']) || $file['error'] !== UPLOAD_ERR_OK) return null;
         $uploadsDir = __DIR__ . '/../data/uploads';
         if (!is_dir($uploadsDir)) mkdir($uploadsDir, 0775, true);
 
-        $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
-        $allowedExt = ['jpg', 'jpeg', 'png', 'webp'];
-        if (in_array($ext, $allowedExt, true)) {
-            $filename = 'photo_' . bin2hex(random_bytes(8)) . '.' . $ext;
-            $destPath = $uploadsDir . '/' . $filename;
-            if (move_uploaded_file($_FILES['photo']['tmp_name'], $destPath)) {
-                $oldPhoto = $record['Photo_Documentation'] ?? '';
-                $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-                $host = $_SERVER['HTTP_HOST'];
-                $record['Photo_Documentation'] = "{$scheme}://{$host}/GIS/Menro/data/uploads/{$filename}";
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, $allowedExt, true)) return null;
 
-                // Clean up the file it's replacing, if it lived in our own uploads folder.
-                if ($oldPhoto && strpos($oldPhoto, '/Menro/data/uploads/') !== false) {
-                    $oldFile = $uploadsDir . '/' . basename($oldPhoto);
-                    if (is_file($oldFile)) @unlink($oldFile);
-                }
+        $filename = $prefix . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
+        $destPath = $uploadsDir . '/' . $filename;
+        if (!move_uploaded_file($file['tmp_name'], $destPath)) return null;
+
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'];
+        // Derived from this script's own location instead of a hardcoded
+        // "/GIS" — that only worked under the local XAMPP setup and broke
+        // every media URL the moment the site was deployed at a domain's
+        // root (Hostinger) instead of a /GIS subfolder.
+        $basePath = preg_replace('#/Menro/API$#', '', dirname($_SERVER['SCRIPT_NAME']));
+        return "{$scheme}://{$host}{$basePath}/Menro/data/uploads/{$filename}";
+    }
+
+    $uploadsDir = __DIR__ . '/../data/uploads';
+    $photoKeys = ['photo', 'photo2', 'photo3', 'photo4', 'photo5'];
+    $photoFields = ['Photo_Documentation', 'Photo_Documentation_2', 'Photo_Documentation_3', 'Photo_Documentation_4', 'Photo_Documentation_5'];
+    foreach ($photoKeys as $i => $key) {
+        if (!isset($_FILES[$key])) continue;
+        $url = storeUploadedMediaForEdit($_FILES[$key], 'photo', ['jpg', 'jpeg', 'png', 'webp']);
+        if (!$url) continue;
+        $oldPhoto = $record[$photoFields[$i]] ?? '';
+        $record[$photoFields[$i]] = $url;
+        if ($oldPhoto && strpos($oldPhoto, '/Menro/data/uploads/') !== false) {
+            $oldFile = $uploadsDir . '/' . basename($oldPhoto);
+            if (is_file($oldFile)) @unlink($oldFile);
+        }
+    }
+
+    if (isset($_FILES['video'])) {
+        $videoUrl = storeUploadedMediaForEdit($_FILES['video'], 'video', ['mp4', 'mov', 'webm', '3gp']);
+        if ($videoUrl) {
+            $oldVideo = $record['Video_Documentation'] ?? '';
+            $record['Video_Documentation'] = $videoUrl;
+            if ($oldVideo && strpos($oldVideo, '/Menro/data/uploads/') !== false) {
+                $oldFile = $uploadsDir . '/' . basename($oldVideo);
+                if (is_file($oldFile)) @unlink($oldFile);
             }
         }
     }
@@ -258,12 +284,47 @@ if ($action === 'updateFields') {
         $record[$arrayKey] = $newArray;
     }
 
-    rebuildRepeatGroup($record, 'Species_Records', json_decode($_POST['trees'] ?? '[]', true), [
-        'species'       => 'Species_Name',
-        'treeCount'     => 'Tree_Count',
-        'saplingCount'  => 'Sapling_Count',
-        'seedlingCount' => 'Seedling_Count',
-    ]);
+    // Rebuilds every plot the ranger edited — each plot keeps its own
+    // Species_Records list, matching how the survey now groups species by
+    // the numbered plot they were found in.
+    $plotsRaw = json_decode($_POST['plots'] ?? '[]', true);
+    if (is_array($plotsRaw) && count($plotsRaw) > 0) {
+        $speciesFieldMap = [
+            'species'       => 'Species_Name',
+            'code'          => 'Tree_Code',
+            'treeCount'     => 'Tree_Count',
+            'saplingCount'  => 'Sapling_Count',
+            'seedlingCount' => 'Seedling_Count',
+            'height'        => 'Height_m',
+            'gbh'           => 'GBH_cm',
+            'canopyLength'  => 'Canopy_Length_m',
+            'canopyWidth'   => 'Canopy_Width_m',
+        ];
+        $plotRecords = [];
+        foreach ($plotsRaw as $plot) {
+            if (!is_array($plot)) continue;
+            $speciesRows = is_array($plot['speciesRows'] ?? null) ? $plot['speciesRows'] : [];
+            $speciesEntries = [];
+            foreach ($speciesRows as $speciesRow) {
+                if (empty($speciesRow['species'])) continue;
+                $entry = [];
+                foreach ($speciesFieldMap as $inKey => $koboKey) {
+                    $entry[$koboKey] = $speciesRow[$inKey] ?? '';
+                }
+                $speciesEntries[] = $entry;
+            }
+            $plotRecords[] = [
+                'Plot_No'         => $plot['plotNo'] ?? '',
+                'Plot_Size'       => $plot['plotSize'] ?? '',
+                'Species_Records' => $speciesEntries,
+            ];
+        }
+        $record['Plot_Records'] = $plotRecords;
+        // Also kept flattened at the top level — the dashboard's zone-wide
+        // stats and species charts read this one array and don't know about
+        // individual plots, so this keeps them working unchanged.
+        $record['Species_Records'] = array_merge(...array_map(fn($p) => $p['Species_Records'], $plotRecords ?: [['Species_Records' => []]]));
+    }
 
     rebuildRepeatGroup($record, 'Mollusk_Records', json_decode($_POST['molluskRows'] ?? '[]', true), [
         'species' => 'Mollusk_Species_Name',
@@ -358,7 +419,7 @@ if ($action === 'approve' || $action === 'reject') {
         $areaLabel = $record['_zone_name'] ?? ($record['Protected_area_Zone'] ?? ($record['Barangay'] ?? 'Unknown zone'));
         $areaLabel = str_replace('_', ' ', (string) $areaLabel);
         $dateLabel = $record['Inspection_Date'] ?? '';
-        $message = $newStatus === 'approved' ? 'Your survey was approved' : 'Your survey needs revision';
+        $message = $newStatus === 'approved' ? 'Your survey was verified' : 'Your survey needs revision';
 
         $notif = $pdo->prepare(
             "INSERT INTO ranger_notifications (kobo_id, ranger_name, message, status, zone_name, inspection_date, notes)

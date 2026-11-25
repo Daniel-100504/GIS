@@ -64,9 +64,9 @@ function initIdleLogout(timeoutMinutes, onTimeout, options = {}) {
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
         <h2 class="confirm-modal-title">Session timing out</h2>
-        <p class="confirm-modal-text">You've been inactive. You'll be signed out in <strong id="idleCountdownValue">${secondsLeft}</strong>s.</p>
+        <p class="confirm-modal-text">You've been inactive. You'll be logged out in <strong id="idleCountdownValue">${secondsLeft}</strong>s.</p>
         <div class="confirm-modal-actions">
-          <button type="button" class="btn-confirm-cancel" id="idleStayBtn">Stay signed in</button>
+          <button type="button" class="btn-confirm-cancel" id="idleStayBtn">Stay logged in</button>
         </div>
       </div>
     `;

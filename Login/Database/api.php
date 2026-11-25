@@ -23,6 +23,18 @@ function respond($data, $code = 200) {
     exit;
 }
 
+// Hardcoded to the real live domain on purpose, instead of reading
+// $_SERVER['HTTP_HOST'] — an email can be opened from any device, not just
+// whichever machine happened to trigger it. If this were derived from the
+// current request, testing from localhost would email out a
+// "localhost/..." link that only ever works on that one computer; every
+// other device opening the email (a phone, a different PC) would hit a
+// dead link. The live domain always works, everywhere, so email links use
+// it unconditionally.
+function aquaguardLoginUrl() {
+    return "https://bakawan.site/Login/Login.php";
+}
+
 function requireRole($allowedRoles) {
     if (!isset($_SESSION['user']) || !in_array($_SESSION['user']['role'], $allowedRoles, true)) {
         respond(['success' => false, 'error' => 'Not authorized.'], 401);
@@ -396,7 +408,7 @@ try {
         // same as the "no email on file" case for sending a reset link.
         if ($account['email']) {
             try {
-                sendRoleChangedEmail($account['email'], $account['full_name'], $roleLabel[$role], $roleLabel[$newRole]);
+                sendRoleChangedEmail($account['email'], $account['full_name'], $roleLabel[$role], $roleLabel[$newRole], aquaguardLoginUrl());
             } catch (Exception $e) {
                 // Swallowed — see comment above.
             }
@@ -416,13 +428,31 @@ try {
             respond(['success' => false, 'error' => 'Invalid status value.'], 400);
         }
 
-        $stmt = $pdo->prepare("SELECT username FROM {$table} WHERE id = :id");
+        $stmt = $pdo->prepare("SELECT username, full_name, email FROM {$table} WHERE id = :id");
         $stmt->execute(['id' => $id]);
-        $targetUsername = $stmt->fetchColumn() ?: "#{$id}";
+        $account = $stmt->fetch(PDO::FETCH_ASSOC);
+        $targetUsername = $account ? $account['username'] : "#{$id}";
 
         $stmt = $pdo->prepare("UPDATE {$table} SET is_active = :active WHERE id = :id");
         $stmt->execute(['active' => $active, 'id' => $id]);
         logAudit($pdo, ($active === '1' ? 'Activated' : 'Deactivated') . " {$roleLabel[$role]} account \"{$targetUsername}\".");
+
+        // Best-effort, same reasoning as the role-change email — an account
+        // with no email on file just quietly skips the notice. Deactivation
+        // gets no login button (there's nothing to log into right now), just
+        // a plain notice; activation gets the button since they can use it.
+        if ($account && $account['email']) {
+            try {
+                if ($active === '1') {
+                    sendAccountActivatedEmail($account['email'], $account['full_name'], aquaguardLoginUrl());
+                } else {
+                    sendAccountDeactivatedEmail($account['email'], $account['full_name']);
+                }
+            } catch (Exception $e) {
+                // Swallowed — the status change itself already succeeded above.
+            }
+        }
+
         respond(['success' => true]);
     }
 
@@ -516,7 +546,11 @@ try {
         );
         $stmt->execute(['token' => $token, 'id' => $requestId]);
 
-        $resetLink = 'http://' . $_SERVER['HTTP_HOST'] . '/GIS/Login/reset-password.php?token=' . $token;
+        // Hardcoded to the live domain, same reasoning as aquaguardLoginUrl()
+        // above — an emailed reset link needs to work from whatever device
+        // opens the email, not just the machine that happened to trigger it
+        // (which breaks entirely when that machine is localhost).
+        $resetLink = "https://bakawan.site/Login/reset-password.php?token={$token}";
 
         try {
             sendResetPasswordEmail($account['email'], $account['full_name'], $resetLink);

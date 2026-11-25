@@ -26,6 +26,51 @@ function renderRangerNotifItem(n) {
   `;
 }
 
+// A second, purely local notification source — for events that only ever
+// happen on this one device (an offline survey finally syncing) and have no
+// server-side row to fetch. Merged into the same bell/list as the real
+// ranger_notifications ones below, so there's one notification experience
+// instead of two separate places to check.
+const LOCAL_NOTIF_KEY = 'aquaguard_local_notifications';
+
+function getLocalNotifications() {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_NOTIF_KEY) || '[]');
+  } catch (err) {
+    return [];
+  }
+}
+
+function setLocalNotifications(list) {
+  try {
+    localStorage.setItem(LOCAL_NOTIF_KEY, JSON.stringify(list));
+  } catch (err) {
+    // Storage unavailable — the notification just won't persist, not fatal.
+  }
+}
+
+// Called from field-survey.js the moment a queued offline survey actually
+// makes it to the server.
+window.addLocalRangerNotification = function (message) {
+  const list = getLocalNotifications();
+  list.unshift({ id: 'local-' + Date.now(), message, createdAt: new Date().toISOString(), isRead: false });
+  setLocalNotifications(list.slice(0, 30)); // keep this from growing forever
+  loadRangerNotifications();
+};
+
+function renderLocalNotifItem(n) {
+  const date = new Date(n.createdAt);
+  const dateLabel = isNaN(date.getTime())
+    ? ''
+    : `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+  return `
+    <button type="button" class="notif-item${n.isRead ? '' : ' unread'}" data-local-id="${escapeNotifHtml(n.id)}">
+      <div class="notif-item-title">${escapeNotifHtml(n.message)}</div>
+      <div class="notif-item-sub">${escapeNotifHtml(dateLabel)}</div>
+    </button>
+  `;
+}
+
 // The 20s poll (bottom of this file) and a click's own refresh can both be
 // in flight at once; if the poll started first but resolves second, its
 // (now-stale) unread data would otherwise overwrite the click's fresher
@@ -39,27 +84,32 @@ async function loadRangerNotifications() {
   if (!countEl || !listEl) return;
 
   const thisGeneration = ++notifRenderGeneration;
+  // The local (offline-sync) notifications are read regardless of whether
+  // the server fetch below succeeds — a ranger checking the bell while
+  // offline should still see those, not just whatever was already on screen.
+  const localItems = getLocalNotifications();
+  let serverItems = [];
   try {
     const res = await fetch(NOTIF_API, { credentials: 'same-origin' });
-    if (!res.ok) return;
-    const data = await res.json();
-    if (thisGeneration !== notifRenderGeneration) return;
-    const items = Array.isArray(data.results) ? data.results : [];
-
-    const unreadCount = items.filter(n => !n.isRead).length;
-    if (unreadCount > 0) {
-      countEl.hidden = false;
-      countEl.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
-    } else {
-      countEl.hidden = true;
+    if (res.ok) {
+      const data = await res.json();
+      serverItems = Array.isArray(data.results) ? data.results : [];
     }
-
-    listEl.innerHTML = items.length
-      ? items.map(renderRangerNotifItem).join('')
-      : '<div class="notif-empty">No notifications yet</div>';
   } catch (err) {
-    // Silent — the bell just stays as it was; the next poll will retry.
+    // No connection — just show whatever local notifications there are.
   }
+  if (thisGeneration !== notifRenderGeneration) return;
+
+  const unreadCount = serverItems.filter(n => !n.isRead).length + localItems.filter(n => !n.isRead).length;
+  if (unreadCount > 0) {
+    countEl.hidden = false;
+    countEl.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+  } else {
+    countEl.hidden = true;
+  }
+
+  const html = localItems.map(renderLocalNotifItem).join('') + serverItems.map(renderRangerNotifItem).join('');
+  listEl.innerHTML = html || '<div class="notif-empty">No notifications yet</div>';
 }
 
 async function markNotificationRead(id) {
@@ -99,12 +149,23 @@ function bindRangerNotifications() {
   if (clearBtn) {
     clearBtn.addEventListener('click', async () => {
       await markNotificationRead('all');
+      setLocalNotifications(getLocalNotifications().map((n) => ({ ...n, isRead: true })));
       loadRangerNotifications();
     });
   }
 
   if (listEl) {
     listEl.addEventListener('click', (e) => {
+      const localItem = e.target.closest('.notif-item[data-local-id]');
+      if (localItem) {
+        const localId = localItem.getAttribute('data-local-id');
+        setLocalNotifications(
+          getLocalNotifications().map((n) => (n.id === localId ? { ...n, isRead: true } : n))
+        );
+        loadRangerNotifications();
+        return;
+      }
+
       const item = e.target.closest('.notif-item[data-kobo-id]');
       if (!item) return;
       wrap.classList.remove('open');

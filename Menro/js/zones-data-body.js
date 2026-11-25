@@ -65,6 +65,22 @@ function koboExtractTrees(sub) {
   return [sub];
 }
 
+// A submission can cover more than one plot (matching the real MENRO
+// sheet, where one visit measures several numbered plots) — a real
+// Plot_Records array (new-format submissions) takes priority; a legacy
+// record only ever had one implicit plot, described by its flat
+// Plot_No/Plot_Size fields and a single Species_Records list.
+function koboExtractPlots(sub) {
+  if (Array.isArray(sub["Plot_Records"]) && sub["Plot_Records"].length > 0) {
+    return sub["Plot_Records"];
+  }
+  return [{
+    Plot_No: sub["Plot_No"] || "",
+    Plot_Size: sub["Plot_Size"] || "",
+    Species_Records: koboExtractTrees(sub),
+  }];
+}
+
 // Mirrors koboExtractTrees, but for the Fauna step's separate mollusk table
 // — its own named array (Mollusk_Records) checked first, falling back to a
 // single implicit row for a legacy record that only ever had one flat
@@ -210,8 +226,8 @@ function setConnectionStatus(online) {
   connectionStatusEl.classList.remove("online", "offline");
   connectionStatusEl.classList.add(online ? "online" : "offline");
   connectionStatusEl.title = online
-    ? "Connected — live field survey data"
-    : "Offline — showing last available data";
+    ? "Connected, live field survey data"
+    : "Offline, showing last available data";
 
   if (connectionStatusIconEl) connectionStatusIconEl.innerHTML = online ? ICON_ONLINE : ICON_OFFLINE;
   if (connectionStatusTextEl) connectionStatusTextEl.textContent = online ? "Online" : "Offline";
@@ -227,7 +243,7 @@ window.addEventListener("online", () => {
 window.addEventListener("offline", () => {
   setConnectionStatus(false);
   if (typeof showDataWarning === "function") {
-    showDataWarning("You're offline — showing last available data.");
+    showDataWarning("You're offline. Showing last available data.");
   }
 });
 
@@ -258,6 +274,8 @@ function resetZonesToBaseline() {
     zone.ndvi = base ? base.ndvi : null;
     zone.status = base ? base.status : "pending";
     zone.satNdvi      = null;
+    zone.ndviDelta        = null;
+    zone.ndviPreviousDate = null;
     zone.lastRanger   = "—";
     zone.lastDate     = "—";
     zone.transect     = "—";
@@ -267,6 +285,12 @@ function resetZonesToBaseline() {
     zone.waterColor   = "—";
     zone.aquafarmNear = "—";
     zone.notes        = "—";
+    zone.threats      = "—";
+    zone.lastSubmissionId = null;
+    zone.approvalStatus = null;
+    zone.reviewedAt      = null;
+    zone.needsAttention       = false;
+    zone.needsAttentionReason = "";
   });
 }
 
@@ -308,8 +332,75 @@ function latestSubmissionByZone(submissions) {
   return byZone;
 }
 
+// Every submission for one zone, newest first — unlike latestSubmissionByZone
+// above, nothing here gets discarded, so this is what the zone history view
+// in the map popup reads from.
+function zoneSubmissionHistory(zoneId) {
+  return ALL_SUBMISSIONS.filter(sub => {
+    const areaRaw = sub["Protected_area_Zone"] || sub["Barangay"] || "";
+    const subZoneId = sub["_zone_id"] || zoneIdFromProtectedArea(areaRaw) || BARANGAY_TO_ZONE[areaRaw];
+    return subZoneId === zoneId;
+  }).sort((a, b) => koboSubmissionDate(b).localeCompare(koboSubmissionDate(a)));
+}
+
+// Same zoneId grouping as latestSubmissionByZone, but keeps every submission
+// (newest first) instead of discarding all but the latest — this is what
+// decides the "needs attention" flag below, scoped to whatever date range
+// mergeKoboIntoZones was called with (so it respects the scene-date picker
+// the same way every other zone field already does).
+function groupSubmissionsByZone(submissions) {
+  const byZone = {};
+  submissions.forEach(sub => {
+    const areaRaw = sub["Protected_area_Zone"] || sub["Barangay"] || "";
+    const zoneId  = sub["_zone_id"] || zoneIdFromProtectedArea(areaRaw) || BARANGAY_TO_ZONE[areaRaw];
+    if (!zoneId) return;
+    if (!byZone[zoneId]) byZone[zoneId] = [];
+    byZone[zoneId].push(sub);
+  });
+  Object.values(byZone).forEach(list =>
+    list.sort((a, b) => koboSubmissionDate(b).localeCompare(koboSubmissionDate(a)))
+  );
+  return byZone;
+}
+
+function submissionTreeTotal(sub) {
+  const plots = koboExtractPlots(sub);
+  const allTrees = plots.flatMap(p => p["Species_Records"] || []);
+  return allTrees.reduce((sum, t) => sum + (Number(koboTreeField(t, "Tree_Count")) || 0), 0);
+}
+
+// Flags a zone for MENRO's attention — not AI, just two plain signals the
+// panel asked about directly: an unresolved threat report, or a tree count
+// that dropped since the previous survey. Needs at least one past survey to
+// compare against, so a zone's very first submission never triggers the
+// decline check (nothing to compare it to yet).
+function zoneNeedsAttention(history) {
+  if (!history || history.length === 0) return { flag: false, reason: "" };
+
+  const latest = history[0];
+  const latestAlerts = typeof submissionAlerts === "function" ? submissionAlerts(latest) : [];
+  const unresolvedThreat = latestAlerts.length > 0 && !latest["_alert_reviewed"];
+
+  let declining = false;
+  if (history.length >= 2) {
+    declining = submissionTreeTotal(latest) < submissionTreeTotal(history[1]);
+  }
+
+  if (unresolvedThreat && declining) {
+    return { flag: true, reason: "Unresolved threat reported, and tree count dropped since the last survey" };
+  }
+  if (unresolvedThreat) {
+    return { flag: true, reason: "Unresolved threat reported in the latest survey" };
+  }
+  if (declining) {
+    return { flag: true, reason: "Tree count dropped since the last survey" };
+  }
+  return { flag: false, reason: "" };
+}
+
 function mergeKoboIntoZones(submissions) {
   const byZone = latestSubmissionByZone(submissions);
+  const historyByZone = groupSubmissionsByZone(submissions);
 
   ZONES.forEach(zone => {
     const sub = byZone[zone.id];
@@ -337,13 +428,23 @@ function mergeKoboIntoZones(submissions) {
     zone.lastRanger    = sub["Ranger_Name"]  || zone.lastRanger || "—";
     zone.lastDate      = koboSubmissionDate(sub) || zone.lastDate || "—";
     zone.transect      = sub["Plot_number"]  || zone.transect   || "—";
-    zone.canopyCover   = summary.count > 0 ? `${summary.count} species recorded` : "—";
+    zone.canopyCover   = summary.avgCanopyCoverPct !== null ? `${Math.round(summary.avgCanopyCoverPct)}%` : "—";
     zone.speciesName   = summary.speciesList.length ? summary.speciesList.join(", ") : (zone.speciesName || "—");
     zone.treeCount     = summary.count || zone.treeCount || "—";
     zone.waterColor    = sub["Water_Color"] ? sub["Water_Color"].replace(/_/g," ") : "—";
     zone.aquafarmNear  = aquafarmRaw ? aquafarmRaw.replace(/_/g," ") : "—";
     zone.notes         = [sub["Additional_Notes"], sub["Water_Quality_Notes"] || sub["Water_quality_notes"]]
       .filter(Boolean).join(" — ") || zone.notes || "—";
+    zone.threats       = (typeof observedThreatsDisplay === "function"
+      ? observedThreatsDisplay(sub["Observed_Threats"], sub["Observed_Threats_Other"])
+      : null) || zone.threats || "—";
+    zone.lastSubmissionId = sub["_id"] != null ? String(sub["_id"]) : (zone.lastSubmissionId || null);
+    zone.approvalStatus   = sub["_approval_status"] || "pending";
+    zone.reviewedAt       = sub["_reviewed_at"] || null;
+
+    const attention = zoneNeedsAttention(historyByZone[zone.id] || []);
+    zone.needsAttention       = attention.flag;
+    zone.needsAttentionReason = attention.reason;
   });
 
   console.log(`KoboToolbox: merged ${Object.keys(byZone).length} zone(s) from ${submissions.length} submission(s).`);

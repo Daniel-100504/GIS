@@ -6,13 +6,12 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
 }
 ?>
 <div class="dashboard-header">
-  <div class="dashboard-header-badge">
-    <img src="../../assets/calatagan-seal.png" width="48" height="48" alt="Calatagan Seal">
-  </div>
   <div>
     <h2 class="dashboard-page-title">Mangrove Monitoring Dashboard</h2>
     <div class="dashboard-meta-row">
       <span>MENRO Calatagan &middot; Batangas</span>
+      <span class="dashboard-meta-dot">&middot;</span>
+      <span id="dashboardSummaryDate"></span>
     </div>
   </div>
   <div class="dashboard-header-inspection">
@@ -83,7 +82,10 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     <div id="ndviBarChart"></div>
   </div>
   <div class="chart-card dashboard-threats-card">
-    <p class="chart-card-title">Threats Over Time</p>
+    <div class="chart-card-header-row">
+      <p class="chart-card-title">Threats Over Time</p>
+      <select class="dashboard-year-select" id="threatsYearSelect" aria-label="Year"></select>
+    </div>
     <div id="threatsOverTimeChart"></div>
   </div>
 </div>
@@ -94,7 +96,10 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'menro') {
     <div id="healthDonutChart"></div>
   </div>
   <div class="chart-card dashboard-alerts-card">
-    <p class="chart-card-title">Threats &amp; Alerts</p>
+    <div class="chart-card-header-row">
+      <p class="chart-card-title">Threats &amp; Alerts</p>
+      <span class="chart-card-corner-stat" id="alertsUnreviewedStat"></span>
+    </div>
     <div class="alert-card-list" id="alertsCardList"></div>
     <div class="dashboard-empty" id="alertsEmpty" hidden>No threats or alerts reported.</div>
   </div>

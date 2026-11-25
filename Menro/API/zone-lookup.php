@@ -25,10 +25,30 @@ function nearestMangroveAreaZone(float $lat, float $lng) {
     $best = $rows[0] ?? null;
     if ($best === null) return null;
 
+    // The RPC itself doesn't return mpa_manager, so it's fetched separately
+    // from the plain table. Best-effort: a failure here just leaves it blank
+    // rather than losing the whole zone match over one extra lookup.
+    $mpaManager = null;
+    $mpaCh = curl_init(SUPABASE_URL . '/rest/v1/mangrove_areas?select=mpa_manager&id=eq.' . (int) $best['id']);
+    curl_setopt($mpaCh, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($mpaCh, CURLOPT_HTTPHEADER, [
+        'apikey: ' . SUPABASE_SECRET_KEY,
+        'Authorization: Bearer ' . SUPABASE_SECRET_KEY,
+    ]);
+    curl_setopt($mpaCh, CURLOPT_TIMEOUT, 8);
+    $mpaResponse = curl_exec($mpaCh);
+    $mpaHttpCode = curl_getinfo($mpaCh, CURLINFO_HTTP_CODE);
+    curl_close($mpaCh);
+    if ($mpaResponse !== false && $mpaHttpCode < 400) {
+        $mpaRows = json_decode($mpaResponse, true);
+        $mpaManager = $mpaRows[0]['mpa_manager'] ?? null;
+    }
+
     return [
-        'zoneId'   => 'field-' . $best['id'],
-        'name'     => $best['name'],
-        'barangay' => $best['barangay'],
+        'zoneId'     => 'field-' . $best['id'],
+        'name'       => $best['name'],
+        'barangay'   => $best['barangay'],
+        'mpaManager' => $mpaManager,
     ];
 }
 

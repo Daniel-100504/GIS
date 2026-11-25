@@ -59,7 +59,7 @@ $record = [
     'Ranger_Name'                          => $rangerName,
     'Inspection_Date'                      => $_POST['inspectionDate'] ?? date('Y-m-d'),
     'Record_your_current_location'         => ($lat !== null && $lng !== null) ? "{$lat} {$lng} 0 0" : '',
-    'Estimated_Canopy_Cover_'              => $_POST['canopyCover'] ?? '',
+    'Area_No'                              => $_POST['areaNo'] ?? '',
     'Overall_Health_Assessment'            => $_POST['healthAssessment'] ?? '',
     'Observed_Threats'                     => $_POST['observedThreats'] ?? '',
     'Observed_Threats_Other'               => $_POST['observedThreatsOther'] ?? '',
@@ -81,30 +81,51 @@ $record = [
     'Water_Quality_Notes'                  => $_POST['waterNotes'] ?? '',
 ];
 
-// The Vegetation step now logs one row per species actually found in the
-// plot (Species | Trees | Saplings | Seedlings) instead of a single fixed
-// species — saved as a real repeat-group array so it displays and edits the
-// same way a Kobo repeat-group submission already does, with no schema
-// change needed (extractTrees() on the ranger/MENRO side already knows how
-// to find and read any array-of-objects field on the record).
-$speciesRows = json_decode($_POST['speciesRows'] ?? '[]', true);
-if (is_array($speciesRows)) {
-    $record['Species_Records'] = array_values(array_filter(array_map(function ($row) {
+// The Vegetation step now logs one or more plots, each with its own species
+// table (Species | Trees | Saplings | Seedlings) — matching the real MENRO
+// sheet, where one visit can measure several numbered plots. Each plot's
+// row becomes a real repeat-group entry the same way a Kobo repeat-group
+// submission already works, nested under that plot.
+function buildSpeciesRecords(array $speciesRows): array {
+    return array_values(array_filter(array_map(function ($row) {
         if (!is_array($row) || empty($row['species'])) return null;
         return [
-            'Species_Name'  => $row['species'],
-            'Tree_Count'    => $row['treeCount'] ?? '',
-            'Sapling_Count' => $row['saplingCount'] ?? '',
+            'Tree_Code'      => $row['code'] ?? '',
+            'Species_Name'   => $row['species'],
+            'Tree_Count'     => $row['treeCount'] ?? '',
+            'Sapling_Count'  => $row['saplingCount'] ?? '',
             'Seedling_Count' => $row['seedlingCount'] ?? '',
+            'Height_m'       => $row['height'] ?? '',
+            'GBH_cm'         => $row['gbh'] ?? '',
+            'Canopy_Length_m' => $row['canopyLength'] ?? '',
+            'Canopy_Width_m'  => $row['canopyWidth'] ?? '',
         ];
     }, $speciesRows)));
 }
 
+$plotsRaw = json_decode($_POST['plots'] ?? '[]', true);
+$plotRecords = [];
+if (is_array($plotsRaw)) {
+    foreach ($plotsRaw as $plot) {
+        if (!is_array($plot)) continue;
+        $plotRecords[] = [
+            'Plot_No'         => $plot['plotNo'] ?? '',
+            'Plot_Size'       => $plot['plotSize'] ?? '',
+            'Species_Records' => buildSpeciesRecords(is_array($plot['speciesRows'] ?? null) ? $plot['speciesRows'] : []),
+        ];
+    }
+}
+$record['Plot_Records'] = $plotRecords;
+
+// Also kept flattened at the top level (every plot's trees merged into one
+// list) — the dashboard's zone-wide stats, health derivation, and species
+// charts all read this one array and were never written to know about
+// individual plots, so this keeps them working unchanged.
+$record['Species_Records'] = array_merge(...array_map(fn($p) => $p['Species_Records'], $plotRecords ?: [['Species_Records' => []]]));
+
 // Same idea for the Fauna step's mollusk table — its own separate
 // repeat-group array, distinct from Species_Records so a species row and a
-// mollusk row are never confused with each other. Species presence only,
-// no count — mollusks are too small and numerous to count reliably in the
-// field, unlike trees.
+// mollusk row are never confused with each other.
 $molluskRows = json_decode($_POST['molluskRows'] ?? '[]', true);
 if (is_array($molluskRows)) {
     $record['Mollusk_Records'] = array_values(array_filter(array_map(function ($row) {
@@ -113,24 +134,44 @@ if (is_array($molluskRows)) {
     }, $molluskRows)));
 }
 
-// Photo upload — stored as a plain absolute URL so the existing photo
-// display logic (which only recognizes a value starting with http/https)
-// can show it without needing any changes on its end.
-if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+// Photo upload — up to 5, stored as plain absolute URLs across separate
+// fields (Photo_Documentation, Photo_Documentation_2, ...) so the existing
+// generic "any field whose name contains photo/image/picture" lookup on the
+// ranger side picks up every one of them automatically, with no changes
+// needed there.
+function storeUploadedMedia($file, string $prefix, array $allowedExt) {
+    if (!isset($file['error']) || $file['error'] !== UPLOAD_ERR_OK) return null;
     $uploadsDir = __DIR__ . '/../data/uploads';
     if (!is_dir($uploadsDir)) mkdir($uploadsDir, 0775, true);
 
-    $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
-    $allowedExt = ['jpg', 'jpeg', 'png', 'webp'];
-    if (in_array($ext, $allowedExt, true)) {
-        $filename = 'photo_' . bin2hex(random_bytes(8)) . '.' . $ext;
-        $destPath = $uploadsDir . '/' . $filename;
-        if (move_uploaded_file($_FILES['photo']['tmp_name'], $destPath)) {
-            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-            $host = $_SERVER['HTTP_HOST'];
-            $record['Photo_Documentation'] = "{$scheme}://{$host}/GIS/Menro/data/uploads/{$filename}";
-        }
-    }
+    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    if (!in_array($ext, $allowedExt, true)) return null;
+
+    $filename = $prefix . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
+    $destPath = $uploadsDir . '/' . $filename;
+    if (!move_uploaded_file($file['tmp_name'], $destPath)) return null;
+
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'];
+    // Derived from this script's own location instead of a hardcoded
+    // "/GIS" — that only worked under the local XAMPP setup and broke
+    // every media URL the moment the site was deployed at a domain's
+    // root (Hostinger) instead of a /GIS subfolder.
+    $basePath = preg_replace('#/Menro/API$#', '', dirname($_SERVER['SCRIPT_NAME']));
+    return "{$scheme}://{$host}{$basePath}/Menro/data/uploads/{$filename}";
+}
+
+$photoKeys = ['photo', 'photo2', 'photo3', 'photo4', 'photo5'];
+$photoFields = ['Photo_Documentation', 'Photo_Documentation_2', 'Photo_Documentation_3', 'Photo_Documentation_4', 'Photo_Documentation_5'];
+foreach ($photoKeys as $i => $key) {
+    if (!isset($_FILES[$key])) continue;
+    $url = storeUploadedMedia($_FILES[$key], 'photo', ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif']);
+    if ($url) $record[$photoFields[$i]] = $url;
+}
+
+if (isset($_FILES['video'])) {
+    $videoUrl = storeUploadedMedia($_FILES['video'], 'video', ['mp4', 'mov', 'webm', '3gp']);
+    if ($videoUrl) $record['Video_Documentation'] = $videoUrl;
 }
 
 $pdo = getDbConnection();
@@ -140,7 +181,14 @@ if ($lat !== null && $lng !== null) {
         $record['_zone_id']       = $zone['zoneId'];
         $record['_zone_name']     = $zone['name'];
         $record['_zone_barangay'] = $zone['barangay'];
+        $record['MPA_Manager']    = $zone['mpaManager'] ?? '';
     }
+}
+// No GPS match (or no GPS at all) means no mapped area to pull this from —
+// MPA manager is MENRO's to set when they map the area, not the ranger's,
+// so there's nothing to fall back to here.
+if (!isset($record['MPA_Manager'])) {
+    $record['MPA_Manager'] = '';
 }
 
 // Kobo IDs are large positive integers, so a negative one can never collide —

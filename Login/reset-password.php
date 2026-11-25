@@ -10,6 +10,7 @@ if (empty($_GET['token'])) {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AquaGuard – Reset Password</title>
+  <link rel="icon" href="../assets/aquaguard-logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -22,7 +23,7 @@ if (empty($_GET['token'])) {
     <aside class="brand-panel">
       <div class="brand-panel-content">
         <div class="brand-top">
-          <img src="../assets/calatagan-seal.png" width="44" height="44" alt="Calatagan Seal" class="brand-seal">
+          <img src="../assets/aquaguard-logo.png" width="44" height="44" alt="AquaGuard logo" class="brand-seal">
           <div class="brand-text">
             <h1 class="brand-title">AquaGuard</h1>
             <p class="brand-sub">Mangrove Monitoring System</p>

@@ -46,6 +46,11 @@ body {
   position: sticky;
   top: 0;
   height: 100vh;
+  /* Without this, a short screen just cuts off whatever doesn't fit (the
+     Sign Out button, on some phones) with no way to reach it at all —
+     scrolling the sidebar itself is what actually guarantees everything
+     in it stays reachable. */
+  overflow-y: auto;
   transition: width 0.2s ease;
 }
 
@@ -216,8 +221,11 @@ body {
   min-width: 0;
 }
 
+/* Hidden on desktop (the sidebar is always visible there already) — shown
+   only under the mobile breakpoint below, where it opens the off-canvas
+   drawer. */
 .topbar-menu-btn {
-  display: flex;
+  display: none;
   flex-shrink: 0;
   width: 36px;
   height: 36px;
@@ -256,14 +264,6 @@ body {
   font-size: 0.72rem;
   color: var(--ink-400);
   margin-top: 2px;
-}
-
-.topbar-coord {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--ink-500);
-  letter-spacing: 0.02em;
-  font-weight: 500;
 }
 
 .topbar-right {
@@ -846,6 +846,24 @@ body {
   color: #c98a2c;
 }
 
+.confirm-zone-ack {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: #fdf3e3;
+  border: 1.5px solid #f0d9ab;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  color: #8a6416;
+  text-align: left;
+  cursor: pointer;
+}
+
+.confirm-zone-ack input { margin-top: 2px; flex-shrink: 0; }
+
 .survey-zone-preview-inside {
   background: #eaf6ef;
   color: var(--healthy);
@@ -898,10 +916,22 @@ body {
 
 .history-table {
   width: 100%;
+  /* Without this, table-layout: fixed forces every column to squeeze into
+     whatever width the container has. min-width always wins over width when
+     they conflict, so below this the table holds its real size and
+     .history-table-scroll (overflow-x: auto) has something to scroll. */
+  min-width: 760px;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 0.8rem;
-  border: 1.5px solid var(--border-strong);
+}
+
+.history-table-scroll {
+  overflow-x: auto;
+  /* Border on the scroll wrapper (not the table) so both left and right
+     edges stay inside the panel's border-radius — the table's own border
+     used to disappear off the right edge when scrollable, breaking symmetry. */
+  border-top: 1px solid var(--border-strong);
 }
 
 .history-table th {
@@ -1115,6 +1145,57 @@ body {
 
 .edit-field-full { grid-column: 1 / -1; }
 
+.field-warning-tooltip {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 14px rgba(20, 20, 20, 0.14);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--ink-700);
+  position: relative;
+  animation: fieldWarningIn 0.15s ease;
+}
+
+.field-warning-tooltip::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 16px;
+  width: 11px;
+  height: 11px;
+  background: var(--surface);
+  border-left: 1px solid var(--border-strong);
+  border-top: 1px solid var(--border-strong);
+  transform: rotate(45deg);
+}
+
+.field-warning-icon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: #e8732a;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  font-style: normal;
+}
+
+@keyframes fieldWarningIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .edit-field em {
   font-style: normal;
   color: #c1473a;
@@ -1218,6 +1299,22 @@ body {
   background: var(--surface);
 }
 
+.survey-success-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 22px 2px;
+  padding: 12px 16px;
+  background: #eaf6ee;
+  border: 1px solid #a3d9b1;
+  border-radius: var(--radius-sm);
+  color: #1a6b34;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+.survey-success-banner[hidden] { display: none; }
+.survey-success-banner svg { flex-shrink: 0; color: #2a9050; }
+
 .field-survey-form > .survey-section-title:not(:first-child) {
   margin-top: 8px;
   border-top: 1px solid var(--border);
@@ -1298,6 +1395,66 @@ body {
   font-size: 0.72rem;
   font-weight: 400;
   color: var(--ink-400);
+}
+
+.plot-block {
+  margin: 10px 22px 0;
+  padding: 14px 0 16px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.plot-block + .plot-block { margin-top: 16px; }
+
+.plot-block-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr 32px;
+  gap: 12px;
+  align-items: end;
+  padding: 0 14px 12px;
+}
+
+.plot-block-header .edit-field { color: var(--ink-500); }
+
+.plot-size-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.plot-size-inputs input { flex: 1; min-width: 0; }
+
+.plot-size-sep {
+  flex-shrink: 0;
+  color: var(--ink-400);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.plot-block-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-400);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.plot-block-remove:hover { background: #fbe9e7; color: #c1473a; }
+.plot-block-remove[hidden] { visibility: hidden; }
+
+.plot-block .species-table-wrap { margin: 0 14px; }
+.plot-block .btn-add-species { margin: 10px 14px 0; }
+
+@media (max-width: 560px) {
+  .plot-block-header { grid-template-columns: 1fr 1fr; }
+  .plot-block-remove { grid-column: 2; justify-self: end; }
 }
 
 .species-table-wrap {
@@ -1402,6 +1559,60 @@ body {
 
 .species-row-remove[hidden] { visibility: hidden; }
 
+.species-row-measurements {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 6px;
+  margin-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+
+.species-row-measurements label {
+  flex: 0 0 90px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.species-row-measurements span {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-400);
+}
+
+.species-row-measure {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-700);
+  font-size: 0.78rem;
+  font-weight: 500;
+  font-family: inherit;
+}
+
+.plot-no-input[readonly],
+.species-row-measure[readonly],
+.edit-field-readonly[readonly] {
+  background: var(--surface-sunken);
+  color: var(--ink-500);
+  cursor: default;
+}
+
+.species-row-measure:focus {
+  outline: none;
+  border-color: var(--brand-600);
+  box-shadow: 0 0 0 3px rgba(28, 125, 97, 0.15);
+}
+
+
 .btn-add-species {
   display: flex;
   align-items: center;
@@ -1450,7 +1661,7 @@ body {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
-  .view-species-table { min-width: 340px; }
+  .view-species-table { min-width: 300px; font-size: 0.68rem; }
   .view-species-table th,
   .view-species-table td { padding: 6px 8px; }
 }
@@ -1599,6 +1810,71 @@ body {
   color: var(--brand-700);
 }
 
+#customThreatsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 22px 0;
+}
+
+.custom-threat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.custom-threat-row .custom-threat-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--ink-700);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.custom-threat-row .custom-threat-input:focus { border-color: var(--brand-600); }
+
+.custom-threat-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-400);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.custom-threat-remove:hover { background: #fbe9e7; color: #c1473a; }
+
+.btn-add-custom-threat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 22px 0;
+  padding: 7px 14px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-500);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+  align-self: flex-start;
+}
+
+.btn-add-custom-threat:hover { border-color: var(--brand-600); color: var(--brand-600); }
+
 #threatOtherField {
   margin: 10px 22px 0;
   max-width: 400px;
@@ -1629,7 +1905,8 @@ body {
   border: 1px solid var(--border-strong);
 }
 
-.survey-photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.survey-photo-thumb img,
+.survey-photo-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .survey-photo-thumb-remove {
   position: absolute;
@@ -1660,6 +1937,11 @@ body {
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-strong);
   margin-bottom: 8px;
+}
+
+video.edit-photo-preview {
+  width: 240px;
+  height: 160px;
 }
 
 .survey-photo-picker {
@@ -1729,7 +2011,6 @@ body {
 .btn-use-location:hover { background: var(--brand-100); }
 
 .aquafarm-location-out {
-  font-family: var(--font-mono);
   font-size: 0.78rem;
   color: var(--brand-700);
   font-weight: 600;
@@ -2118,25 +2399,21 @@ body {
 }
 
 .view-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  border-top: 1px solid var(--border);
-  border-left: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .view-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px 14px;
-  border-right: 1px solid var(--border);
+  gap: 3px;
+  padding: 9px 0;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
 }
 
-.view-field-full { grid-column: 1 / -1; }
+.view-field:last-child { border-bottom: none; }
+
+.view-field-full {}
 
 .view-label {
   font-size: 0.68rem;
@@ -2264,6 +2541,85 @@ body {
 
 .view-photo-thumb:hover { transform: scale(1.03); box-shadow: 0 4px 12px rgba(10, 49, 40, 0.18); }
 
+/* Video in the detail view should be wider, not forced into a square thumb */
+.view-video-thumb {
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  aspect-ratio: unset;
+  object-fit: unset;
+}
+
+/* Clickable cursors on all media thumbs */
+.view-photo-thumb,
+.edit-photo-preview,
+.survey-review-photo { cursor: pointer; }
+
+/* Lightbox overlay */
+.media-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.media-lightbox[hidden] { display: none; }
+
+.media-lightbox-inner {
+  max-width: min(94vw, 1200px);
+  max-height: 90vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.media-lightbox-img {
+  max-width: 100%;
+  max-height: 90vh;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+  display: block;
+}
+.media-lightbox-img[hidden] { display: none; }
+
+.media-lightbox-video {
+  max-width: 100%;
+  max-height: 90vh;
+  border-radius: var(--radius-sm);
+  background: #000;
+  display: block;
+}
+.media-lightbox-video[hidden] { display: none; }
+
+.media-lightbox-toolbar {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 1;
+}
+
+.media-lightbox-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.media-lightbox-btn:hover { background: rgba(255, 255, 255, 0.28); }
+
 .view-empty-note {
   font-size: 0.8rem;
   color: var(--ink-400);
@@ -2272,8 +2628,6 @@ body {
 }
 
 @media (max-width: 700px) {
-  .view-grid { grid-template-columns: repeat(2, 1fr); }
-
   /* The message is now a direct child of .field-survey-actions, a sibling
      of Cancel and the Back/Next group (not nested inside the latter) — so
      a plain flex order + full-width basis reliably pushes it onto its own
@@ -2303,7 +2657,31 @@ body {
 .field-survey-msg:empty { display: none; }
 
 @media (max-width: 480px) {
-  .view-grid { grid-template-columns: 1fr; }
+  /* Matches the same further-tightened sizing used for the Submission
+     History table — smaller type throughout so this reads consistently
+     with the rest of the mobile app instead of its original, larger
+     desktop sizing. */
+  .edit-modal-header { padding: 14px 40px 12px 14px; }
+  .edit-modal-title { font-size: 0.88rem; }
+  .edit-modal-subtitle { font-size: 0.68rem; }
+
+  .view-section-title {
+    padding: 9px 10px;
+    gap: 7px;
+    font-size: 0.74rem;
+  }
+  .view-section-icon { width: 24px; height: 24px; }
+  .view-section-icon svg { width: 12px; height: 12px; }
+
+  .view-section-body { padding: 9px 10px; gap: 8px; }
+  .view-subsection-label { font-size: 0.58rem; }
+
+  .view-field { padding: 7px 0; }
+  .view-label { font-size: 0.54rem; }
+  .view-value { font-size: 0.68rem; }
+
+  .view-notes { padding: 7px 8px; font-size: 0.68rem; }
+  .view-empty-note { font-size: 0.68rem; }
 }
 
 #history-table-body tr.row-clickable { cursor: pointer; }
@@ -2376,6 +2754,7 @@ body {
 }
 
 @media (max-width: 900px) {
+  .topbar-menu-btn { display: flex; }
   .stat-row { grid-template-columns: repeat(2, 1fr); }
   .welcome-banner { flex-direction: column; align-items: stretch; text-align: left; }
   .btn-new-survey { justify-content: center; }
@@ -2396,6 +2775,12 @@ body {
     width: auto;
   }
 
+  /* Reset the desktop min-width so each card fills the panel rather than
+     staying 760px wide and getting clipped on the right. */
+  .history-table { min-width: 0; width: 100%; }
+  .history-table tbody tr { width: 100%; box-sizing: border-box; }
+  .history-table td { width: 100%; box-sizing: border-box; }
+
   .history-table { border: none; }
   .history-table thead { display: none; }
 
@@ -2408,28 +2793,56 @@ body {
 
   .history-table tbody tr:last-child { margin-bottom: 0; }
 
-  /* Tighter than the original card layout (was 10px/14px padding, 12px
-     gap, 12px between cards) — same fields, just less empty space per
-     row so a whole day's submissions fit with less scrolling. */
+  /* Matches the same tightened card density used on the Admin side's
+     account tables — smaller value text and tighter padding so a whole
+     day's submissions fit with less scrolling, while the label column
+     stays wide enough for "Observed Threats" / "Aquafarm Nearby" to
+     stay on one line instead of wrapping. */
   .history-table td {
     display: flex;
     align-items: flex-start;
     gap: 8px;
-    padding: 6px 14px;
+    padding: 7px 11px;
     border-right: none;
     text-align: left;
     white-space: normal;
-    max-width: none;
-    font-size: 0.8rem;
+    max-width: 100%;
+    font-size: 0.68rem;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    min-width: 0;
   }
 
+  /* Desktop bolds the Mangroves column to make it stand out in a dense
+     row of plain text — in these labeled cards the data-label already
+     does that job, so the bold/dark-green styling just reads as heavier
+     and less uniform than the rest of the card (and the Admin tables,
+     which never bold a value at all). */
+  .history-table td:nth-child(2) {
+    font-weight: 500;
+    color: var(--ink-700);
+  }
+
+  /* Same reasoning as the Mangroves column above — the Aquafarm Nearby
+     tag's own bold, larger desktop styling reads as heavier than the
+     rest of the card here. */
+  .history-table .wq {
+    font-size: 0.68rem;
+    font-weight: 500;
+    min-width: 0;
+  }
+
+  /* A fixed 110px column left visible empty space before the value began,
+     since the label text itself is much narrower than that at this font
+     size — shrinking both together closes that gap so the label column
+     fits its own text instead of reserving more room than it needs. */
   .history-table td::before {
     content: attr(data-label);
-    flex: 0 0 98px;
-    font-size: 0.62rem;
+    flex: 0 0 96px;
+    font-size: 0.54rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03em;
     color: var(--ink-400);
     padding-top: 1px;
   }
@@ -2476,7 +2889,6 @@ body {
 
   .view { padding: 18px 16px; }
   .topbar { padding: 14px 16px 12px; }
-  .topbar-coord { display: none; }
 }
 .approval-tabs {
   display: flex;
@@ -2706,3 +3118,266 @@ body {
   .filter-search { grid-column: 1 / -1; flex: none; min-width: 0; }
   .filter-select { max-width: none; width: 100%; }
 }
+
+/* ── Bottom navigation bar (mobile only) ─────────────────────────────── */
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* hamburger hides on mobile — bottom nav handles navigation.
+     Only shown when the survey form is open (bottom nav is hidden there). */
+  .topbar-menu-btn { display: none; }
+  body[data-active-view="submit"] .topbar-menu-btn { display: flex; }
+
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1200;
+    background: var(--surface);
+    border-top: 1.5px solid var(--border-strong);
+    box-shadow: 0 -4px 20px rgba(10, 33, 27, 0.1);
+    padding: 6px 0 max(6px, env(safe-area-inset-bottom));
+  }
+
+  .mobile-nav-item {
+    flex: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 4px 4px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: var(--ink-400);
+    font-family: var(--font-body);
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* pill sits behind the icon — no transition so it never bleeds onto other buttons */
+  .mobile-nav-item::before {
+    content: '';
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 52px;
+    height: 32px;
+    border-radius: 999px;
+    background: transparent;
+  }
+
+  .mobile-nav-item.active::before {
+    background: var(--brand-100);
+  }
+
+  .mobile-nav-item svg {
+    position: relative; /* sits above the ::before pill */
+  }
+
+  .mobile-nav-item span {
+    position: relative;
+  }
+
+  .mobile-nav-item.active {
+    color: var(--brand-700);
+  }
+
+  .mobile-nav-item.active svg {
+    stroke: var(--brand-700);
+    stroke-width: 2.5;
+  }
+
+  .mobile-nav-item:active svg {
+    transform: scale(0.88) !important;
+  }
+
+  /* push main content up so it isn't hidden behind the nav bar */
+  .main {
+    padding-bottom: 72px;
+  }
+
+  /* hide the bottom nav while the survey form is open — the Next/Submit/Cancel
+     buttons sit at the bottom of the screen and accidental nav taps are likely */
+  #view-submit.active ~ .mobile-bottom-nav {
+    display: none;
+  }
+
+  /* History table overflow fix — the table is wider than the mobile viewport;
+     the scroll wrapper already has overflow-x:auto, but the panel needs to clip
+     so the table doesn't bust outside the rounded border. */
+  #view-history .panel {
+    overflow: hidden;
+  }
+  #view-history {
+    padding: 16px 12px;
+  }
+  .history-table-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ── Profile view ─────────────────────────────────────────────────────── */
+#view-profile.active {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-direction: column;
+  padding-top: 40px;
+}
+
+.profile-view-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 36px 32px 28px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 2px 12px rgba(10, 33, 27, 0.07);
+}
+
+.profile-view-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--brand-600);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+}
+
+.profile-view-name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--ink-900);
+  letter-spacing: -0.01em;
+}
+
+.profile-view-role {
+  font-size: 0.8rem;
+  color: var(--ink-500);
+  text-align: center;
+}
+
+.profile-view-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 24px;
+  width: 100%;
+}
+
+.profile-view-settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 22px;
+  background: none;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink-700);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.profile-view-settings:hover {
+  background: var(--surface-sunken);
+  border-color: var(--brand-600);
+}
+
+.profile-view-logout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 22px;
+  background: none;
+  border: 1.5px solid var(--degraded);
+  border-radius: var(--radius-sm);
+  color: var(--degraded);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.profile-view-logout:hover {
+  background: #fbeae7;
+}
+
+/* ── Settings panel ─────────────────────────────────────────────────────── */
+.settings-panel-body {
+  padding: 8px 0;
+}
+
+.settings-section {
+  padding: 18px 20px 4px;
+}
+
+.settings-section-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--ink-400);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+}
+
+.settings-option-row {
+  display: flex;
+  gap: 10px;
+}
+
+.settings-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 11px 14px;
+  background: var(--surface-alt);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--ink-600);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+
+.settings-option:hover {
+  border-color: var(--brand-600);
+  color: var(--brand-700);
+}
+
+.settings-option.active {
+  background: var(--brand-100);
+  border-color: var(--brand-600);
+  color: var(--brand-700);
+}
+
